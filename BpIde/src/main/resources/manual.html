@@ -176,6 +176,7 @@
     <li class="sub"><a href="#clases-tipo">4.4 Clases</a></li>
     <li class="sub"><a href="#any">4.5 any</a></li>
     <li class="sub"><a href="#genericos">4.6 Los genéricos</a></li>
+    <li class="sub"><a href="#indice-objeto">4.7 Un objeto con índice</a></li>
 
     <li class="group"><a href="#declaraciones">5. Declaraciones</a></li>
     <li class="sub"><a href="#var">5.1 var</a></li>
@@ -735,6 +736,57 @@ b.mete(Metro(<span class="num">2</span>))
   <code>class Sensores extends List&lt;Sensor&gt;</code> no se escribe. En JC, <code>new List&lt;Sensor&gt;()</code>
   y <code>foreach (var s in sensores)</code>, y <code>new Collections.Map&lt;int, Tarea&gt;()</code> crea el de
   llaves <code>integer</code> (<code>Collections.numericMap()</code>).
+</p>
+
+<h3 id="indice-objeto">4.7 Un objeto con índice: <code>x[i]</code></h3>
+<p>
+  Una <code>property</code> son dos métodos: <code>getP()</code> y <code>setP(v)</code>. Con índice, son los mismos con
+  el índice delante, y eso es <code>x[i]</code> sobre un objeto (V8/H8, #794). No hay nada que declarar: una clase
+  se indexa escribiendo esos métodos, y la VM no se entera.
+</p>
+<table>
+  <tr><th>Se escribe</th><th>Es</th></tr>
+  <tr><td><code>x[i]</code></td><td><code>x.get(i)</code></td></tr>
+  <tr><td><code>x[i] := v</code></td><td><code>x.set(i, v)</code> (<code>x.put(i, v)</code> en un <code>Map</code>, que no tiene <code>set</code>)</td></tr>
+  <tr><td><code>x.pin[i]</code></td><td><code>x.getPin(i)</code></td></tr>
+  <tr><td><code>x.pin[i] := v</code></td><td><code>x.setPin(i, v)</code></td></tr>
+</table>
+<pre><code><span class="kw">var</span> sensores: <span class="type">List</span>&lt;<span class="type">Sensor</span>&gt; := List()
+sensores.add(Sensor(<span class="num">4</span>))
+<span class="kw">print</span> sensores[<span class="num">0</span>].valor()          <span class="comment">// sensores.get(0), con su cast</span>
+sensores[<span class="num">0</span>] := Sensor(<span class="num">5</span>)           <span class="comment">// sensores.set(0, …)</span>
+sensores[<span class="num">0</span>] := <span class="str">"hola"</span>              <span class="comment">// error: 'List&lt;Sensor&gt;' guarda 'Sensor', no 'string' (set)</span>
+
+<span class="kw">var</span> m: <span class="type">Collections.Map</span>&lt;<span class="type">string</span>, <span class="type">Tarea</span>&gt; := Collections.Map()
+m[<span class="str">"riego"</span>] := Tarea(<span class="num">3</span>)             <span class="comment">// m.put("riego", …)</span>
+<span class="kw">print</span> m[<span class="str">"riego"</span>].hora()            <span class="comment">// m.get("riego")</span>
+
+<span class="kw">class</span> Gpio
+  <span class="kw">public function</span> getPin(i: <span class="type">integer</span>): <span class="type">boolean</span> ...
+  <span class="kw">public function</span> setPin(i: <span class="type">integer</span>, v: <span class="type">boolean</span>) ...
+<span class="kw">end</span> Gpio
+
+gpio.pin[<span class="num">3</span>] := <span class="kw">true</span>        <span class="comment">// gpio.setPin(3, true)</span>
+<span class="kw">print</span> gpio.pin[<span class="num">3</span>]            <span class="comment">// gpio.getPin(3)</span></code></pre>
+<ul>
+  <li><strong>Es una llamada normal:</strong> vale con sobrecargas (<code>t[3]</code> y <code>t["a"]</code>, junto a un
+      <code>get()</code> sin índice), por una interfaz y por la vtable, y se comprueba como cualquier llamada. Sin
+      <code>get</code> no es indexable, y sin <code>set</code> se lee y no se escribe.</li>
+  <li><strong>Parece un array y no lo es:</strong> <code>l[i]</code> cuesta lo que <code>l.get(i)</code>, poco más del
+      doble que leer de un array. Para un bucle apretado, un array.</li>
+  <li><strong><code>x[i] += e</code></strong> lee con <code>get</code> y escribe con <code>set</code>, y el objeto y el
+      índice se calculan una sola vez, como en un array.</li>
+  <li><strong>Una <code>property</code> <code>pin</code> puede convivir con <code>getPin(i)</code>:</strong>
+      <code>x.pin</code> es la property, y <code>x.pin[3]</code>, el método. Lo que choca con el accesor es lo que tiene su
+      forma: <code>getPin()</code> y <code>setPin(v)</code>.</li>
+  <li><strong>Dentro de la clase, si hay un campo o una property <code>pin</code>, <code>pin[i]</code> es indexar ese
+      miembro</strong>, con <code>this</code> o sin él: es lo que escribe el cuerpo de <code>getPin(i)</code>, que si no se
+      llamaría a sí mismo. Si no hay ningún miembro <code>pin</code>, también es <code>getPin(i)</code>.</li>
+  <li><strong>En una <code>native</code>,</strong> <code>x[i]</code> es la llamada, con sus límites, y
+      <code>x[i] += e</code> no se traduce. <code>x[i]</code> no va en un desempaquetado.</li>
+</ul>
+<p>
+  No hay <code>x[i, j]</code>: se escribe <code>x.get(i, j)</code>. Y <code>s[i]</code> sigue sin valer en una cadena.
 </p>
 
 <!-- =========================================================== -->

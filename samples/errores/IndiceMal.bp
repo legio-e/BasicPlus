@@ -1,0 +1,63 @@
+// IndiceMal.bp — FALLA A PROPÓSITO (V8/H8 #794): `x[i]` es `x.get(i)`, y `x[i] := v`, `x.set(i, v)` (`put` en un Map); `x.pin[i]`
+// es `x.getPin(i)`, y `x.pin[i] := v`, `x.setPin(i, v)`. Sin `get`, no es indexable; sin `set`, se lee y no se escribe. El índice y
+// el valor se comprueban como los de la llamada. Y un método con la forma del accesor de una property sigue chocando con él.
+module IndiceMal
+  import Collections
+
+  class Cosa
+    public function Cosa()
+    end Cosa
+  end Cosa
+
+  class Motor
+    public function Motor()
+    end Motor
+  end Motor
+
+  class Sensor
+    public function Sensor()
+    end Sensor
+  end Sensor
+
+  class SoloGet
+    public function SoloGet()
+    end SoloGet
+
+    public function get(i: integer): integer
+      return i
+    end get
+
+    public function getPin(i: integer): integer
+      return i
+    end getPin
+  end SoloGet
+
+  class Choca
+    public property pin: integer
+
+    public function Choca()
+    end Choca
+
+    public function getPin(): integer
+      return 1
+    end getPin
+  end Choca
+
+  function main()
+    var c: Cosa := Cosa()
+    print c[0]
+    c[0] := 1
+
+    var g: SoloGet := SoloGet()
+    g[0] := 1
+    g[0] += 1
+    g.pin[0] := 1
+    print g["a"]
+
+    var s: List<Sensor> := List()
+    s[0] := "hola"
+    var m: Collections.Map<string, Sensor> := Collections.Map()
+    m["a"] := Motor()
+    m[3] := Sensor()
+  end main
+end IndiceMal

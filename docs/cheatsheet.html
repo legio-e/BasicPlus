@@ -246,11 +246,13 @@ m.unlock()</pre>
 <pre><span class="k">var</span> l: List&lt;Sensor&gt; <span class="k">:=</span> List()
 l.add(Sensor(<span class="t">4</span>))
 l.add("x")                 <span class="c">// compile error</span>
-<span class="k">print</span> l.get(<span class="t">0</span>).value()     <span class="c">// no cast to write</span></pre>
+<span class="k">print</span> l[<span class="t">0</span>].value()         <span class="c">// l.get(0): no cast to write</span>
+l[<span class="t">0</span>] <span class="k">:=</span> Sensor(<span class="t">5</span>)          <span class="c">// l.set(0, …)</span></pre>
   <p class="note"><code>&lt;Sensor&gt;</code> is an order to the compiler: same class, same VM. What goes in must be a
      <code>Sensor</code>, and what comes out is one. Inside <code>&lt; &gt;</code> goes a class, an interface or
      <code>string</code>; a number goes in its box, <code>List&lt;Integer&gt;</code>. A new class opts in with
-     <code>@element{Base}</code>.</p>
+     <code>@element{Base}</code>. On any object, <code>x[i]</code> is <code>x.get(i)</code> and
+     <code>x.pin[i]</code> is <code>x.getPin(i)</code>; it looks like an array and costs a call.</p>
 </section>
 
 <section>

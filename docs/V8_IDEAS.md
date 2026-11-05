@@ -5758,15 +5758,19 @@ elemento (en una clase marcada también se restringe). Para un micro no parecen 
   enlace tardio») y cargan, y lo para el cast, «conversion invalida: el valor no es un 'Sensor'». Otra razón para que se quede.
 - `Genericos.mod` crece 14 bytes: su `List<Object>` público ahora se escribe en la interfaz (`bpi 11`). Los otros 737 `.mod`, iguales.
 
-### `lista[i]`: una property con índice (5-nov: análisis, sin decidir)
+### `lista[i]`: una property con índice (5-nov, `#794`)
 
 Eduardo: *«Lo de lista[i] me parece bien, en realidad es la notación de una propiedad ( en C# las propiedades pueden tener índice )»*.
 
 **Lo que hay.** `x[i]` sólo vale en un array (*«el tipo 'List' no es indexable»*). Una `property p` son dos métodos, `getP()` y `setP(v)`. Una con índice y sin nombre serían `get(i)` y `set(i, v)`, y ésos ya los tiene `List`. C# hace
 lo mismo: `this[int i]` se compila como `get_Item(i)` y `set_Item(i, v)`, una por clase y sin nombre, sobrecargable por el tipo del índice. Con nombre las tienen VB y Delphi; Java no tiene.
 
-**La propuesta.** `x[i]` es `x.get(i)`, y `x[i] := v`, `x.set(i, v)`, en cualquier clase que los tenga: nada nuevo que declarar y nada que tocar en Core, como `for x in lista`. En un `Map`, `m["a"] := v` es `put`. `gpio.pin[3]` sale solo
-si `pin` devuelve un objeto con `get` y `set`.
+**Lo decidido** (Eduardo: *«a ver get normal no tiene índice, get(i) sería una sobrecarga y no veo el problema que necesite que se cambie de nombre»*; *«OK»*). `x[i]` es `x.get(i)`, y `x[i] := v`, `x.set(i, v)`, en cualquier clase que los
+tenga: nada nuevo que declarar, y nada que tocar en Core, como `for x in lista`. En un `Map`, `m["a"] := v` es `put`. Y con nombre, por el mismo camino: `x.pin[i]` es `x.getPin(i)`, y `x.pin[i] := v`, `x.setPin(i, v)`. Una property `pin` puede
+convivir con `getPin(i)`: son sobrecargas, y el compilador las rechazaba sólo porque miraba el nombre. Yo había propuesto que `pin` devolviera un objeto con `get` y `set`: costaba una clase y RAM por cada colección. No hace falta `this[…]`.
+
+**Un matiz que salió al implementarlo:** dentro de la clase, si hay un campo o una property `pin`, `pin[i]` es indexar ese miembro. Si no, en una clase con un campo `pin` y un `getPin(i)`, patrón normal, su cuerpo `this.pin[i]` se llamaría a sí mismo.
+Desde fuera, `x.pin[i]` es el método. Si `pin` no es un miembro, también dentro, y sin `this`.
 
 **Lo medido:**
 - De las 103 pruebas que piden indexadores, 99 declaran el suyo: con índice `int`, 67; `string`, 20; sobrecargados, 18; en una interfaz, 23; `x[i] += 1`, 14; con dos índices, 14. A 20 no les falta nada más, y 11 de ellas comprueban algo.
@@ -5783,7 +5787,11 @@ si `pin` devuelve un objeto con `get` y `set`.
 
 **Lo que no cubre:** `x[i, j]` (el traductor escribe `x.get(i, j)`) y `s[i]` en una cadena, que sigue sin valer.
 
-**Por decidir:** la regla sin declaración, o además la forma de property (`public property this[i: integer]: T`; en JC, `public T this[int i] { get {…} set {…} }`), que serían los mismos dos métodos; y `put` en un Map.
+**El traductor.** `T this[…] { get {…} set {…} }` pasa a ser los dos métodos, también en una interfaz, y lo de la `ArrayList` y la `Hashtable` se escribe `x[i]`. Rechaza lo que no cabe: un explícito, con opcionales o `params`, con un miembro llamado
+`get` o `set`, y el `new` que oculta al del padre (`test-147`). Mono, de 609 a 627.
+
+**Lo que salió de las pruebas:** `#795`, `List.get` y `set` miran la capacidad y no el tamaño (`l.get(3)` en una lista de 2 da `null`); y `#796`, de `test-834`: la visibilidad de un método sobrecargado se mira en la primera sobrecarga, no en la
+elegida, y `a.t(1)` llama desde fuera a un `private`. Las dos, anotadas y sin arreglar: las decide Eduardo. Y uno mío, en el compuesto: un `get` privado no está en la vtable (`test-655`, `test-590`).
 
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 

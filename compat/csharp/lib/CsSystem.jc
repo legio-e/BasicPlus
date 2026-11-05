@@ -182,7 +182,7 @@ module CsSystem
 
    // `Hashtable` e `IDictionary` (H8, tema 3), lo que usan los programas: lo demás no se traduce. El `Map` de Collections no vale: ordena sus
    // llaves, y aquí una llave es cualquier objeto. Las guarda en orden, en una `List`, y las busca una a una: en C#, el orden no está definido,
-   // y aquí no importa la velocidad. El indexador es `get_Item` y `set_Item`, que JC no tiene indexadores.
+   // y aquí no importa la velocidad. El indexador es `get` y `set`, que es lo que son `x[i]` y `x[i] = v` en JC.
    /// ¿La misma llave? Dos cajas o dos cadenas, por su valor; lo demás, el mismo objeto.
    public function bool Llave_Misma(Object a, Object b)
    {
@@ -271,7 +271,7 @@ module CsSystem
          return this.Busca(llave) >= 0;
       }
 
-      public function Object get_Item(Object llave)
+      public function Object get(Object llave)
       {
          int i = this.Busca(llave);
          if (i < 0)
@@ -281,7 +281,7 @@ module CsSystem
          return this.valores.get(i);
       }
 
-      public function void set_Item(Object llave, Object valor)
+      public function void set(Object llave, Object valor)
       {
          int i = this.Busca(llave);
          if (i < 0)

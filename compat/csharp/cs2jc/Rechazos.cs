@@ -124,7 +124,6 @@ namespace Cs2Jc
             [SyntaxKind.MemberBindingExpression] = H7(NuloYPunto),
             [SyntaxKind.ElementBindingExpression] = H7(NuloYPunto),
             [SyntaxKind.CoalesceAssignmentExpression] = H7(NuloYPunto),
-            [SyntaxKind.IndexerDeclaration] = H7(Indexadores),
             [SyntaxKind.OperatorDeclaration] = H7(Operadores),
             [SyntaxKind.ConversionOperatorDeclaration] = H7(Operadores),
             [SyntaxKind.GenericName] = H7(Genericos),

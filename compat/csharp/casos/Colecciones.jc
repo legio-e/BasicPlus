@@ -33,12 +33,12 @@ module CsColecciones
          {
             return 2;
          }
-         if ((string) l.get(0) != "uno" || ((Integer) l.get(1)).value() != 5 || (M) l.get(2) != objeto)
+         if ((string) l[0] != "uno" || ((Integer) l[1]).value() != 5 || (M) l[2] != objeto)
          {
             return 3;
          }
-         l.set(1, new Integer(7));
-         if (((Integer) l.get(1)).value() != 7)
+         l[1] = new Integer(7);
+         if (((Integer) l[1]).value() != 7)
          {
             return 4;
          }
@@ -67,26 +67,26 @@ module CsColecciones
          }
          CsSystem.Hashtable h = new CsSystem.Hashtable();
          h.Add("A", new Integer(10));
-         h.set_Item("B", new Integer(20));
-         h.set_Item("B", new Integer(21));
+         h["B"] = new Integer(20);
+         h["B"] = new Integer(21);
          h.Add(new Integer(5), "cinco");
-         if (h.Count != 3 || ((Integer) h.get_Item("A")).value() != 10 || ((Integer) h.get_Item("B")).value() != 21 || (string) h.get_Item(new Integer(5)) != "cinco")
+         if (h.Count != 3 || ((Integer) h["A"]).value() != 10 || ((Integer) h["B"]).value() != 21 || (string) h[new Integer(5)] != "cinco")
          {
             return 8;
          }
-         if (!h.Contains("B") || !h.ContainsKey(new Integer(5)) || h.Contains("Z") || h.get_Item("Z") != null)
+         if (!h.Contains("B") || !h.ContainsKey(new Integer(5)) || h.Contains("Z") || h["Z"] != null)
          {
             return 9;
          }
          string calculada = "B";
          calculada += "";
-         if (((Integer) h.get_Item(calculada)).value() != 21)
+         if (((Integer) h[calculada]).value() != 21)
          {
             return 13;
          }
          CsSystem.Hashtable sinNumeros = new CsSystem.Hashtable();
-         sinNumeros.set_Item("A", new Integer(1));
-         sinNumeros.set_Item("B", new Integer(2));
+         sinNumeros["A"] = new Integer(1);
+         sinNumeros["B"] = new Integer(2);
          CsSystem.Hashtable d = sinNumeros;
          string llaves = "";
          foreach (var elemento_s2 in d.Keys)
@@ -103,7 +103,7 @@ module CsColecciones
             return 11;
          }
          objeto.tabla.Add("x", objeto);
-         if ((M) objeto.tabla.get_Item("x") != objeto)
+         if ((M) objeto.tabla["x"] != objeto)
          {
             return 12;
          }

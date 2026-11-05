@@ -3425,6 +3425,8 @@ public final class MivmEmitter {
         }
         if (target instanceof IndexExpr) {
             IndexExpr ix = (IndexExpr) target;
+            if (info.escriturasDeIndice.containsKey(a)) { emitExprStmt(info.escriturasDeIndice.get(a)); return; }   // V8/H8 (#794)
+            if (info.compuestosDeIndice.containsKey(a)) { emitCompuestoDeIndice(a, ix, tType); return; }
             switch (a.op) {
                 case ASSIGN:
                     emitExpr(ix.target);
@@ -3642,6 +3644,44 @@ public final class MivmEmitter {
             }
         }
         errors.add("asignación a target no soportado: " + target.getClass().getSimpleName());
+    }
+
+    /** V8/H8 (#794) — `x[i] += e` sobre un objeto: `x.set(i, x.get(i) + e)`, con `x` e `i` calculados una vez, como en un array
+     *  (#746). El índice de un objeto puede ser una cadena: su local oculto, por su ancho. */
+    private void emitCompuestoDeIndice(AssignStmt a, IndexExpr ix, BpType t) throws IOException {
+        CallExpr lectura = info.lecturasDeIndice.get(ix);
+        CallExpr escritura = info.compuestosDeIndice.get(a);
+        IExpr receptor = ((MemberAccessExpr) lectura.callee).target;
+        FunctionSymbol get = (FunctionSymbol) info.exprSymbols.get(lectura.callee);
+        FunctionSymbol set = (FunctionSymbol) info.exprSymbols.get(escritura.callee);
+        BpType tipoIndice = get.params.get(0).type;
+        boolean puro = esPuro(receptor) && esPuro(ix.index);
+        String indice = occupies8Bytes(tipoIndice) ? TMP_COMPUESTO_IDX + "8" : TMP_COMPUESTO_IDX;
+        if (!puro) {
+            declareLocalByType(TMP_COMPUESTO_REF, info.exprTypes.get(receptor));
+            declareLocalByType(indice, tipoIndice);
+            emitExpr(receptor);
+            w.emitSetLocal(TMP_COMPUESTO_REF);
+            emitExpr(ix.index);
+            coerceToTarget(ix.index, tipoIndice);
+            w.emitSetLocal(indice);
+        }
+        for (int vez = 0; vez < 2; vez++) {   // el objeto y el índice de `set`, y los de `get`
+            if (puro) {
+                emitExpr(receptor);
+                emitExpr(ix.index);
+                coerceToTarget(ix.index, tipoIndice);
+            } else {
+                w.emitGetLocal(TMP_COMPUESTO_REF);
+                w.emitGetLocal(indice);
+            }
+        }
+        emitInvocacion(get, receptor);
+        emitCastDeElemento(lectura);
+        emitCompuesto(a, t, true);
+        emitWiden(t, set.params.get(1).type);
+        emitInvocacion(set, receptor);
+        descarta(occupies8Bytes(set.returnType));
     }
 
     /** #746 — los dos locales ocultos de un compuesto cuyo destino lleva una llamada (`a[f()] += 5`, `g().n += 1`). */
@@ -5830,15 +5870,20 @@ public final class MivmEmitter {
                 emitExpr(c.args.get(i));
                 if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
             }
-            if (!fs.esVirtual() && !fs.isExternal) {   // #390: no virtual ⇒ CALL directo
-                w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
-            } else {
-                // BUG-6: numArgs = slots de 4 bytes (long/double = 2), no nº de args.
-                emitInvokeVirtualSmart(receptorDe(ma.target, fs.ownerClass), fs.ownerClass, emitName(fs), claveDe(fs), argSlotCount(fs));
-            }
+            emitInvocacion(fs, ma.target);
             return;
         }
         errors.add("call con callee no soportado: " + c.callee.getClass().getSimpleName());
+    }
+
+    /** La llamada a un método, con el objeto y los argumentos ya en la pila. */
+    private void emitInvocacion(FunctionSymbol fs, IExpr receptor) throws IOException {
+        if (!fs.esVirtual() && !fs.isExternal) {   // #390: no virtual ⇒ CALL directo
+            w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
+        } else {
+            // BUG-6: numArgs = slots de 4 bytes (long/double = 2), no nº de args.
+            emitInvokeVirtualSmart(receptorDe(receptor, fs.ownerClass), fs.ownerClass, emitName(fs), claveDe(fs), argSlotCount(fs));
+        }
     }
 
     /**
@@ -6000,6 +6045,7 @@ public final class MivmEmitter {
     }
 
     private void emitIndexLoad(IndexExpr ix) throws IOException {
+        if (info.lecturasDeIndice.containsKey(ix)) { emitExpr(info.lecturasDeIndice.get(ix)); return; }   // V8/H8 (#794)
         if (info.arraysNuevos.contains(ix)) {   // V8/H8: `A[n]`, lo mismo que el principio de emitArrayLit
             BpType el = ((ArrayType) info.exprTypes.get(ix)).element;
             emitExpr(ix.index);
@@ -6697,6 +6743,10 @@ public final class MivmEmitter {
         }
         if (tg instanceof IndexExpr) {
             IndexExpr ix = (IndexExpr) tg;
+            if (info.lecturasDeIndice.containsKey(ix)) {   // V8/H8 (#794)
+                errors.add("`x[i]` de un objeto no va en un desempaquetado: guárdalo en una variable y asígnalo después");
+                return;
+            }
             emitExpr(ix.target);
             emitExpr(ix.index);
             w.emitGetLocal(valLocal);

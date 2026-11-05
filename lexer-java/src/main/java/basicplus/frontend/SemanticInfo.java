@@ -71,6 +71,16 @@ public final class SemanticInfo {
     /** V8/H8 (#793) — en un `for x in lista` sobre una `List<X>`, X: lo mismo, en cada vuelta. */
     public final java.util.Map<Ast.ForStmt, BpType> elementoDeFor = new IdentityHashMap<>();
 
+    /** V8/H8 (#794) — `x[i]` sobre un objeto es una llamada: `x.get(i)`, o `x.getPin(i)` en `x.pin[i]`. El árbol sigue siendo
+     *  el de indexar, que es lo que leen los escritores; la llamada, ya analizada, está aquí. */
+    public final java.util.Map<Ast.IExpr, Ast.CallExpr> lecturasDeIndice = new IdentityHashMap<>();
+
+    /** V8/H8 (#794) — `x[i] := v`: la sentencia que es, `x.set(i, v)` (`put` en un Map, `setPin` en `x.pin[i]`). */
+    public final java.util.Map<Ast.AssignStmt, Ast.ExprStmt> escriturasDeIndice = new IdentityHashMap<>();
+
+    /** V8/H8 (#794) — `x[i] += e`: la llamada a `set` que le toca. El objeto y el índice se calculan una vez (#746). */
+    public final java.util.Map<Ast.AssignStmt, Ast.CallExpr> compuestosDeIndice = new IdentityHashMap<>();
+
     /** V8/H7.1 (#747) — de cada asignación compuesta (`x op= e`), el tipo en que se opera: el de `x op e`, como en C#.
      *  Si no es el de `x`, el resultado se recorta al de `x` al guardarlo (`byte b; b += 1` opera en integer). */
     public final Map<Ast.AssignStmt, BpType> compuestos = new IdentityHashMap<>();
@@ -89,7 +99,7 @@ public final class SemanticInfo {
         }
         if (e instanceof Ast.MemberAccessExpr)
             return exprSymbols.get(e) instanceof Symbol.VarSymbol && esPuro(((Ast.MemberAccessExpr) e).target);
-        if (e instanceof Ast.IndexExpr) return esPuro(((Ast.IndexExpr) e).target) && esPuro(((Ast.IndexExpr) e).index);
+        if (e instanceof Ast.IndexExpr) return !lecturasDeIndice.containsKey(e) && esPuro(((Ast.IndexExpr) e).target) && esPuro(((Ast.IndexExpr) e).index);
         if (e instanceof Ast.UnaryExpr) return esPuro(((Ast.UnaryExpr) e).operand);
         if (e instanceof Ast.BinaryExpr) return esPuro(((Ast.BinaryExpr) e).left) && esPuro(((Ast.BinaryExpr) e).right);
         return false;

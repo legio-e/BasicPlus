@@ -385,6 +385,16 @@ namespace Cs2Jc
                     Linea(Tipo(s.Type, p.Type) + " " + NombreDe(s) + " { get; set; }");
                     return;
                 }
+                case IndexerDeclarationSyntax ix:
+                {
+                    var s = m.GetDeclaredSymbol(ix);
+                    if (!s.IsAbstract) { Rechaza(ix, Porque.Pendiente("un indexador de interfaz con cuerpo (C# 8)")); return; }
+                    if (!IndexadorSeEscribe(ix, s)) return;
+                    string tipo = Tipo(s.Type, ix.Type), ps = Parametros(ix.ParameterList);
+                    if (s.GetMethod != null) Linea("function " + tipo + " get(" + ps + ");");
+                    if (s.SetMethod != null) Linea("function void set(" + ps + ", " + tipo + " value);");
+                    return;
+                }
                 default: RechazaNodo(d); return;
             }
         }
@@ -421,6 +431,7 @@ namespace Cs2Jc
                 case ConstructorDeclarationSyntax c: EmiteConstructor(c); break;
                 case DestructorDeclarationSyntax de: EmiteDestructor(de); break;
                 case PropertyDeclarationSyntax p: EmitePropiedad(p); break;
+                case IndexerDeclarationSyntax ix: EmiteIndexador(ix); break;
                 case BaseTypeDeclarationSyntax _: break;            // las anidadas, sacadas al módulo
                 case DelegateDeclarationSyntax _: break;            // ya rechazados, al empezar
                 default: RechazaNodo(d); break;
@@ -688,10 +699,19 @@ namespace Cs2Jc
             alPrimario = null;
         }
 
+        string FirmaEnJc(IMethodSymbol ms) => string.Join(",", ms.Parameters.Select(p => EnFirma(p.Type)));
+
         void EmiteConstructor(ConstructorDeclarationSyntax c)
         {
             var s = m.GetDeclaredSymbol(c);
             if (s.IsStatic) { estatico = c; return; }                     // detrás de los campos: CtorEstatico
+            // `C(ulong)` y `C(uint)` (test-cls-02): en JC, los dos de `long`, y un constructor no puede cambiar de nombre
+            if (claseActual.InstanceConstructors.TakeWhile(o => !SymbolEqualityComparer.Default.Equals(o, s))
+                    .Any(o => FirmaEnJc(o) == FirmaEnJc(s)))
+            {
+                Rechaza(c, Porque.Pendiente("dos constructores que en JC tienen la misma firma"));
+                return;
+            }
             string cabecera = AccesoDe(s) + " function " + NombreTipo(claseActual)
                 + "(" + Parametros(c.ParameterList) + ")";
             var ini = c.Initializer;
@@ -803,12 +823,77 @@ namespace Cs2Jc
             Linea("}");
         }
 
+        /// H8 (`#794`) — `T this[int i] { get {…} set {…} }`: en JC, dos métodos, `get(i)` y `set(i, v)`, que es lo que son
+        /// `x[i]` y `x[i] = v`.
+        void EmiteIndexador(IndexerDeclarationSyntax ix)
+        {
+            var s = m.GetDeclaredSymbol(ix);
+            if (OcultaPropiedad(s) || OcultaIndexador(s)) { Rechaza(ix, Porque.H7(Porque.NoVirtuales)); return; }
+            if (!IndexadorSeEscribe(ix, s)) return;
+            string tipo = Tipo(s.Type, ix.Type), ps = Parametros(ix.ParameterList), acceso = AccesoDe(s);
+            if (ix.ExpressionBody != null)
+            {
+                AnotacionesDeIndexador(s, true);
+                Linea(acceso + " function " + tipo + " get(" + ps + ")");
+                Cuerpo(null, ix.ExpressionBody, false);
+                return;
+            }
+            foreach (var a in GetPrimero(ix.AccessorList.Accessors))
+            {
+                bool lee = a.IsKind(SyntaxKind.GetAccessorDeclaration);
+                if (!lee && !a.IsKind(SyntaxKind.SetAccessorDeclaration)) { RechazaNodo(a); continue; }
+                AnotacionesDeIndexador(s, lee);
+                Linea(acceso + " function " + (lee ? tipo + " get(" + ps + ")" : "void set(" + ps + ", " + tipo + " value)"));
+                if (s.IsAbstract) Abstracto(lee ? "get" : "set");
+                else Cuerpo(a.Body, a.ExpressionBody, !lee);
+            }
+        }
+
+        /// `new int this[int i]` (test-147): oculta al del padre, y en JC los métodos son virtuales: `((X) y)[0]` iría al de la hija.
+        bool OcultaIndexador(IPropertySymbol s)
+        {
+            if (s.IsOverride) return false;
+            for (var b = s.ContainingType.BaseType; b != null && DelPrograma(b); b = b.BaseType)
+                if (b.GetMembers().OfType<IPropertySymbol>().Any(o => o.IsIndexer && MismosParametros(o.Parameters, s.Parameters)))
+                    return true;
+            return false;
+        }
+
+        /// Lo que un indexador no puede ser en dos métodos: en una llamada `x[i]` no hay dónde poner lo opcional, y `get` y
+        /// `set` tienen que estar libres.
+        bool IndexadorSeEscribe(IndexerDeclarationSyntax ix, IPropertySymbol s)
+        {
+            string porque = s.ExplicitInterfaceImplementations.Length > 0 ? "un indexador explícito de una interfaz"
+                : ix.ParameterList.Parameters.Any(p => p.Default != null || p.Modifiers.Any(SyntaxKind.ParamsKeyword))
+                    ? "un indexador con parámetros opcionales o params"
+                : s.ContainingType.GetMembers("get").Any() || s.ContainingType.GetMembers("set").Any()
+                    ? "un indexador y un miembro llamado get o set" : null;
+            if (porque != null) Rechaza(ix, Porque.Pendiente(porque));
+            return porque == null;
+        }
+
+        /// Las anotaciones de un accesor: `get` y `set` son dos métodos, y la interfaz o el padre pueden tener sólo uno.
+        void AnotacionesDeIndexador(IPropertySymbol s, bool lee)
+        {
+            var ifaces = new List<string>();
+            foreach (var i in claseActual.AllInterfaces.Where(i => DelPrograma(i)))
+                foreach (var mi in i.GetMembers().OfType<IPropertySymbol>().Where(x => x.IsIndexer && (lee ? x.GetMethod : x.SetMethod) != null))
+                {
+                    string nombre = NombreTipo(i);
+                    if (SymbolEqualityComparer.Default.Equals(claseActual.FindImplementationForInterfaceMember(mi), s) && !ifaces.Contains(nombre))
+                        ifaces.Add(nombre);
+                }
+            if (ifaces.Count > 0) Linea("@implement{ " + string.Join(", ", ifaces) + " }");
+            var redef = s.OverriddenProperty;
+            if (redef != null && DelPrograma(redef.ContainingType) && (lee ? redef.GetMethod : redef.SetMethod) != null) Linea("@override{}");
+        }
+
         /// Los accesores de una propiedad, con el `get` delante: JC lo quiere así, y C# deja `{ set {…} get {…} }`
         /// (test-272); el orden no cambia lo que hace cada uno.
         static List<AccessorDeclarationSyntax> GetPrimero(SyntaxList<AccessorDeclarationSyntax> acc) =>
             acc.OrderBy(a => a.IsKind(SyntaxKind.GetAccessorDeclaration) ? 0 : 1).ToList();
 
-        string Parametros(ParameterListSyntax pl)
+        string Parametros(BaseParameterListSyntax pl)
         {
             var partes = new List<string>();
             foreach (var p in pl.Parameters)

@@ -17,8 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * V8/H8 (5-nov) — los tipos genéricos en el fuente. `#792`: el `>` que cierra un tipo al final de una línea no es un
- * operador colgante. `#793`: `C<X>`, una orden al compilador. Que salen bien en las dos VMs, Genericos y GenericosOrden, del
- * corpus; los errores, GenericosMal; aquí, lo que el compilador deja y lo que no.
+ * operador colgante. `#793`: `C<X>`, una orden al compilador. `#794`: `x[i]` sobre un objeto. Que salen bien en las dos VMs,
+ * Genericos, GenericosOrden e IndiceObjeto, del corpus; los errores, GenericosMal e IndiceMal; aquí, lo que el compilador deja
+ * y lo que no.
  */
 class TipoGenericoTest {
 
@@ -101,12 +102,42 @@ class TipoGenericoTest {
         assertEquals("", aot("return l.length()"));
     }
 
+    @Test @DisplayName("#794: en una native, `x[i]` es la llamada, con sus mismos límites; el compuesto, no se traduce")
+    void indiceEnUnaNative() throws Exception {
+        assertEquals("", aot("return t[1]"));
+        assertEquals(aot("t.set(1, 2)\n      return 0"), aot("t[1] := 2\n      return 0"));   // los límites de la llamada
+        assertTrue(aot("var c: Caja := l[0]\n      return c.n").contains("lleva un cast"));
+        assertTrue(aot("t[1] += 2\n      return 0").contains("no se traduce en una native"));
+    }
+
+    @Test @DisplayName("#794: `x[i]` de un objeto no va en un desempaquetado")
+    void indiceEnUnDesempaquetado(@TempDir Path tmp) throws IOException {
+        assertTrue(error(tmp, "module T\n  import Core\n  class Tab\n    public function Tab()\n    end Tab\n"
+                + "    public function get(i: integer): integer\n      return i\n    end get\n"
+                + "    public function set(i: integer, v: integer)\n    end set\n  end Tab\n"
+                + "  function dos(): (integer, integer)\n    return (1, 2)\n  end dos\n"
+                + "  function Main()\n    var t: Tab := Tab()\n    var b: integer := 0\n"
+                + "    { t[0], b } := dos()\n    print b\n  end Main\nend T\n")
+                .contains("no va en un desempaquetado"));
+    }
+
+    @Test @DisplayName("#794: dentro de `getPin(i)`, `this.pin[i]` es el campo: no se llama a sí mismo")
+    void elCampoGanaDentro(@TempDir Path tmp) throws IOException {
+        compilaBien(tmp, "module T\n  import Core\n  class R\n    var pin: integer[]\n    public function R()\n"
+                + "      this.pin := integer[2]\n    end R\n    public function getPin(i: integer): integer\n"
+                + "      return this.pin[i]\n    end getPin\n  end R\n  function Main()\n    var r: R := R()\n"
+                + "    print r.pin[0]\n  end Main\nend T\n");
+    }
+
     /** Como en AotCoberturaTest: lo que dice el emisor de una native con este cuerpo; "" si la traduce. */
     private static String aot(String cuerpo) throws Exception {
         String src = "module CobTest\n  import Core\n  public class Caja\n    public property n: integer\n"
                 + "    public function Caja(v: integer)\n      this.n := v\n    end Caja\n  end Caja\n"
-                + "  native function f(l: List<Caja>): integer\n      " + cuerpo + "\n  end f\n"
-                + "  function Main()\n    print f(List())\n  end Main\nend CobTest\n";
+                + "  public class Tab\n    public function Tab()\n    end Tab\n"
+                + "    public function get(i: integer): integer\n      return i\n    end get\n"
+                + "    public function set(i: integer, v: integer)\n    end set\n  end Tab\n"
+                + "  native function f(l: List<Caja>, t: Tab): integer\n      " + cuerpo + "\n  end f\n"
+                + "  function Main()\n    print f(List(), Tab())\n  end Main\nend CobTest\n";
         Parser p = new Parser(new Lexer(src).tokenize());
         Ast.ModuleNode m = p.parseModule();
         assertTrue(p.getErrors().isEmpty(), String.valueOf(p.getErrors()));

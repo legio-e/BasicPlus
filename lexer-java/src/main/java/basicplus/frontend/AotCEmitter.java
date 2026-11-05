@@ -1751,6 +1751,12 @@ public final class AotCEmitter {
              * Para += / -= cargamos primero, operamos, escribimos. */
             if (a.target instanceof Ast.IndexExpr) {
                 Ast.IndexExpr ix = (Ast.IndexExpr) a.target;
+                /* V8/H8 (#794) — `x[i] := v` sobre un objeto es la llamada `x.set(i, v)`. El compuesto, no: el objeto y el
+                 * índice se calculan una vez, con dos locales que aquí no hay. */
+                if (semInfo != null && semInfo.escriturasDeIndice.containsKey(a)) { emitStmt(semInfo.escriturasDeIndice.get(a)); return; }
+                if (semInfo != null && semInfo.compuestosDeIndice.containsKey(a))
+                    throw new UnsupportedAotException("AOT: '" + a.op.enBp() + "' sobre `x[i]` de un objeto (line " + a.line
+                            + ") no se traduce en una native: escribe x[i] := x[i] op v, o quita 'native'.");
                 BpType tArr = tipoDe(ix.target);
                 BpType tElem = (tArr instanceof ArrayType) ? ((ArrayType) tArr).element : null;
                 /* #746 — un compuesto calcula el array y el índice dos veces (store(a, i, load(a, i) op v)): con una
@@ -2907,6 +2913,10 @@ public final class AotCEmitter {
                 w.print("vm->aot_helpers->newarray_" + nuevo + "(vm, ");
                 emitExpr(ix.index);
                 w.print(")");
+                return;
+            }
+            if (semInfo != null && semInfo.lecturasDeIndice.containsKey(ix)) {   /* V8/H8 (#794): `x[i]`, la llamada que es */
+                emitExpr(semInfo.lecturasDeIndice.get(ix));
                 return;
             }
             w.print("vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");

@@ -659,17 +659,25 @@ public final class SemanticAnalyzer {
                     Scope members = p.name.isStatic() ? cls.staticMembers : cls.instanceMembers;
                     Symbol got = members.tryLookup(getName);
                     Symbol sot = members.tryLookup(setName);
-                    if (got instanceof FunctionSymbol)
+                    // V8/H8 (#794) — `getPin(i)` junto a una property `pin` es una sobrecarga, no una colisión: choca lo
+                    // que tiene la forma del accesor, `getPin()` y `setPin(v)`
+                    if (got instanceof FunctionSymbol && (p.name.isStatic() || conParametros((FunctionSymbol) got, 0)))
                         err(p.line, p.column,
                             "el accessor sintético '" + cls.name + "." + getName
                             + "' colisiona con un método ya declarado en la clase");
-                    if (sot instanceof FunctionSymbol)
+                    if (sot instanceof FunctionSymbol && (p.name.isStatic() || conParametros((FunctionSymbol) sot, 1)))
                         err(p.line, p.column,
                             "el accessor sintético '" + cls.name + "." + setName
                             + "' colisiona con un método ya declarado en la clase");
                 }
             }
         }
+    }
+
+    /** V8/H8 (#794) — ¿alguna sobrecarga de la cadena lleva esos parámetros? */
+    private static boolean conParametros(FunctionSymbol cabeza, int n) {
+        for (FunctionSymbol f = cabeza; f != null; f = f.nextOverload) if (f.params.size() == n) return true;
+        return false;
     }
 
     private void declareTopLevel(ITopLevelDecl decl, ClassSymbol owner, Scope scope) {
@@ -1508,6 +1516,8 @@ public final class SemanticAnalyzer {
                 }
             }
         }
+        // V8/H8 (#794) — `getPin(i)` junto a una property `pin`: el nombre pelado es del accesor, que el emisor registra con él
+        if (owner != null && nombraUnAccesor(owner, head.name)) taken.add(head.name);
         for (FunctionSymbol f = head; f != null; f = f.nextOverload) {
             String inherited = inheritedBySig.get(f.signatureKey());
             if (inherited != null) {
@@ -1521,6 +1531,17 @@ public final class SemanticAnalyzer {
             }
             taken.add(f.slotKey);
         }
+    }
+
+    /** V8/H8 (#794) — ¿`metodo` se llama como un accesor de una property de la clase o de un antepasado? */
+    private static boolean nombraUnAccesor(ClassSymbol cls, String metodo) {
+        if (metodo.length() < 4 || !(metodo.startsWith("get") || metodo.startsWith("set"))) return false;
+        String n = metodo.substring(3);
+        String minuscula = Character.toLowerCase(n.charAt(0)) + n.substring(1);
+        for (ClassSymbol c = cls; c != null; c = c.baseClass)
+            if (c.instanceMembers.tryLookup(minuscula) instanceof PropertySymbol
+                    || c.instanceMembers.tryLookup(n) instanceof PropertySymbol) return true;
+        return false;
     }
 
     /** H5.a-E3 — todas las sobrecargas de {@code name} visibles en {@code cls},
@@ -2755,9 +2776,11 @@ public final class SemanticAnalyzer {
         // que comprobar que encajan el uno con el otro.
         if (analyzeEventSubscription(a, scope)) return;
         rejectStrayMethodRef(a.value);
+        if (a.op == Ast.AssignOpKind.ASSIGN && a.target instanceof IndexExpr && escrituraDeIndice(a, scope)) return;   // #794
 
         BpType lhsT = analyzeExpr(a.target, scope, null);
         BpType rhsT = analyzeExpr(a.value, scope, lhsT);
+        if (a.op != Ast.AssignOpKind.ASSIGN && info.lecturasDeIndice.containsKey(a.target)) compuestoDeIndice(a, scope);   // #794
 
         // target debe ser asignable
         boolean okTarget = a.target instanceof IdentifierExpr
@@ -3715,8 +3738,13 @@ public final class SemanticAnalyzer {
                     + "' no es un tipo");
             return ErrorType.INSTANCE;
         }
+        IndiceConNombre conNombre = indiceConNombre(ix, scope);   // V8/H8 (#794): `x.pin[i]`
+        if (conNombre != null && tieneMetodo(conNombre.cls, "get" + conNombre.sufijo, 1))
+            return leeIndice(ix, llamada(conNombre.receptor, "get" + conNombre.sufijo, ix, ix.index), scope);
         arrayFijoPermitido.add(ix.target);   // V7/H1 #19: indexar un array fijo sí
         BpType t = analyzeExpr(ix.target, scope, null);
+        if (t instanceof ClassType && tieneMetodo(((ClassType) t).cls, "get", 1))
+            return leeIndice(ix, llamada(ix.target, "get", ix, ix.index), scope);   // V8/H8 (#794): `x[i]`
         BpType idxT = analyzeExpr(ix.index, scope, PrimitiveType.INTEGER);
         if (!PrimitiveType.INTEGER.isAssignableFrom(idxT))
             err(ix.line, ix.column, "índice debe ser integer, no '" + idxT.display() + "'");
@@ -3724,6 +3752,122 @@ public final class SemanticAnalyzer {
         if (t instanceof ErrorType) return ErrorType.INSTANCE;
         err(ix.line, ix.column, "el tipo '" + t.display() + "' no es indexable");
         return ErrorType.INSTANCE;
+    }
+
+    /** V8/H8 (#794) — `x.pin[i]`: el objeto, su clase y lo que sigue a `get` y `set` en sus métodos. */
+    private static final class IndiceConNombre {
+        final IExpr receptor;
+        final ClassSymbol cls;
+        final String sufijo;
+        IndiceConNombre(IExpr receptor, ClassSymbol cls, String sufijo) {
+            this.receptor = receptor;
+            this.cls = cls;
+            this.sufijo = sufijo;
+        }
+    }
+
+    /** V8/H8 (#794) — Eduardo: «get normal no tiene índice, get(i) sería una sobrecarga». `x.pin[i]` es `x.getPin(i)`, y
+     *  `x.pin[i] := v`, `x.setPin(i, v)`, si la clase los tiene. Dentro de la clase, si hay un campo o una property `pin`,
+     *  `pin[i]` es indexar ese miembro: es lo que escribe el cuerpo de `getPin(i)`, que si no se llamaría a sí mismo. Y si
+     *  `pin` no es un miembro, también `pin[i]` a secas, que es `this.pin[i]`. */
+    private IndiceConNombre indiceConNombre(IndexExpr ix, Scope scope) {
+        IExpr receptor;
+        String nombre;
+        if (ix.target instanceof MemberAccessExpr) {
+            receptor = ((MemberAccessExpr) ix.target).target;
+            nombre = ((MemberAccessExpr) ix.target).member;
+        } else if (ix.target instanceof IdentifierExpr && currentClass != null && currentFunction != null
+                && !currentFunction.isStatic && (scope == null || scope.resolve(((IdentifierExpr) ix.target).name) == null)) {
+            receptor = new ThisExpr(ix.line, ix.column);
+            nombre = ((IdentifierExpr) ix.target).name;
+        } else {
+            return null;
+        }
+        ClassSymbol cls = claseDeInstancia(receptor, scope);
+        if (cls == null) return null;
+        Symbol miembro = cls.lookupInstance(nombre);
+        boolean dentro = currentClass != null && (currentClass == cls || currentClass.isSubclassOf(cls));
+        if (dentro && miembro != null && !(miembro instanceof FunctionSymbol)) return null;
+        String sufijo = Character.toUpperCase(nombre.charAt(0)) + nombre.substring(1);
+        return tieneMetodo(cls, "get" + sufijo, 1) || tieneMetodo(cls, "set" + sufijo, 2)
+                ? new IndiceConNombre(receptor, cls, sufijo) : null;
+    }
+
+    /** V8/H8 (#794) — la clase de un objeto, sin decir nada: si hay algo que decir, lo dirá el camino de siempre, y una sola
+     *  vez. null si no es un objeto (un array, o el nombre de una clase o de un módulo). */
+    private ClassSymbol claseDeInstancia(IExpr e, Scope scope) {
+        int errores = info.diagnostics.size();
+        BpType t = analyzeExpr(e, scope, null);
+        while (info.diagnostics.size() > errores) info.diagnostics.remove(info.diagnostics.size() - 1);
+        return t instanceof ClassType && !(info.exprSymbols.get(e) instanceof ClassSymbol) ? ((ClassType) t).cls : null;
+    }
+
+    private boolean tieneMetodo(ClassSymbol cls, String nombre, int parametros) {
+        for (FunctionSymbol f : collectInstanceCandidates(cls, nombre)) if (f.params.size() == parametros) return true;
+        return false;
+    }
+
+    /** V8/H8 (#794) — la llamada que es: el árbol no se toca, y ésta se analiza como cualquier otra (sobrecargas, visibilidad,
+     *  la llave de un Map, el `C<X>` de #793). */
+    private static CallExpr llamada(IExpr receptor, String metodo, Node donde, IExpr... args) {
+        return new CallExpr(new MemberAccessExpr(receptor, metodo, donde.line, donde.column),
+                            new ArrayList<>(java.util.Arrays.asList(args)), donde.line, donde.column);
+    }
+
+    private BpType leeIndice(IndexExpr ix, CallExpr c, Scope scope) {
+        BpType t = analyzeExpr(c, scope, null);
+        info.lecturasDeIndice.put(ix, c);
+        return t;
+    }
+
+    /** V8/H8 (#794) — `x[i] := v`, `x.pin[i] := v`: true si era un objeto, y entonces ya está analizada. En un Map, `put`. */
+    private boolean escrituraDeIndice(AssignStmt a, Scope scope) {
+        IndexExpr ix = (IndexExpr) a.target;
+        if (ix.conNew || elementoDeArrayNuevo(ix, scope) != null) return false;
+        IExpr receptor;
+        String metodo;
+        IndiceConNombre conNombre = indiceConNombre(ix, scope);
+        if (conNombre != null) {
+            receptor = conNombre.receptor;
+            metodo = "set" + conNombre.sufijo;
+            if (!tieneMetodo(conNombre.cls, metodo, 2)) return noSeEscribe(a, conNombre.cls, metodo, scope);
+        } else {
+            ClassSymbol cls = claseDeInstancia(ix.target, scope);
+            if (cls == null) return false;
+            receptor = ix.target;
+            metodo = esMapa(cls) ? "put" : "set";
+            if (!tieneMetodo(cls, metodo, 2)) {
+                if (!tieneMetodo(cls, "get", 1)) return false;   // «no es indexable», por el camino de siempre
+                return noSeEscribe(a, cls, metodo, scope);
+            }
+        }
+        CallExpr c = llamada(receptor, metodo, ix, ix.index, a.value);
+        analyzeExpr(c, scope, null);
+        info.exprTypes.put(ix, info.exprTypes.get(a.value));
+        info.escriturasDeIndice.put(a, new ExprStmt(c, a.line, a.column));
+        return true;
+    }
+
+    private boolean noSeEscribe(AssignStmt a, ClassSymbol cls, String metodo, Scope scope) {
+        analyzeExpr(a.value, scope, null);
+        err(a.line, a.column, "'" + cls.name + "' no tiene " + metodo + "(i, v): se lee, y no se escribe");
+        return true;
+    }
+
+    /** V8/H8 (#794) — `x[i] += e`: se lee con el `get` de {@link #analyzeIndex} y se escribe con el `set` que le toca, que
+     *  recibe lo que da `x[i]`. */
+    private void compuestoDeIndice(AssignStmt a, Scope scope) {
+        IndexExpr ix = (IndexExpr) a.target;
+        MemberAccessExpr g = (MemberAccessExpr) info.lecturasDeIndice.get(ix).callee;
+        ClassSymbol cls = ((ClassType) info.exprTypes.get(g.target)).cls;
+        String metodo = "get".equals(g.member) ? (esMapa(cls) ? "put" : "set") : "set" + g.member.substring(3);
+        if (!tieneMetodo(cls, metodo, 2)) {
+            err(a.line, a.column, "'" + cls.name + "' no tiene " + metodo + "(i, v): se lee, y no se escribe");
+            return;
+        }
+        CallExpr c = llamada(g.target, metodo, ix, ix.index, ix);
+        analyzeExpr(c, scope, null);
+        info.compuestosDeIndice.put(a, c);
     }
 
     /** V8/H8 — los nombres de los tipos primitivos, como los deja el parser en una expresión (`integer[10]`). */

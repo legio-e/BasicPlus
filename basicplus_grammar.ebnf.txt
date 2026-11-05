@@ -600,6 +600,9 @@ unary    ::= '-' primary
      obj.method(args)
      arr[i]
      obj.method().field[0].other()                                    *)
+(* V8/H8 (#794): sobre un objeto, `x[i]` es la llamada `x.get(i)`, y `x[i] := v`, `x.set(i, v)`
+   (`put` en un Map); `x.pin[i]` es `x.getPin(i)`, y `x.pin[i] := v`, `x.setPin(i, v)`. Dentro de la
+   clase, si hay un campo o una property `pin`, `pin[i]` es indexar ese miembro. *)
 primary  ::= atom { '.' ( call_expr | name ) | '[' expr ']' } ;
 
 atom     ::= INTEGER_LIT

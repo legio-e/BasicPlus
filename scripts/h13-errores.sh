@@ -117,6 +117,13 @@ GenericosMal|una llave string necesita Collections.Map()
 GenericosMal|la llave de este Map es integer, no 'string' (put)
 GenericosMal|la llave de este Map es integer, no 'string' (getString)
 GenericosMal|se esperaba un array o una List en 'for in'
+IndiceMal|el tipo 'Cosa' no es indexable
+IndiceMal|'SoloGet' no tiene set(i, v)
+IndiceMal|'SoloGet' no tiene setPin(i, v)
+IndiceMal|'List<Sensor>' guarda 'Sensor', no 'string' (set)
+IndiceMal|guarda 'Sensor', no 'Motor' (put)
+IndiceMal|la llave de este Map es string, no 'integer' (put)
+IndiceMal|el accessor sint
 InterfacesMal|la interfaz 'ConCampo' no tiene campos
 InterfacesMal|ciclo de herencia entre interfaces en 'A'
 InterfacesMal|'SinArea' implementa 'Forma' y no tiene 'area(): double' (tiene 'area(): integer')

@@ -368,8 +368,17 @@ namespace Cs2Jc
             {
                 case AssignmentExpressionSyntax c when c.IsKind(SyntaxKind.SimpleAssignmentExpression)
                                                        && c.Left is ElementAccessExpressionSyntax ea && EsColeccion(ea):
-                    return Expr(ea.Expression) + (EsLista(m.GetTypeInfo(ea.Expression).Type) ? ".set(" : ".set_Item(")
-                           + Expr(ea.ArgumentList.Arguments[0].Expression) + ", " + Expr(c.Right) + ")";
+                    return Expr(ea.Expression) + "[" + Expr(ea.ArgumentList.Arguments[0].Expression) + "] = " + Expr(c.Right);
+                // `x[i, j] = v` y `base[i] = v`: JC no los escribe con índice, sino con la llamada que son (#794)
+                case AssignmentExpressionSyntax c when c.Left is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
+                    if (!c.IsKind(SyntaxKind.SimpleAssignmentExpression))
+                        return Rechaza(c, Porque.Pendiente("un compuesto sobre `x[i, j]` o `base[i]`"));
+                    return (ea.Expression is BaseExpressionSyntax ? "base" : Expr(ea.Expression)) + ".set("
+                           + string.Join(", ", ea.ArgumentList.Arguments.Select(a => Expr(a.Expression))) + ", " + Expr(c.Right) + ")";
+                case PostfixUnaryExpressionSyntax p when p.Operand is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
+                    return Rechaza(p, Porque.Pendiente("un compuesto sobre `x[i, j]` o `base[i]`"));
+                case PrefixUnaryExpressionSyntax p when p.Operand is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
+                    return Rechaza(p, Porque.Pendiente("un compuesto sobre `x[i, j]` o `base[i]`"));
                 case AssignmentExpressionSyntax a:
                     if (a.IsKind(SyntaxKind.CoalesceAssignmentExpression))
                     {
@@ -956,13 +965,25 @@ namespace Cs2Jc
             if (EsCadena(t) && ea.ArgumentList.Arguments.Count == 1)
                 return "charCodeAt(" + Expr(ea.Expression) + ", " + Indice(ea.ArgumentList.Arguments[0].Expression) + ")";
             if (EsColeccion(ea))
-                return Expr(ea.Expression) + (EsLista(m.GetTypeInfo(ea.Expression).Type) ? ".get(" : ".get_Item(") + Expr(ea.ArgumentList.Arguments[0].Expression) + ")";
+                return Expr(ea.Expression) + "[" + Expr(ea.ArgumentList.Arguments[0].Expression) + "]";
             if (m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer)
-                return Rechaza(ea, DelPrograma(p) ? Porque.H7(Porque.Indexadores) : Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
+            {
+                if (!DelPrograma(p)) return Rechaza(ea, Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
+                if (ea.ArgumentList.Arguments.Any(a => a.NameColon != null))
+                    return Rechaza(ea, Porque.Pendiente("un indexador con argumentos con nombre"));
+                string args = string.Join(", ", ea.ArgumentList.Arguments.Select(a => Expr(a.Expression)));
+                if (ea.Expression is BaseExpressionSyntax) return "base.get(" + args + ")";
+                return IndiceConLlamada(ea) ? Expr(ea.Expression) + ".get(" + args + ")" : Expr(ea.Expression) + "[" + args + "]";
+            }
             return RechazaNodo(ea);
         }
 
-        /// ¿`x[i]` de una `ArrayList` o una `Hashtable`? En JC, `get` y `set` de la `List`, y `get_Item` y `set_Item` de la tabla.
+        /// ¿`x[i, j]` o `base[i]` de un indexador del programa? JC los escribe con la llamada: `x.get(i, j)` y `base.get(i)`.
+        bool IndiceConLlamada(ElementAccessExpressionSyntax ea) =>
+            m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer && DelPrograma(p)
+            && (ea.ArgumentList.Arguments.Count != 1 || ea.Expression is BaseExpressionSyntax);
+
+        /// ¿`x[i]` de una `ArrayList` o una `Hashtable`? En JC, `get` y `set` de la `List` y de la tabla (#794).
         bool EsColeccion(ElementAccessExpressionSyntax ea) =>
             m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer && !DelPrograma(p) && ea.ArgumentList.Arguments.Count == 1
             && (EsLista(m.GetTypeInfo(ea.Expression).Type) || EsTabla(m.GetTypeInfo(ea.Expression).Type));
