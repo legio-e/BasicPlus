@@ -1951,8 +1951,10 @@ Eduardo: *«OK te he conectado la Pico2 con wifi y la C5. Cuando quieras miramos
 | WiFi apagada, tres pasadas | 41, 41, 41 | 189, 154, 154 ms | 124 |
 | `quantum=256` | 99 | 87 ms | 99 |
 | `quantum=128` | 100 | 55 ms | 99 |
+| en la flash, sin el bus de la pantalla, tres pasadas | 45, 46, 45 | 218, 234, 204 ms | de 136 a 139 |
+| en la flash, con `quantum=128`, dos pasadas | 86, 126 | 177, 182 ms | 87, 125 |
 
-**No es la WiFi: es el turno de los hilos, contado en opcodes** (`#801`).
+**No es la WiFi, ni el bus que comparten la pantalla y la SD** (las dos en el SPI 2; Eduardo: *«En la C5 la SD y la pantalla comparten el bus SPI (creo)»*): **es el turno de los hilos, contado en opcodes** (`#801`).
 
 ---
 
