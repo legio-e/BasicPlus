@@ -6112,6 +6112,14 @@ Juntas: 1 y 2, +9; con 4 y 5, +13; con 3, +27. Ninguna toca JC.
   `Prueba(x)`. Una clase por tipo, escrita por el traductor. En un primer paso, las variables y los parámetros; lo que se pasa de un campo o de
   una casilla (`ref a[i]`) y lo de C# 7 (`ref int r = ref x`, `test-ref-11`), aparte.
 
+**La idea de Eduardo para `ref` y `out`** (6-nov; sin decidir ni programar, y cambia el ajuste 3): *«Aquí no separaremos un poco de C#. A ver pasar datos por referencia solamente tiene sentido con variable escalares, los objetos y arrays ya se pasan por referencia y los strings son inmutables así que no se pueden pasar. La diferencia que quiero hacer es que lo único que vamos autorizar es pasar propiedades, con lo cual pasaremos 'delegados' del setter y el getter.»*
+
+- **Cómo la entiendo:** en `suma(ref c.valor, 5)`, lo que llega a `suma` no es un entero sino el objeto `c` con el getter y el setter de `valor`, y dentro `n := n + k` se compila como leer con el getter y escribir con el setter. `suma(ref x, 5)` con una variable, o `suma(ref a[i], 5)`, son un error de compilación.
+- **Es lo contrario de C#**, que permite variables, campos y casillas y prohíbe justo las propiedades (CS0206). Y encaja con la VM: una referencia a una variable sería un puntero a una pila, que aquí no existe; una property es un objeto, con su handle, y dos métodos. La VM no ve nada nuevo: seguramente sin tocarla ni tocar el `.mod`, a comprobar.
+- **`out`:** sólo el setter, así que leer antes de escribir es un error de compilación, y una property sin setter no se puede pasar. La palabra `out` no puede reservarse del todo: hay muestras con variables que se llaman así (`GpioLoop`, los `NB2`).
+- **Censo, por texto y aproximado** (128 de las 2742 pruebas): de 244 parámetros declarados, 113 son escalares, 18 cadenas y 5 arrays, y los 108 restantes, clases, `struct`, enums o `T`. De 161 argumentos, 150 son un nombre suelto (una variable o un campo), 6 una casilla y 1 un miembro.
+- **Dos cosas que señalé:** (1) con una cadena o un objeto, `ref` no cambia el texto ni el objeto: cambia a cuál apunta la variable del que llama (`out string error`, `ref Nodo raiz`). Tiene sentido, y con este mecanismo sale sin hacer nada: una property de tipo `string` tiene su setter igual. Recomiendo no limitarlo a los escalares. (2) Como casi todo lo que pasa C# son variables, en las pruebas lo salva el traductor con la caja del ajuste 3, que tendría una property `v`: se pasaría `ref caja.v`. Las dos ideas encajan.
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
