@@ -33,7 +33,7 @@
  * no se entera de por dónde viaja.
  */
 #include "wire_v1.h"
-#include "bpvm_platform.h"   /* V6/#473: bpvm_platform_now_ms */
+#include "bpvm_wire_cables.h"   /* V8/H3: este cable, y encima los dos */
 #include "log.h"             /* #545: un corte se dice en el log (sólo va al anillo de RAM) */
 
 #include "driver/usb_serial_jtag.h"
@@ -41,9 +41,6 @@
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
-
-#include <string.h>
 
 /* El driver pide sus dos buffers. RX holgado por la misma razón que en UART0:
  * las tramas del wire llevan bulk detrás (PUT de .mod y de recursos). */
@@ -58,81 +55,12 @@
 
 static const char* s_nombre = "USB-Serial-JTAG";
 
-void wire_v1_transport_init(void) {
-    usb_serial_jtag_driver_config_t cfg = {
-        .tx_buffer_size = WIRE_TX_BUF,
-        .rx_buffer_size = WIRE_RX_BUF,
-    };
-    /* Si el driver no instala, el wire queda mudo y HOY ESO NO SE VEIA: la placa
-     * arrancaba entera y simplemente no contestaba. Que el nombre lo diga es lo
-     * unico que hace falta para no perder una tarde. */
-    esp_err_t rc = usb_serial_jtag_driver_install(&cfg);
-    if (rc != ESP_OK) s_nombre = "USB-Serial-JTAG (FALLO AL INSTALAR)";
-}
-
 const char* wire_v1_transport_name(void) { return s_nombre; }
 
 /* #574 — los pines que este cable le quita al programa: el D- y el D+ del USB nativo del chip (C3 18/19, C5 13/14,
  * C6 12/13; los dice el IDF para cada uno). */
 uint64_t wire_v1_transport_pines(void) {
     return (1ULL << USB_INT_PHY0_DM_GPIO_NUM) | (1ULL << USB_INT_PHY0_DP_GPIO_NUM);
-}
-
-/* ===================== Lectura ===================== */
-
-/* Bloquea hasta `ms` cediendo CPU dentro del driver — MISMO motivo que en
- * UART0: pollear con timeout 0 + vTaskDelay(0) no cede y el watchdog mata a
- * IDLE. Devuelve el byte o -1 si venció sin datos. */
-static int wire_read_byte(int ms) {
-    uint8_t b;
-    int n = usb_serial_jtag_read_bytes(&b, 1, pdMS_TO_TICKS(ms));
-    return (n == 1) ? (int) b : -1;
-}
-
-/* P-run-stop (#257) — variante NO bloqueante para el poll de KILL que la VM
- * invoca entre quanta durante un RUN. */
-int wire_v1_try_getchar(void) {
-    uint8_t b;
-    int n = usb_serial_jtag_read_bytes(&b, 1, 0);
-    return (n == 1) ? (int) b : -1;
-}
-
-int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
-    size_t n = 0;
-    if (first_char_already_read >= 0) {
-        if (n + 1 >= buf_max) return -1;
-        buf[n++] = (char) first_char_already_read;
-    }
-    int64_t ultimo = bpvm_platform_now_ms();   /* V6/#473: plazo de linea estancada */
-    for (;;) {
-        int c = wire_read_byte(100);    /* bloquea <=100 ms cediendo CPU */
-        if (c < 0) {                     /* timeout sin datos */
-            /* Sin plazo, un truncado se come el mensaje siguiente. El porque
-             * entero, en include/bpvm_wire_v1.h (WIRE_V1_ESTANCADA_MS). */
-            if (n > 0 && bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_ESTANCADA_MS)
-                return -2;
-            continue;
-        }
-        ultimo = bpvm_platform_now_ms();
-        if (c == '\n') {
-            return (int) n;
-        }
-        if (c == '\r') continue;
-        if (n + 1 >= buf_max) return -1;
-        buf[n++] = (char) c;
-    }
-}
-
-int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
-    if (n > buf_max) return -1;
-    size_t got = 0;
-    int64_t ultimo = bpvm_platform_now_ms();   /* #495: plazo de bulk estancado (bpvm_wire_v1.h) */
-    while (got < n) {
-        int r = usb_serial_jtag_read_bytes(buf + got, n - got, pdMS_TO_TICKS(200));
-        if (r > 0) { got += (size_t) r; ultimo = bpvm_platform_now_ms(); continue; }
-        if (bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_BULK_ESTANCADO_MS) return -2;
-    }
-    return (int) n;
 }
 
 /* ===================== Escritura ===================== */
@@ -174,48 +102,30 @@ static void wire_write(const char* data, size_t n) {
     s_tx_cortado = 0;
 }
 
-/* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre
- * (include/bpvm_wire_v1.h: «La linea debe ser ATOMICA frente a otros
- * escritores»). Lo cumplia SOLO la Pico; aqui estaba vigilado, no construido.
+/* V8/H3 (6-nov) — ESTE CABLE SÓLO MUEVE BYTES: la línea, el bulk, sus plazos y el cerrojo son de src/wire_cables.c.
  *
- * Los dos escritores concurrentes son reales: el hilo `io` saca los OUTPUT del
- * programa mientras la tarea del wire contesta sus replies — el poll atiende
- * HELLO/BUSY EN CALIENTE, durante un run. Sin cerrojo, el IDE recibe dos JSON
- * entrelazados: corrupcion de framing, no estetica. Y no pasa en el PC.
- *
- * El cerrojo es del CABLE, no de la VM: el `tx_mtx` del comun (src/bpvm_io.c:84)
- * solo cubre la salida del programa —el poll contesta fuera de el— y ademas vive
- * dentro de la VM, asi que no existe entre ejecuciones.
- *
- * Init perezoso, y es seguro: la primera escritura es el banner de arranque, con
- * una sola tarea viva. Y tomar un mutex libre NO bloquea, asi que vale incluso
- * antes de que arranque el planificador. */
-static SemaphoreHandle_t s_tx_mutex = NULL;
-
-static void tx_lock(void) {
-    if (s_tx_mutex == NULL) s_tx_mutex = xSemaphoreCreateMutex();
-    if (s_tx_mutex != NULL) xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-}
-static void tx_unlock(void) {
-    if (s_tx_mutex != NULL) xSemaphoreGive(s_tx_mutex);
+ * Bloquea hasta `ms` cediendo CPU dentro del driver — MISMO motivo que en UART0: pollear con timeout 0 + vTaskDelay(0) no cede
+ * y el watchdog mata a IDLE. Una espera de menos de un tick es un tick. */
+static int usb_leer(uint8_t* buf, size_t n, int ms) {
+    TickType_t ticks = pdMS_TO_TICKS(ms);
+    if (ms > 0 && ticks == 0) ticks = 1;
+    int r = usb_serial_jtag_read_bytes(buf, n, ticks);
+    return (r > 0) ? r : 0;
 }
 
-void wire_v1_send_line(const char* data, size_t len) {
-    tx_lock();
-    if (len) wire_write(data, len);
-    wire_write("\n", 1);
-    tx_unlock();
-}
+static void usb_escribir(const uint8_t* datos, size_t n) { wire_write((const char*) datos, n); }
 
-void wire_v1_send_bulk(const uint8_t* data, size_t n) {
-    if (n) wire_write((const char*) data, n);
-}
+static const bpvm_wire_cable_t CABLE_USB = { "USB-Serial-JTAG", usb_leer, usb_escribir, NULL, NULL, NULL };
 
-/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
-void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
-    tx_lock();
-    if (len) wire_write(line, len);
-    wire_write("\n", 1);
-    if (n) wire_write((const char*) bulk, n);
-    tx_unlock();
+void wire_v1_transport_init(void) {
+    usb_serial_jtag_driver_config_t cfg = {
+        .tx_buffer_size = WIRE_TX_BUF,
+        .rx_buffer_size = WIRE_RX_BUF,
+    };
+    /* Si el driver no instala, el wire queda mudo y HOY ESO NO SE VEIA: la placa
+     * arrancaba entera y simplemente no contestaba. Que el nombre lo diga es lo
+     * unico que hace falta para no perder una tarde. */
+    esp_err_t rc = usb_serial_jtag_driver_install(&cfg);
+    if (rc != ESP_OK) s_nombre = "USB-Serial-JTAG (FALLO AL INSTALAR)";
+    bpvm_wire_cables_local(&CABLE_USB);
 }

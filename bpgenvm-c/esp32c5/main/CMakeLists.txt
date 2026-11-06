@@ -22,6 +22,10 @@ idf_component_register(
         # donde tiene sentido lo que solo miramos nosotros cuando algo falla.
         # El S3 y el P4 tienen dos puertos y NO se tocan.
         "../../esp32/common/wire_v1_usbjtag.c"
+        "../../src/wire_cables.c"            # V8/H3: encima del cable local, y del de la red donde lo haya
+        "../../esp32/common/wire_red.c"      # V8/H3: el cable de la red
+        "../../esp32/common/wifi_esp32.c"    # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../../esp32/common/net_esp32.c"     # V8/H3: la IP y los sockets (esp_netif, lwIP)
         "c5_board_id.c"                       # V7/H11: identidad de placa (pisa el default del S3)
         "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
         "../../esp32/common/repl_esp32.c"
@@ -121,6 +125,10 @@ idf_component_register(
         "../../third_party/littlefs"   # H2-B3: lfs.h
         "../../third_party/fatfs"      # V7/H3 SD.3: ff.h (nuestro ffconf.h sale de ../../include)
     REQUIRES
+        esp_wifi         # V8/H3: la WiFi
+        esp_netif
+        esp_event
+        lwip
         esp_timer
         esp_driver_uart
         esp_driver_usb_serial_jtag   # V6/P1.C3.3: el cable del wire va por el USB nativo
@@ -142,7 +150,8 @@ idf_component_register(
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
 # (LFS_NO_DEBUG/WARN/ERROR: por stdout romperían consola/paridad, como en el RP2350).
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
+    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC
+    BPVM_WIRE_CABLES=1)   # V8/H3: src/wire_cables.c
 
 # #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
 # del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.

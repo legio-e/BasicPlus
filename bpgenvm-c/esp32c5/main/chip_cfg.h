@@ -46,4 +46,8 @@
  * flash—: `esp32_caps_init` (gpio_esp32.c) lee el eFuse. */
 #define CHIP_GPIO_VDD_SPI  19
 
+/* V8/H3 (6-nov): esta imagen lleva la WiFi, con la radio del chip. Tiene PSRAM y le cabe; en la C3 y la C6, que no la tienen,
+ * Eduardo: «C3 y C6 sin wifi». */
+#define CHIP_TIENE_WIFI 1
+
 #endif /* BPVM_CHIP_CFG_H */

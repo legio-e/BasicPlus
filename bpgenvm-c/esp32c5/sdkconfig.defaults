@@ -106,3 +106,10 @@ CONFIG_ESP_INT_WDT_TIMEOUT_MS=800
 # la máxima: sin pedir nada, la CPU va a la de la imagen, como antes. Cuesta unos KB de código, y los drivers piden y
 # sueltan un permiso en cada operación. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
 CONFIG_PM_ENABLE=y
+
+# V8/H3 (6-nov): LA WIFI, como en la S3: sin NVS, la calibración al encenderla, la tarea de eventos a 4 KB y los búferes de la
+# WiFi y de lwIP en la PSRAM. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=n
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

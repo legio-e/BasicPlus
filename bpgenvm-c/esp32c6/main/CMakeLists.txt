@@ -21,6 +21,7 @@ idf_component_register(
         # donde tiene sentido lo que solo miramos nosotros cuando algo falla.
         # El S3 y el P4 tienen dos puertos y NO se tocan.
         "../../esp32/common/wire_v1_usbjtag.c"
+        "../../src/wire_cables.c"            # V8/H3: encima del cable local, y del de la red donde lo haya
         "c6_board_id.c"                       # V6/P1.C6: identidad de placa (pisa el default del S3)
         # V7/H6.b (25-sep): la pantalla SALE de la imagen — LVGL y gui.c van en el pack (GuiMini) y el driver
         # en el suyo (DriverSpi, con la placa en el ENV), como en la C5. Aquí quedan los trampolines (gui_pack.c).
@@ -143,7 +144,8 @@ idf_component_register(
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
 # (LFS_NO_DEBUG/WARN/ERROR: por stdout romperían consola/paridad, como en el RP2350).
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
+    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC
+    BPVM_WIRE_CABLES=1)   # V8/H3: src/wire_cables.c
 
 # #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
 # del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.
