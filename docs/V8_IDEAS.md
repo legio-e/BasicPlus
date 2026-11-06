@@ -7021,3 +7021,34 @@ de lo que había antes en esa zona de la pila. Eso sí es un handle, y retiene e
 salir»*). Si el `Main` de B acaba bien y deja hilos vivos, `tryExe` da `false`, con *«Overlay.tryExe: el programa ha acabado
 con hilos vivos»*: compara los hilos vivos de antes y de después, con el builtin 302 (`__overlayThreads`). Los hilos de A no
 cuentan. Si uno de A acaba mientras B deja uno suyo, la cuenta no lo ve, pero `unload` sigue negándose con otros hilos vivos.
+
+## E14 · Micro32 Suite: una organización en GitHub y el proyecto en dos (Eduardo, 6-nov; `#802`; sin decidir)
+
+Eduardo: *«con JC llamar al proyecto BasicPlus se queda un poco corto. Así que la idea es en GitHub cambiar el nombre de proyecto y convertirlo en un grupo de proyectos ( no se si 'grupo' es el término correcto ) . El nombre sería algo como 'Micro32 Suite' . Y luego para que sea un grupo de proyectos tenemos que dividir el nuestro en 2. Por un lado el IDE, el compilador y la VM-Java . Por el otro la VM-C y las VM de los micros. Hay que verlo pero creo que puede ser una separación bastante limpia, una se hace casi todo en Java y la otra se hace casi todo en C.»*
+
+**El término** es *organización*. `legio-e/BasicPlus` se transfiere a ella, y los enlaces y los `git` de antes siguen funcionando por redirección, mientras nadie cree otro repositorio con el nombre viejo. Dividir, en cambio, crea repositorios nuevos, sin redirección, sin etiquetas y con otros hashes.
+
+**El nombre.** El 6-nov, `github.com/micro32` y `micro-32` estaban cogidos; `micro32-suite` y `micro32suite` daban 404. No es una reserva, ni se ha mirado si es marca registrada. BasicPlus y JC siguen siendo los nombres de los lenguajes, y lo de dentro (`bpvm_*`, `BpIde`) no hace falta cambiarlo.
+
+**Lo que dice el código: la separación es limpia.** Ninguna línea de Java enlaza con C, ni al revés: se hablan por contratos (el `.mod`, los opcodes, el wire, el `.mdn`, los packs).
+
+**Lo que queda en medio, que no es de Java ni de C:**
+
+| qué | por qué está en medio |
+|---|---|
+| `bpstdlib` (185 ficheros) | la necesita el compilador y va dentro de las imágenes; de `Core.bp` sale la tabla de builtins de las dos VMs (`scripts/gen_builtins.py`) |
+| `compat` y `samples` (982 ficheros) | la red es el invariante: necesita las dos VMs por definición |
+| el AOT | en los dos sentidos: el compilador escribe C contra las cabeceras y los `.ld` de `bpgenvm-c`, y el `Makefile` de la VM-C llama al compilador (el jar y `AotMain`) |
+| lo que usa el IDE | `bpvm-sim` y la VM-C de host; y el ZIP se monta con todo |
+| `docs`, con `FICHAS.md` | la fuente única de verdad es de las dos mitades |
+
+**Lo que dicen los commits: la forma de trabajar no es tan limpia.** Sin contar los que sólo tocan documentos, tocan Java y C a la vez 341 de 1785 en toda la historia (19 %), y 51 de 161 en V8 (32 %). No es un defecto: es el invariante, la cascada hecha commit. Un builtin nuevo hoy es un commit; dividido, dos en dos repositorios que tienen que ir a la par.
+
+**Y la historia.** 3185 commits y 1625 hashes citados en los documentos. `git filter-repo` conserva la historia de cada mitad, pero con otros hashes: `BasicPlus` tendría que quedarse, archivado, como la referencia de esos hashes y de las etiquetas `v1.0`–`v7.0`.
+
+**Recomendación:**
+
+1. La organización y el nombre, al publicar V8: entonces se hace el push de todos modos, y no se pierde nada.
+2. La división, no antes de empezar V9, y cuanto más quieto esté el lenguaje, mejor: lo que cuesta son los commits que cruzan.
+3. Antes, dentro del repositorio de hoy y con la red de testigo: quitar las rutas escritas a mano (`../lexer-java`, `C:\lenguajes\pm\bpgenvm-c`), y dejar fuera lo viejo (`lexer`, `vm`…).
+4. Lo de en medio, decidido antes de cortar. La opción más sencilla: tres proyectos, el de Java, el de C y uno pequeño con la red y los contratos, que no es de ninguno de los dos.

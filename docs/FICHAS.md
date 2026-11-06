@@ -7381,6 +7381,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir)
+
+- **La idea:** *«con JC llamar al proyecto BasicPlus se queda un poco corto»*: el nombre de un grupo de proyectos, y dos: el IDE, el compilador y la VM-Java, y la VM-C con las de los micros.
+- **Medido** (`V8_IDEAS` §E14): el código se separa limpio, por contratos; en medio quedan la stdlib, la red, el AOT, lo que usa el IDE y los documentos; y en V8, uno de cada tres commits de código toca Java y C a la vez.
+- **Sin hacer: por decidir (Eduardo)**, y nada en GitHub sin su palabra. La recomendación, en §E14: la organización al publicar V8, y la división no antes de empezar V9.
+
 #### 🔵 `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi)
 
 - **Lo que pasa:** `C5SdGui`, con un hilo que escribe y relee ficheros en la SD y otro que cambia una etiqueta. El 24-sep, 176 cambios de la etiqueta, 63 ms de peor hueco y 30 ficheros; el 6-nov, 41, unos 155 ms y 124. Sale `RESULT: OK` y la pantalla se ve bien (Eduardo): no se rompe nada, pero la etiqueta va cuatro veces más despacio.
