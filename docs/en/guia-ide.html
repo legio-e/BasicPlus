@@ -485,6 +485,17 @@
   version does not stay there passing itself off as the new one.
 </p>
 <p>
+  <strong>Over WiFi.</strong> A board with WiFi works the same without a cable: backend
+  <em>Placa (red)</em>, its IP and <strong>Connect</strong>. If you do not know it,
+  <strong>Buscar en la red</strong> asks the whole network which boards are there. The IDE
+  remembers the last one, and if you connect by cable it learns its IP. The board listens on both
+  at once and talks to whoever sent it something last, so you can come in over the network with a
+  program running and stop it. The <strong>WiFi</strong> button writes the network and its
+  password to <code>/sys/wifi.json</code>; the board has to be reset for it to take effect. The
+  password stays in clear on the board, and the board accepts any computer on the network: use it
+  on a network you trust.
+</p>
+<p>
   The same panel serves the <em>Java VM (TCP v1)</em>: point it at a local
   or remote daemon and you get the same tree and the same buttons — the
   protocol is identical.

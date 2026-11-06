@@ -48,6 +48,9 @@ void bpvm_red_hay_ip(int hay);
 /* La IP de ahora, en texto. 1, o 0 y "" si no hay. */
 int  bpvm_red_ip(char* buf, size_t n);
 
+/* El nombre de la placa en la red: el del fichero, o el suyo. "" hasta que se prepara. */
+const char* bpvm_red_nombre(void);
+
 /* Quien quiera saber cuándo sube y baja la IP: el cable por la red, que abre su puerto con ella. Uno. */
 void bpvm_red_al_cambiar(void (*fn)(int hay));
 

@@ -241,7 +241,11 @@ public final class BpvmClient implements AutoCloseable {
     /** A2.6 — Conecta a una VM REMOTA ya corriendo en {@code host:port}. */
     public void connectRemote(String host, int port) throws IOException {
         try {
-            this.socket = new java.net.Socket(host, port);
+            /* V8/H3 (6-nov): con plazo: una placa apagada o fuera de la red no contesta, y Windows esperaría 20 s. Y sin
+             * Nagle: el wire son mensajes cortos, y por la WiFi cada espera se nota. */
+            this.socket = new java.net.Socket();
+            socket.connect(new java.net.InetSocketAddress(host, port), 5000);
+            socket.setTcpNoDelay(true);
             this.outRaw = new BufferedOutputStream(socket.getOutputStream());
             this.inRaw  = conLatido(new BufferedInputStream(socket.getInputStream()));
         } catch (IOException e) {

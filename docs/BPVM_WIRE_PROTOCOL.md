@@ -28,7 +28,7 @@ El protocolo permite al IDE:
 Servidor puede ser:
 - VM Java en modo daemon (`java -jar bpvm.jar --listen=7332`).
 - Firmware Pico sobre USB CDC.
-- Firmware Pico sobre TCP/WiFi (futuro #145).
+- El firmware de una placa con WiFi, por TCP (V8/H3; §2.3).
 
 Cliente: el IDE BpIde, vía la abstracción `BpvmClient` con `Transport`
 intercambiable.
@@ -74,6 +74,31 @@ exacto de bytes, y solo entonces volver al modo line-delimited.
 
 **Bulk siempre va bytes raw**, nunca base64. Razones: eficiencia (USB
 CDC tiene ancho limitado) y simplicidad del parser embedded.
+
+### 2.3 Por la red (V8/H3)
+
+Una placa con WiFi habla este mismo protocolo por TCP, en el puerto **3333**, a la vez que por su cable de siempre. El puerto se
+abre al tener IP y se cierra al perderla.
+
+- **Habla uno a la vez: el último que ha mandado un mensaje entero.** Las respuestas y la salida del programa van a ése. Se cambia
+  sólo entre mensajes, y lo que no empieza por `{` no es un mensaje. Así un cliente puede entrar con un programa corriendo y
+  pararlo. Al cambiar de cable, lo que se le mandaba al de antes se corta, como con un `HELLO`.
+- **Un cliente a la vez por la red:** uno nuevo sustituye al anterior, que con la WiFi suele ser uno muerto. Cuando se va, habla el
+  cable local.
+- **Un cliente muerto se ve solo:** SO_KEEPALIVE (a los 10 s de silencio, tres sondas cada 5 s), y un envío atascado 5 s lo da por
+  perdido.
+- Una conexión abierta cuenta como actividad para el apagado de la WiFi (`autoOff`, en `/sys/wifi.json`).
+- **Sin seguridad, de momento:** la placa acepta a cualquier ordenador de la red.
+
+**Buscar placas.** Por UDP al mismo puerto, a toda la red, cuando se le pide; la placa no se anuncia sola. Cada placa con IP contesta
+a quien preguntó:
+
+```json
+{"type":"FIND"}
+{"type":"FIND_REPLY","name":"basicplus-esp32p4","micro":"esp32p4","uniqueId":"E8F60AE0B380","ip":"192.168.1.53","port":3333}
+```
+
+`name` es el nombre de la placa en la red: el `hostname` de `/sys/net.json`, o `basicplus-<micro>`.
 
 ---
 
@@ -279,6 +304,10 @@ imagen (V7/H12, 6-oct): dos en la Pico 2, la Metro, la S3 y la P4. Un programa c
 aunque haya dos (lo dice el log del RUN); con natives, también, en las imágenes sin el contexto de la native por tarea
 (las de un núcleo); la GUI, con los dos (sus builtins los ejecuta el run 0). `run2StackFreeBytes` (con dos runs: la Pico
 y la familia ESP32): la marca de agua de la pila del segundo; `runStackFree` es la del run que cerró el último programa.
+
+`wifi`, `ssid`, `rssi` e `ip` (V8/H3, en una placa con WiFi): el estado del enlace (`off`, `starting`, `connecting`, `connected`,
+`noNetwork` o `badKey`), la red de `/sys/wifi.json`, su señal en dBm (0 si no está conectada) y la IP de ahora (`""` si no hay). Con
+la IP, el IDE aprende por el cable a qué dirección conectarse por la red.
 
 #### `TIME` (request)
 

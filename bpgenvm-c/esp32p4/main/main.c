@@ -35,6 +35,7 @@
 #include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
 #include "bpvm_boot2.h"        /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
 #include "bpvm_wifi.h"         /* V8/H3: la WiFi, en el gancho `red` */
+#include "wire_red.h"          /* V8/H3: el cable de la red */
 #include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
 #include "pack_esp32.h"        /* V5/H7 → V7/H6: el pack nativo, común a la familia */
 #include "esp_log.h"
@@ -360,6 +361,9 @@ static void p4_cable(void) {
 
 /* 2b — la red: la WiFi, si el ENV (`wifi=1`) o /sys/wifi.json ("autoStart") lo piden. No bloquea. */
 static void p4_red(void) {
+#ifndef BPVM_P4_WIRE_TCP
+    if (bpvm_wifi_hay()) wire_red_iniciar();   /* el cable de la red: el puerto se abre solo, con la IP */
+#endif
     bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
 }
 

@@ -10,6 +10,10 @@ idf_component_register(
         "../common/main.c"
         "../common/platform_esp32.c"
         "../common/wire_v1.c"
+        "../common/wire_red.c"               # V8/H3: el cable de la red
+        "../common/wifi_esp32.c"             # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../common/net_esp32.c"              # V8/H3: la IP de la familia (esp_netif)
+        "../../src/wire_cables.c"            # V8/H3: encima de la UART, y del cable de la red cuando lo tenga
         "../common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
         "../common/repl_esp32.c"
         "../common/gpio_esp32.c"
@@ -98,6 +102,10 @@ idf_component_register(
         "../../src"
         "../../third_party/littlefs"   # H2-B3: lfs.h
     REQUIRES
+        esp_wifi         # V8/H3: la WiFi
+        esp_netif
+        esp_event
+        lwip
         esp_timer
         esp_driver_uart
         esp_partition
@@ -118,7 +126,8 @@ idf_component_register(
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas
 # (LFS_NO_DEBUG/WARN/ERROR: por stdout romperían consola/paridad, como en el RP2350).
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
-    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
+    LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC
+    BPVM_WIRE_CABLES=1)   # V8/H3: src/wire_cables.c
 
 # #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
 # del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.

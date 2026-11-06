@@ -6,20 +6,15 @@
  * IDE) en vez de stdio/USB-CDC. Los logs de ESP-IDF van por la consola
  * (USB-Serial-JTAG), así que el binario del wire en UART0 queda limpio.
  *
- * Los builders JSON (msg_begin, field_*, etc.) son idénticos al de Pico
- * (C portable) — copiados aquí para no acoplar los dos firmwares.
+ * V8/H3 (6-nov): lo que queda aquí es lo de la UART; lo que no es del cable está en src/wire_cables.c.
  */
 #include "wire_v1.h"
-#include "bpvm_platform.h"   /* V6/#473: bpvm_platform_now_ms */
+#include "bpvm_wire_cables.h"   /* V8/H3: este cable, y encima los dos */
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "driver/uart.h"
 #include "soc/uart_pins.h"   /* #574: U0TXD_GPIO_NUM / U0RXD_GPIO_NUM, los de UART0 del SoC */
-
-#include <stdio.h>
-#include <string.h>
 
 #define WIRE_UART        UART_NUM_0
 #define WIRE_UART_BAUD   115200
@@ -64,6 +59,39 @@
 #define WIRE_UART_RX_PIN UART_PIN_NO_CHANGE
 #endif
 
+const char* wire_v1_transport_name(void) { return "UART0 @115200"; }
+
+/* #574 — los pines que este cable le quita al programa: los que se le dan a uart_set_pin arriba o, si no se tocan
+ * (UART_PIN_NO_CHANGE), los de UART0 del SoC. */
+uint64_t wire_v1_transport_pines(void) {
+    int tx = (WIRE_UART_TX_PIN == UART_PIN_NO_CHANGE) ? U0TXD_GPIO_NUM : WIRE_UART_TX_PIN;
+    int rx = (WIRE_UART_RX_PIN == UART_PIN_NO_CHANGE) ? U0RXD_GPIO_NUM : WIRE_UART_RX_PIN;
+    return (1ULL << tx) | (1ULL << rx);
+}
+
+/* ===================== El cable ===================== */
+
+/* V8/H3 (6-nov) — ESTE CABLE SÓLO MUEVE BYTES: la línea, el bulk, sus plazos y el cerrojo son de src/wire_cables.c, que pone
+ * las funciones `wire_v1_*` encima de éste y del de la red.
+ *
+ * Bloquea hasta `ms`, cediendo la CPU dentro del driver. CLAVE: pollear con timeout 0 + vTaskDelay no vale: el bug original
+ * era pdMS_TO_TICKS(5) con el tick de ESP-IDF (100 Hz = 10 ms/tick) = 0 ticks → vTaskDelay(0) NO cede → busy-spin → el task
+ * watchdog mata IDLE0. Por lo mismo, una espera de menos de un tick es un tick. uart_read_bytes vuelve con los `n` bytes o
+ * al acabar el tiempo: para uno, en cuanto llega. */
+static int uart_leer(uint8_t* buf, size_t n, int ms) {
+    TickType_t ticks = pdMS_TO_TICKS(ms);
+    if (ms > 0 && ticks == 0) ticks = 1;
+    int r = uart_read_bytes(WIRE_UART, buf, n, ticks);
+    return (r > 0) ? r : 0;
+}
+
+/* tx_buffer=0: bloquea hasta vaciar. */
+static void uart_escribir(const uint8_t* datos, size_t n) {
+    uart_write_bytes(WIRE_UART, (const char*) datos, n);
+}
+
+static const bpvm_wire_cable_t CABLE_UART = { "UART0", uart_leer, uart_escribir, NULL, NULL, NULL };
+
 void wire_v1_transport_init(void) {
     const uart_config_t cfg = {
         .baud_rate = WIRE_UART_BAUD,
@@ -79,125 +107,5 @@ void wire_v1_transport_init(void) {
     uart_set_pin(WIRE_UART, WIRE_UART_TX_PIN, WIRE_UART_RX_PIN,
                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(WIRE_UART, WIRE_RX_BUF, 0, 0, NULL, 0);
+    bpvm_wire_cables_local(&CABLE_UART);
 }
-
-const char* wire_v1_transport_name(void) { return "UART0 @115200"; }
-
-/* #574 — los pines que este cable le quita al programa: los que se le dan a uart_set_pin arriba o, si no se tocan
- * (UART_PIN_NO_CHANGE), los de UART0 del SoC. */
-uint64_t wire_v1_transport_pines(void) {
-    int tx = (WIRE_UART_TX_PIN == UART_PIN_NO_CHANGE) ? U0TXD_GPIO_NUM : WIRE_UART_TX_PIN;
-    int rx = (WIRE_UART_RX_PIN == UART_PIN_NO_CHANGE) ? U0RXD_GPIO_NUM : WIRE_UART_RX_PIN;
-    return (1ULL << tx) | (1ULL << rx);
-}
-
-/* ===================== Lectura ===================== */
-
-/* Lee 1 byte BLOQUEANDO hasta `ms`. CLAVE: deja que el driver UART ceda
- * CPU mientras espera, en vez de pollear con timeout 0 + vTaskDelay. El
- * bug original: pdMS_TO_TICKS(5) con el tick de ESP-IDF (100 Hz = 10 ms/
- * tick) = 0 ticks → vTaskDelay(0) NO cede → busy-spin → el task watchdog
- * mata IDLE0. Bloquear en uart_read_bytes lo evita. Devuelve el byte o
- * -1 si venció el timeout sin datos. uart_read_bytes retorna en cuanto
- * llega un byte, así que la latencia de respuesta es mínima. */
-static int wire_read_byte(int ms) {
-    uint8_t b;
-    int n = uart_read_bytes(WIRE_UART, &b, 1, pdMS_TO_TICKS(ms));
-    return (n == 1) ? (int) b : -1;
-}
-
-/* P-run-stop (#257) — variante NO bloqueante (0 ticks) para el poll de
- * KILL que la VM invoca entre quanta durante un RUN. */
-int wire_v1_try_getchar(void) {
-    uint8_t b;
-    int n = uart_read_bytes(WIRE_UART, &b, 1, 0);
-    return (n == 1) ? (int) b : -1;
-}
-
-int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
-    size_t n = 0;
-    if (first_char_already_read >= 0) {
-        if (n + 1 >= buf_max) return -1;
-        buf[n++] = (char) first_char_already_read;
-    }
-    int64_t ultimo = bpvm_platform_now_ms();   /* V6/#473: plazo de linea estancada */
-    for (;;) {
-        int c = wire_read_byte(100);    /* bloquea <=100 ms cediendo CPU */
-        if (c < 0) {                     /* timeout sin datos */
-            /* Sin plazo, un truncado se come el mensaje siguiente. El porque
-             * entero, en include/bpvm_wire_v1.h (WIRE_V1_ESTANCADA_MS). */
-            if (n > 0 && bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_ESTANCADA_MS)
-                return -2;
-            continue;
-        }
-        ultimo = bpvm_platform_now_ms();
-        if (c == '\n') return (int) n;
-        if (c == '\r') continue;
-        if (n + 1 >= buf_max) return -1;
-        buf[n++] = (char) c;
-    }
-}
-
-int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
-    if (n > buf_max) return -1;
-    size_t got = 0;
-    int64_t ultimo = bpvm_platform_now_ms();   /* #495: plazo de bulk estancado (bpvm_wire_v1.h) */
-    while (got < n) {
-        /* uart_read_bytes bloquea (cede CPU) hasta tener datos o timeout. */
-        int r = uart_read_bytes(WIRE_UART, buf + got, n - got, pdMS_TO_TICKS(200));
-        if (r > 0) { got += (size_t) r; ultimo = bpvm_platform_now_ms(); continue; }
-        if (bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_BULK_ESTANCADO_MS) return -2;
-    }
-    return (int) n;
-}
-
-/* ===================== Escritura ===================== */
-
-/* V6/#473 — LA LINEA ES ATOMICA, y lo exige el contrato desde siempre
- * (include/bpvm_wire_v1.h: «La linea debe ser ATOMICA frente a otros
- * escritores»). Lo cumplia SOLO la Pico; aqui estaba vigilado, no construido.
- *
- * Los dos escritores concurrentes son reales: el hilo `io` saca los OUTPUT del
- * programa mientras la tarea del wire contesta sus replies — el poll atiende
- * HELLO/BUSY EN CALIENTE, durante un run. Sin cerrojo, el IDE recibe dos JSON
- * entrelazados: corrupcion de framing, no estetica. Y no pasa en el PC.
- *
- * El cerrojo es del CABLE, no de la VM: el `tx_mtx` del comun (src/bpvm_io.c:84)
- * solo cubre la salida del programa —el poll contesta fuera de el— y ademas vive
- * dentro de la VM, asi que no existe entre ejecuciones.
- *
- * Init perezoso, y es seguro: la primera escritura es el banner de arranque, con
- * una sola tarea viva. Y tomar un mutex libre NO bloquea, asi que vale incluso
- * antes de que arranque el planificador. */
-static SemaphoreHandle_t s_tx_mutex = NULL;
-
-static void tx_lock(void) {
-    if (s_tx_mutex == NULL) s_tx_mutex = xSemaphoreCreateMutex();
-    if (s_tx_mutex != NULL) xSemaphoreTake(s_tx_mutex, portMAX_DELAY);
-}
-static void tx_unlock(void) {
-    if (s_tx_mutex != NULL) xSemaphoreGive(s_tx_mutex);
-}
-
-void wire_v1_send_line(const char* data, size_t len) {
-    tx_lock();
-    if (len) uart_write_bytes(WIRE_UART, data, len);
-    uart_write_bytes(WIRE_UART, "\n", 1);
-    tx_unlock();
-}
-
-
-void wire_v1_send_bulk(const uint8_t* data, size_t n) {
-    if (n) uart_write_bytes(WIRE_UART, (const char*) data, n);
-}
-
-/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
-void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
-    tx_lock();
-    if (len) uart_write_bytes(WIRE_UART, line, len);
-    uart_write_bytes(WIRE_UART, "\n", 1);
-    if (n) uart_write_bytes(WIRE_UART, (const char*) bulk, n);
-    tx_unlock();
-}
-
-

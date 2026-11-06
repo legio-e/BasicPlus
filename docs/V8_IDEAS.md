@@ -1825,6 +1825,42 @@ placas). `esp32/common/wifi_esp32.c` publica `'WIFI'` y `net_esp32.c` es el back
 Los 19 KB que no vuelven son lwIP, el bucle de eventos y la tarea de la WiFi, que se quedan para la vez siguiente. La imagen creció 5 páginas: la zona de packs se movió y `Gui` y `SQLite` dicen
 «realojado para OTRA dirección» hasta que se regraben.
 
+### Los pasos C y D, hechos en la P4 (6-nov): el IDE por WiFi
+
+**Lo común, probado en el PC antes que en la placa** (`make test-cables`, 48 comprobaciones, con dos cables de mentira). `src/wire_cables.c` pone las funciones `wire_v1_*` encima de los dos cables, y un cable
+sólo mueve bytes: lee, escribe y, si quiere, mira lo suyo en un sondeo. La línea, el bulk, sus plazos y el cerrojo, que estaban copiados en cada cable, quedan en un sitio. `esp32/common/wire_v1.c` (la UART) se queda con 40 líneas;
+`esp32/common/wire_red.c` es el cable de la red. La S3 y la P4 ya van por aquí; las de USB-Serial-JTAG (C3, C5, C6), cuando tengan WiFi. El `wire_v1_tcp.c` de la Ethernet de la P4 Kit (`BPVM_P4_WIRE=tcp`) se queda como estaba.
+
+**Cambios sobre el algoritmo:**
+- **Lo que no empieza por `{` se tira nada más llegar**, en cualquier cable: esperar a un `\n` por un byte de ruido haría esperar 3 s al otro.
+- **Una espera de 20 ms sólo con un cliente de verdad en el otro cable.** Sin él, la de siempre (100 ms), y el sondeo mira si hay cliente nuevo.
+- **Al cambiar de cable, o al irse el cliente, lo que se le mandaba al de antes se corta** (`bpvm_repl_cliente_ido`, lo que ya hace un `HELLO`).
+- **El cable de la red junta lo que le llega y lo manda al acabar el mensaje:** con `TCP_NODELAY`, una línea y su `\n` serían dos paquetes.
+- **El ahorro de energía de la radio no hace falta tocarlo:** en reposo, el `ping` tarda 179 ms de media, pero en una sesión la radio no llega a dormirse, y un `PING` del wire tarda 6 ms.
+
+**`wire_serie.py` por la red:** donde va el puerto, la dirección de la placa; y `wire_serie.py buscar`. **En el IDE:** el backend «Placa (red)», con la IP o «Buscar en la red» (`RedBackend`, que hereda de `SerialBackend`: la hora, el log y
+la memoria son los de la placa; y `BuscarPlacas`), y el botón «WiFi», que escribe `/sys/wifi.json` (`WifiDialog`). La IP que dice el `INFO` por el cable se recuerda. **Buscar pregunta varias veces:** por la WiFi una difusión no lleva
+acuse, y se pierde (se perdió la primera, medido).
+
+**Medido en la P4:**
+
+| | Por la WiFi | Por la UART |
+|---|---|---|
+| `PING` del wire | 6 ms de mediana, 21 de máximo | |
+| `LIST`, 65 ficheros | 355 ms | |
+| Subir 1 MB | 16,1 s (64 KB/s) | ~95 s (11 KB/s, el límite de los 115 200 baudios) |
+| Bajar 1 MB | 1,5 s (662 KB/s) | ~95 s |
+| Grabar `Gui` + `SQLite` + `Stdlib` (1,5 MB, sellándolos) | 14 s | más de 2 min |
+| Un programa imprimiendo | ~2 000 mensajes `OUTPUT` por segundo | |
+
+Subir va más despacio que bajar porque es de 512 bytes en 512, con su acuse cada cuatro: lo que anuncia la placa, pensado para el anillo de la UART.
+
+**Comprobado en la placa** (lo de cada línea, con su prueba): un programa lanzado por el cable, entrar por la red y que la salida cambie de cable, y pararlo con `KILL`; los dos cables por turnos, 10 de 10, cada uno con lo suyo; el cliente
+se va con el programa en marcha y la salida vuelve al cable; un cliente nuevo sustituye al anterior; un cliente que no lee se da por perdido a los 13 s (se llenan los búferes y corren los 5 s), y el programa sigue; una conexión de 40 s aguanta la WiFi con
+`autoOff` 20, y al cerrarla se apaga a los 20 s; `SqlDemo` y `SdCard` por la red; y con las clases del IDE, sin la ventana: buscar, conectar, `list`, `mem`, `log`, `put`, `get`, `run` y el Stop.
+
+**Lo que falta por probar:** que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`; se probó el cliente que se va, no el que desaparece), y la ventana del IDE, que sólo la ha visto el compilador.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)

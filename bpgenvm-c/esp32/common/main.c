@@ -56,6 +56,14 @@
  * vm_buffer_init. El porqué de cada número está en el `chip_cfg.h` que lo fija — y
  * en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
 #include "chip_cfg.h"
+#ifndef CHIP_TIENE_WIFI
+#define CHIP_TIENE_WIFI 0      /* V8/H3: lo dice cada `chip_cfg.h` que la lleve */
+#endif
+#if CHIP_TIENE_WIFI
+#include "bpvm_wifi.h"
+#include "wifi_esp32.h"
+#include "wire_red.h"
+#endif
 #include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
 #include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */
 uint8_t*       s_vm_buffer      = NULL;
@@ -280,6 +288,16 @@ static void esp32_cable(void) {
     printf("[boot] REPL wire v1 escuchando en %s.\n", wire_v1_transport_name());
 }
 
+#if CHIP_TIENE_WIFI
+/* 2b — la red: la radio de este chip, el cable de la red y la WiFi, si el ENV (`wifi=1`) o /sys/wifi.json ("autoStart") lo
+ * piden. No bloquea. */
+static void esp32_red(void) {
+    wifi_esp32_publicar(NULL);
+    wire_red_iniciar();
+    bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
+}
+#endif
+
 static const bpvm_boot2_familia_t s_boot2 = {
     .env          = board_mgr_env,
     .env_anadir   = board_mgr_esp32_env_anadir,
@@ -298,6 +316,9 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .repl         = repl_esp32_run,
     .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: la S3, dos (y dos runs); la C3, la C5 y la C6, uno */
     .cpu_desde_env = 1,                      /* V8 #784: `cpu.mhz` del ENV, al arrancar */
+#if CHIP_TIENE_WIFI
+    .red          = esp32_red,
+#endif
 };
 
 void app_main(void)

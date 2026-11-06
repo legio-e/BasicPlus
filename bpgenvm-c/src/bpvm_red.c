@@ -15,6 +15,7 @@
 
 static volatile int s_hay = 0;
 static void (*s_al_cambiar)(int hay) = 0;
+static char s_nombre[48] = "";
 
 static void di(char* motivo, unsigned cap, const char* texto) {
     if (motivo && cap) snprintf(motivo, cap, "%s", texto);
@@ -72,7 +73,7 @@ int bpvm_red_cfg_parse(const char* json, size_t len, bpvm_red_cfg_t* c, char* mo
 
 void bpvm_red_preparar(void) {
     bpvm_red_cfg_t c;
-    char json[RED_JSON_MAX], motivo[64], nombre[48], t[20];
+    char json[RED_JSON_MAX], motivo[64], micro[24], t[20];
     memset(&c, 0, sizeof c);
     if (bpvm_fs_exists(BPVM_RED_FICHERO)) {
         long n = bpvm_fs_read(BPVM_RED_FICHERO, (uint8_t*) json, sizeof json);
@@ -86,23 +87,24 @@ void bpvm_red_preparar(void) {
             }
         }
     }
+    if (c.nombre[0]) {
+        snprintf(s_nombre, sizeof s_nombre, "%s", c.nombre);
+    } else {
+        micro[0] = 0;
+        bpvm_machine_micro_name(micro, sizeof micro);
+        snprintf(s_nombre, sizeof s_nombre, "basicplus-%s", micro);
+    }
     if (c.fija) {
         bpvm_red_ip_texto(c.ip, t, sizeof t);
         if (bpvm_net_ip_fija(c.ip, c.mascara, c.puerta, c.dns) == 0) bpvm_diag("red: IP fija %s", t);
         else                                                         bpvm_diag("red: la IP fija %s no se pudo poner", t);
         return;
     }
-    if (c.nombre[0]) {
-        snprintf(nombre, sizeof nombre, "%s", c.nombre);
-    } else {
-        char micro[24];
-        micro[0] = 0;
-        bpvm_machine_micro_name(micro, sizeof micro);
-        snprintf(nombre, sizeof nombre, "basicplus-%s", micro);
-    }
-    if (bpvm_net_ip_dinamica(nombre) == 0) bpvm_diag("red: IP por DHCP, con el nombre %s", nombre);
-    else                                   bpvm_diag("red: el DHCP no se pudo preparar");
+    if (bpvm_net_ip_dinamica(s_nombre) == 0) bpvm_diag("red: IP por DHCP, con el nombre %s", s_nombre);
+    else                                     bpvm_diag("red: el DHCP no se pudo preparar");
 }
+
+const char* bpvm_red_nombre(void) { return s_nombre; }
 
 void bpvm_red_hay_ip(int hay) {
     char t[20];

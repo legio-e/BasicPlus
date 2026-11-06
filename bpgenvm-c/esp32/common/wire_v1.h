@@ -12,7 +12,8 @@
  * queda limpio.
  *
  * 📌 La P4 usa ESTE fichero por defecto (`BPVM_P4_WIRE=uart`); su variante TCP
- * es opcional y vive en `esp32p4/main/wire_v1_tcp.c`.
+ * por Ethernet es opcional y vive en `esp32p4/main/wire_v1_tcp.c`. El cable por la WiFi
+ * va al lado de éste, no en su lugar: `esp32/common/wire_red.c` y `src/wire_cables.c`.
  *
  * ⚠️ Su guarda de inclusión decía `BPVM_PICO_WIRE_V1_H` — la del Pico, copiada
  * con el resto. Nunca mordió porque los dos ficheros no coinciden en ninguna

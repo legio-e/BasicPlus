@@ -31,21 +31,78 @@ Consecuencia: lo que se hace «una vez por arranque» —cargar los packs, leer 
 ENV— necesita un reset explicito tras `pack`/`packdel`/`env` (como ya pasaba con
 el P4 por COM15).
 
+POR LA RED (V8/H3, 6-nov): donde va el puerto, la direccion de la placa. Los verbos son los mismos.
+
+    python tools/wire_serie.py 192.168.1.53 info
+    python tools/wire_serie.py 192.168.1.53:3333 run /app/Bench.mod
+    python tools/wire_serie.py buscar            las placas de la red, las que contesten en 1,5 s
+
 Verbos de packs y env (F1, 12-sep): `packs` (PACK_LS), `pack <f.pack> [arm|riscv]`
 (graba; con arch PODA y SELLA como el panel del IDE, via tools/packtool/PackTool),
 `packfmt` (PACK_FORMAT: pide OK a Eduardo), `env [clave valor | clave -]`, `reset`,
 `resetcable`.
 """
-import json, sys, time
+import json, select, socket, sys, time
 
 try:
     import serial
 except ImportError:
-    sys.exit("falta pyserial — usa el python del ESP-IDF, que ya lo trae")
+    serial = None        # por la red no hace falta; por el puerto, lo dice Wire
+
+PUERTO_RED = 3333
+
+
+class CableRed:
+    """Un socket con la cara de serial.Serial que usa Wire: read y write, in_waiting, y lo demas, que no hace nada."""
+    dtr = rts = False
+
+    def __init__(self, destino, plazo=0.2):
+        host, _, puerto = destino.partition(":")
+        self.k = socket.create_connection((host, int(puerto or PUERTO_RED)), timeout=5)
+        self.k.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.k.settimeout(plazo)
+
+    def write(self, datos):
+        self.k.sendall(datos)
+
+    def read(self, n=1):
+        try:
+            return self.k.recv(n)
+        except socket.timeout:
+            return b""
+
+    @property
+    def in_waiting(self):
+        if not select.select([self.k], [], [], 0)[0]:
+            return 0
+        return 4096      # no se sabe cuanto, y read devuelve lo que haya
+
+    def reset_input_buffer(self):
+        while self.in_waiting and self.read(4096):
+            pass
+
+    def close(self):
+        self.k.close()
+
+
+def es_puerto_serie(nombre):
+    return nombre.upper().startswith("COM") or nombre.startswith("/dev/")
 
 
 class Wire:
     def __init__(self, port, baud=115200):
+        self.buf = b""
+        self.id = 0
+        self.otros = []
+        self.basura = []
+        self.pend = []
+        self.trozo = 0       # #495: el trozo y la ventana que anuncia la placa en el HELLO (0 = no los anuncia)
+        self.ventana = 0
+        if not es_puerto_serie(port):
+            self.s = CableRed(port)
+            return
+        if serial is None:
+            sys.exit("falta pyserial — usa el python del ESP-IDF, que ya lo trae")
         # DTR y RTS apagados ANTES de abrir: ni el EN del puente ni la logica del
         # USB-Serial-JTAG ven un flanco, al abrir ni al cerrar (ver la cabecera).
         self.s = serial.Serial()
@@ -58,13 +115,6 @@ class Wire:
         from serial.tools import list_ports   # sin ligar `serial` como local de __init__
         if any(p.device == port and p.vid == 0x2E8A for p in list_ports.comports()):
             self.s.dtr = True
-        self.buf = b""
-        self.id = 0
-        self.otros = []
-        self.basura = []
-        self.pend = []
-        self.trozo = 0       # #495: el trozo y la ventana que anuncia la placa en el HELLO (0 = no los anuncia)
-        self.ventana = 0
         time.sleep(0.3)
         self.s.reset_input_buffer()
 
@@ -683,7 +733,38 @@ COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_cic
             "env": cmd_env, "part": cmd_part, "reset": cmd_reset, "resetcable": cmd_resetcable,
             "sd": cmd_sd, "sdmount": cmd_sdmount}
 
+def buscar(segundos=1.5):
+    """V8/H3 — las placas de la red: un FIND a toda la red, por UDP, y contesta cada una. Devuelve sus respuestas.
+    Se pregunta varias veces: por la WiFi una difusion no lleva acuse, y se pierde."""
+    k = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    k.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    k.settimeout(0.2)
+    placas, t0, proxima = {}, time.time(), 0.0
+    while time.time() - t0 < segundos:
+        if time.time() >= proxima:
+            k.sendto(b'{"type":"FIND"}\n', ("255.255.255.255", PUERTO_RED))
+            proxima = time.time() + 0.4
+        try:
+            datos, de = k.recvfrom(512)
+        except socket.timeout:
+            continue
+        try:
+            m = json.loads(datos.decode("utf-8", "replace"))
+        except ValueError:
+            continue
+        if m.get("type") == "FIND_REPLY":
+            placas[m.get("uniqueId")] = m
+    k.close()
+    return list(placas.values())
+
+
 if __name__ == "__main__":
+    if len(sys.argv) >= 2 and sys.argv[1] == "buscar":
+        hay = buscar()
+        for m in hay:
+            print("%-16s %-22s %-10s %s" % ("%s:%s" % (m.get("ip"), m.get("port")), m.get("name"), m.get("micro"), m.get("uniqueId")))
+        print("%d placa(s)" % len(hay))
+        sys.exit(0)
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:
         sys.exit(__doc__ + "\ncomandos: " + " ".join(COMANDOS))
     w = Wire(sys.argv[1])

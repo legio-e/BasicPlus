@@ -81,6 +81,8 @@ public final class PicoExplorer extends JPanel {
 
     /* --- UI components ----------------------------------------- */
     private final JRadioButton rbSerial = new JRadioButton("Placa (serial v1)", true);
+    /** V8/H3 — la placa por la red: la misma que por el puerto, con el wire por TCP (RedBackend). */
+    private final JRadioButton rbRed    = new JRadioButton("Placa (red)");
     private final JRadioButton rbVm     = new JRadioButton("VM Java (TCP v1)");
     /** H10 — el micro simulado: una placa que no existe, servida por bpvm-sim en
      *  este mismo PC. Habla el MISMO wire v1 por TCP, así que reutiliza tal cual
@@ -88,8 +90,11 @@ public final class PicoExplorer extends JPanel {
     private final JRadioButton rbSim    = new JRadioButton("Micro simulado (VM-C)");
     private final JComboBox<String> portCombo = new JComboBox<>();
     private final JTextField endpointField = new JTextField("localhost:7332", 16);
+    private final JTextField redField = new JTextField(14);
+    private final JButton btnBuscar = new JButton("Buscar en la red");
     private final JPanel endpointPanel = new JPanel(new CardLayout());
     private static final String CARD_SERIAL = "SERIAL";
+    private static final String CARD_RED    = "RED";
     private static final String CARD_VM     = "VM";
     private static final String CARD_SIM    = "SIM";
     private final JLabel simState = new JLabel("parado");
@@ -108,6 +113,7 @@ public final class PicoExplorer extends JPanel {
     private final JButton btnLogClr  = new JButton("Clr Log");
     private final JButton btnReset   = new JButton("Reset");
     private final JButton btnInfo    = new JButton("Info");
+    private final JButton btnWifi    = new JButton("WiFi");
 
     /** Raíz del árbol. user object = String "Pico" en la raíz, String
      *  con el nombre del segmento en cada carpeta, RemoteFile en las
@@ -128,9 +134,11 @@ public final class PicoExplorer extends JPanel {
         rowBackend.add(new JLabel("Backend:"));
         ButtonGroup bg = new ButtonGroup();
         bg.add(rbSerial);
+        bg.add(rbRed);
         bg.add(rbVm);
         bg.add(rbSim);
         rowBackend.add(rbSerial);
+        rowBackend.add(rbRed);
         rowBackend.add(rbVm);
         rowBackend.add(rbSim);
 
@@ -139,6 +147,16 @@ public final class PicoExplorer extends JPanel {
         serialCard.add(new JLabel("Port:"));
         portCombo.setPreferredSize(new Dimension(120, 22));
         serialCard.add(portCombo);
+        /* V8/H3 — la placa por la red: su IP, o que la busque. La última se recuerda: la que se escribió o la que dijo el
+         * INFO por el cable. */
+        JPanel redCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        redCard.add(new JLabel("IP:"));
+        redCard.add(redField);
+        redCard.add(btnBuscar);
+        { String ultima = IdePrefs.load().placaRed;
+          if (ultima != null) redField.setText(ultima); }
+        btnBuscar.setToolTipText("Pregunta a toda la red qué placas hay");
+        btnBuscar.addActionListener(e -> onBuscarPlacas());
         JPanel vmCard = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         vmCard.add(new JLabel("Endpoint:"));
         vmCard.add(endpointField);
@@ -151,10 +169,12 @@ public final class PicoExplorer extends JPanel {
         simCard.add(btnSim);
         simCard.add(btnSimCfg);
         endpointPanel.add(serialCard, CARD_SERIAL);
+        endpointPanel.add(redCard,    CARD_RED);
         endpointPanel.add(vmCard,     CARD_VM);
         endpointPanel.add(simCard,    CARD_SIM);
         showCard(CARD_SERIAL);
         rbSerial.addActionListener(e -> showCard(CARD_SERIAL));
+        rbRed.addActionListener(e    -> showCard(CARD_RED));
         rbVm.addActionListener(e     -> showCard(CARD_VM));
         rbSim.addActionListener(e    -> showCard(CARD_SIM));
 
@@ -186,6 +206,7 @@ public final class PicoExplorer extends JPanel {
         row2.add(btnLogClr);
         row2.add(btnReset);
         row2.add(btnInfo);
+        row2.add(btnWifi);
 
         toolbar.add(rowBackend);
         toolbar.add(row1);
@@ -288,6 +309,8 @@ public final class PicoExplorer extends JPanel {
         btnLogClr.addActionListener(e -> onLogClear());
         btnReset.addActionListener(e -> onReset());
         btnInfo.addActionListener(e -> onInfo());
+        btnWifi.setToolTipText("La red a la que se conecta la placa: escribe /sys/wifi.json");
+        btnWifi.addActionListener(e -> onWifi());
 
         refreshPorts();
         setConnectedUI(false);
@@ -893,6 +916,38 @@ public final class PicoExplorer extends JPanel {
     public BpvmClient debugClient() {
         return (backend instanceof AbstractBpvmBackend)
                 ? ((AbstractBpvmBackend) backend).debugClient() : null;
+    }
+
+    /** V8/H3 — la última dirección de la placa por la red, para la próxima vez. */
+    private void recuerdaPlacaRed(String direccion) {
+        IdePrefs p = IdePrefs.load();
+        if (direccion.equals(p.placaRed)) return;
+        p.placaRed = direccion;
+        p.save();
+    }
+
+    /** V8/H3 — «buscar en la red»: pregunta, y con una placa la pone en el campo; con varias, se elige. */
+    private void onBuscarPlacas() {
+        status.setText("Buscando placas en la red…");
+        btnBuscar.setEnabled(false);
+        runAsync(() -> {
+            try { return BuscarPlacas.buscar(1500); }
+            catch (IOException sinRed) { return java.util.Collections.<BuscarPlacas.Placa>emptyList(); }
+        }, placas -> {
+            btnBuscar.setEnabled(!isConnected());
+            if (placas.isEmpty()) {
+                status.setText("Ninguna placa ha contestado: ¿tienen la WiFi encendida y están en esta red?");
+                return;
+            }
+            BuscarPlacas.Placa elegida = placas.get(0);
+            if (placas.size() > 1) {
+                elegida = (BuscarPlacas.Placa) JOptionPane.showInputDialog(this, "Placas en la red:", "Buscar en la red",
+                        JOptionPane.PLAIN_MESSAGE, null, placas.toArray(), elegida);
+                if (elegida == null) { status.setText("Disconnected"); return; }
+            }
+            redField.setText(elegida.endpoint());
+            status.setText("En la red: " + elegida);
+        });
     }
 
     /** Helper UI: muestra el card correcto del CardLayout. */
@@ -1684,6 +1739,9 @@ public final class PicoExplorer extends JPanel {
     private void setConnectedUI(boolean connected) {
         btnConnect.setText(connected ? "Disconnect" : "Connect");
         rbSerial.setEnabled(!connected);
+        rbRed.setEnabled(!connected);
+        redField.setEnabled(!connected);
+        btnBuscar.setEnabled(!connected);
         rbVm.setEnabled(!connected);
         rbSim.setEnabled(!connected);
         portCombo.setEnabled(!connected);
@@ -1700,9 +1758,16 @@ public final class PicoExplorer extends JPanel {
         btnLogClr.setEnabled(connected);
         btnReset.setEnabled(connected);
         btnInfo.setEnabled(connected);
+        btnWifi.setEnabled(connected && backend instanceof SerialBackend);   // V8/H3: una placa; la VM Java no tiene
     }
 
     /* ============================================================ */
+
+    /** V8/H3 — la red de la placa. */
+    private void onWifi() {
+        if (!isConnected()) return;
+        new WifiDialog(SwingUtilities.getWindowAncestor(this), backend, status::setText).setVisible(true);
+    }
 
     private void onConnect() {
         if (isConnected()) {
@@ -1718,6 +1783,7 @@ public final class PicoExplorer extends JPanel {
             return;
         }
         final boolean serial = rbSerial.isSelected();
+        final boolean red = rbRed.isSelected();
         final boolean simulado = rbSim.isSelected();
         if (simulado && !sim.isRunning()) {
             status.setText("el simulador no está en marcha — pulsa Arrancar");
@@ -1727,6 +1793,7 @@ public final class PicoExplorer extends JPanel {
          * nadie, sale de la configuración con la que lo arrancamos. */
         final String endpoint = serial
                 ? (String) portCombo.getSelectedItem()
+                : red ? redField.getText().trim()
                 : simulado ? ("127.0.0.1:" + IdePrefs.load().simPort)
                            : endpointField.getText().trim();
         if (endpoint == null || endpoint.isEmpty()) {
@@ -1737,7 +1804,7 @@ public final class PicoExplorer extends JPanel {
         // el mismo backend TCP sirve a la VM Java y al micro simulado.
         final String nombreTcp = simulado ? rbSim.getText() : rbVm.getText();
         final java.util.function.Supplier<Backend> fabrica =
-                () -> serial ? new SerialBackend() : new BpvmBackend(nombreTcp);
+                () -> serial ? new SerialBackend() : red ? new RedBackend() : new BpvmBackend(nombreTcp);
         final Backend b = fabrica.get();
         status.setText("Connecting to " + endpoint + " (" + b.displayName() + ")...");
         runAsync(() -> {
@@ -1749,6 +1816,7 @@ public final class PicoExplorer extends JPanel {
             this.ultimaFabrica = fabrica;
             sentCrc.clear();   // nueva conexión → cache de subidas limpia
             setConnectedUI(true);
+            if (red) recuerdaPlacaRed(endpoint);
             status.setText(endpoint + " — " + hello);
             onRefresh();
             fetchDeviceArch();           // H11: la arch, ANTES de que haga falta compilar
@@ -2348,6 +2416,12 @@ public final class PicoExplorer extends JPanel {
             deviceFlagsCrc = ilong(m, "aotFlagsCrc") & 0xFFFFFFFFL;
             deviceReceta   = istr(m, "aotReceta");
             deviceMdnAbi   = (int) ilong(m, "mdnAbi");   /* V7/H5 (27-sep); 0 si el firmware no lo manda */
+            /* V8/H3: si la placa tiene red, su IP queda para conectarse por ella. */
+            String ip = istr(m, "ip");
+            if (ip != null && !ip.isEmpty() && !rbRed.isSelected()) {
+                recuerdaPlacaRed(ip);
+                redField.setText(ip);
+            }
             if (a != 0 && outputSink != null) {
                 outputSink.accept("[Explorer] la placa ejecuta nativo "
                         + archName((int) a) + " (arch=" + a + ")"
@@ -2622,5 +2696,6 @@ public final class PicoExplorer extends JPanel {
         btnLogClr.setEnabled(enabled && connected);
         btnReset.setEnabled(enabled && connected);
         btnInfo.setEnabled(enabled && connected);
+        btnWifi.setEnabled(enabled && connected && backend instanceof SerialBackend);
     }
 }

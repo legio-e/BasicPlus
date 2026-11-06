@@ -36,6 +36,9 @@ public final class IdePrefs {
     public String vmHost;
     public int    vmPort;
 
+    /** V8/H3 — la última dirección de la placa por la red: la que se escribió, o la que dijo el INFO por el cable. */
+    public String placaRed;
+
     /** Última carpeta donde se abrió o guardó un fichero .bp.
      *  El JFileChooser arranca aquí en vez de en Documents para que el
      *  usuario no tenga que navegar de nuevo cada vez. */
@@ -224,6 +227,7 @@ public final class IdePrefs {
             Map<String, Object> m = Json.parseFlatObject(raw);
             p.vmHost  = Json.getString(m, "vmHost", null);
             p.vmPort  = (int) Json.getLong(m, "vmPort", 0);
+            p.placaRed = Json.getString(m, "placaRed", null);
             p.lastDir = Json.getString(m, "lastDir", null);
             p.lastUploadDir = Json.getString(m, "lastUploadDir", null);
             p.aotGccPath = Json.getString(m, "aotGccPath", null);
@@ -261,6 +265,7 @@ public final class IdePrefs {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("vmHost",  vmHost  == null ? "" : vmHost);
         m.put("vmPort",  (long) vmPort);
+        m.put("placaRed", placaRed == null ? "" : placaRed);
         m.put("lastDir", lastDir == null ? "" : lastDir);
         m.put("lastUploadDir", lastUploadDir == null ? "" : lastUploadDir);
         m.put("aotGccPath", aotGccPath == null ? "" : aotGccPath);

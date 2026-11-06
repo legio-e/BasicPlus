@@ -107,7 +107,7 @@ ifeq ($(OS),Windows_NT)
   OBJ    += $(WIN_RES)
 endif
 
-.PHONY: all clean smoke test-wifi medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-wifi test-cables medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1173,6 +1173,14 @@ test-sqltexto: $(LIBOBJ) build/sql/sqlite3.o
 # y la tarea con una cintura que lo APUNTA todo —el formato, el volumen, cada muestra (las de 8 bits a 16 con signo)
 # y cómo se cierra (drenando al acabar; en seco al parar o al cambiar de sonido)—. Lo que tiene que salir, escrito a
 # mano en la prueba: ningún FALLO.
+# V8/H3 (6-nov) — DOS CABLES A LA VEZ (wire_cables.c), con dos cables de mentira: quién habla, el ruido, los plazos y las
+# caídas. Lo compila sólo quien lo usa (la guarda BPVM_WIRE_CABLES), y aquí se pide.
+test-cables: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -DBPVM_WIRE_CABLES -Isrc test/test_cables.c src/wire_cables.c $(LIBOBJ) -o build/test_cables.exe $(LDFLAGS)
+	@echo "--- V8/H3 dos cables a la vez (esperado: [status=OK], sin FALLO) ---"
+	./build/test_cables.exe
+
 test-wifi: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_wifi.c $(LIBOBJ) -o build/test_wifi.exe $(LDFLAGS)

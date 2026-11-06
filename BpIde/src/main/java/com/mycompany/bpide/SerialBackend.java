@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-public final class SerialBackend extends AbstractBpvmBackend {
+public class SerialBackend extends AbstractBpvmBackend {
 
     /** Baud nominal — USB CDC ignora el valor (no necesita baud rate);
      *  lo dejamos a 115200 por inercia y para herramientas externas. */

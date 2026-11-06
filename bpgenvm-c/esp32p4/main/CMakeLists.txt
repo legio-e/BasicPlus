@@ -13,14 +13,16 @@ endif()                       # queda solo para logs. TCP completo con -DBPVM_P4
 if(BPVM_P4_WIRE STREQUAL "tcp")
     set(WIRE_TRANSPORT_SRC "wire_v1_tcp.c")                   # I/O del wire sobre TCP (lwIP)
 else()
-    set(WIRE_TRANSPORT_SRC "../../esp32/common/wire_v1.c")      # I/O del wire sobre UART0 (reúso del S3)
+    set(WIRE_TRANSPORT_SRC "../../esp32/common/wire_v1.c"       # I/O del wire sobre UART0 (reúso del S3)
+                           "../../esp32/common/wire_red.c"      # V8/H3: y el de la red, por la WiFi
+                           "../../src/wire_cables.c")           # V8/H3: los dos a la vez
 endif()
 
 idf_component_register(
     SRCS
         "main.c"
         "../../esp32/common/esp32_mods.c"       # P6 imagen única: stdlib embebida COMPARTIDA con el S3 (14 mods)
-        "${WIRE_TRANSPORT_SRC}"               # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
+        ${WIRE_TRANSPORT_SRC}                 # VM.3: capa de I/O del wire v1 (TCP o UART0 según BPVM_P4_WIRE)
         "p4_board_id.c"                       # VM.3 pulido: identidad de placa esp32p4 (override fuerte de repl_board_id)
         "aot_funcs_p4.c"                      # H4 AOT RISC-V (Hito 1): override fuerte de esp_aot_register (SOLO P4)
         "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
@@ -156,6 +158,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 # Activa el camino TCP/Ethernet en main.c (por defecto = UART0, sin este define).
 if(BPVM_P4_WIRE STREQUAL "tcp")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE BPVM_P4_WIRE_TCP=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE BPVM_WIRE_CABLES=1)   # V8/H3: src/wire_cables.c
 endif()
 
 # V8 #730: la biblioteca de cadenas (bpgenvm-c/bpstr/, por src/bpstr_vm.c), con -O2 (decidido por Eduardo el
