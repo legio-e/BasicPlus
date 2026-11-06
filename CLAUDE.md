@@ -155,7 +155,7 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 - **Idioma:** español (código, docs, commits, conversación).
 - **Versión actual:** **V8, en curso desde el 14-oct-2026, en modo experimentar** (Eduardo:
   se prueban cosas sin obligaciones; lo que funcione se sube al final y lo que no se aplaza).
-  Su tema: la red, el Bluetooth y el bajo consumo. Su cuaderno, `docs/V8_IDEAS.md`. V7 se
+  Su tema: la red y el Bluetooth (el bajo consumo pasó a V9 el 6-nov). Su cuaderno, `docs/V8_IDEAS.md`. V7 se
   publicó el 13-oct (tag `v7.0`; su ZIP en `dist/` es el oráculo de «¿lo he roto yo hoy?»).
   Qué hay abierto, en `docs/FICHAS.md` §ABIERTAS, bloque V8.
 - **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):

@@ -6,7 +6,7 @@
 >
 > **El modo de V8** (Eduardo, 13-oct): *«V8 es para probar cosas nuevas, para experimentar, sin ponernos obligaciones.
 > Probaremos cosas y lo que funcione lo subiremos al final y lo que no funcione se puede aplazar para más adelante.»*
-> El tema, decidido el 24-sep: la WiFi, el Bluetooth y el bajo consumo.
+> El tema, decidido el 24-sep: la WiFi, el Bluetooth y el bajo consumo. El bajo consumo pasó a V9 el 6-nov (Eduardo: *«Es demasiado complejo y depende mucho del hardware»*).
 >
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
 > **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**

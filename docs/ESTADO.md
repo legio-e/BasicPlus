@@ -41,9 +41,10 @@
 >   quedó vacío. Ningún commit se perdió (`git fsck` limpio), y se lo dije a Eduardo. Con un secreto de por medio, lo que no se ha pedido no se limpia.
 > - **Por la tarde, con Eduardo:** la ventana del IDE, vista en la P4, la S3 y la C5, y bien a la primera. Y la C5, borrada y grabada con la WiFi (`be08fed7`), con su Entorno, sus packs y sus ficheros repuestos: en la red a los 2,5 s, y el cable USB nuevo, bien a la primera.
 > - **`C5SdGui`, con la pantalla, la SD y la WiFi a la vez:** `RESULT: OK`, pero la etiqueta bajó de 176 cambios a 41. Podía ser la WiFi, y no: tres pasadas con ella y tres sin ella dan lo mismo. Ni el bus que comparten la pantalla y la SD, como preguntó Eduardo: escribiendo en la flash sale igual. Bajando el quantum baja el hueco: `#801`.
+> - **Y al cerrar, el rumbo** (Eduardo; FICHAS, bloque V8, «El rumbo hasta el final de V8»): a V8 le queda poco. H2 y H3 se cierran al terminar lo que falta; H8, al llegar a los temas 10 u 11, con las pruebas que pasen como buenas; y lo demás de C# y el bajo consumo (`#490`) van a V9.
 >
 > **Para la próxima sesión:**
-> - **por decidir (Eduardo):** `#799`, `#800` (el caso 21 de `test-cola`: pone la red en ROJO de vez en cuando, y ya lo hacía antes de la WiFi) y `#801` (el turno de un hilo, en opcodes);
+> - **por decidir (Eduardo):** `#799`, `#800` (el caso 21 de `test-cola`: pone la red en ROJO de vez en cuando, y ya lo hacía antes de la WiFi) y `#801` (el turno de un hilo, en opcodes); y lo que viene de V7 en la lista de V8 y sigue sin tocar: si se hace en V8 o pasa a V9;
 > - **la Pico 2 W**, conectada en COM11 con un firmware del 16-jul: sin tocar, y su WiFi, en un pack, por analizar (Eduardo: *«La wifi de la Pico2 lo miramos mañana, con tranquilidad»*);
 > - sin probar: que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`); y el cable USB nuevo en la C3 y la C6, sólo compilado;
 > - la P4, la S3 y la C5 llevan la imagen de hoy, con `/sys/wifi.json` y `autoOff` 0; lo que tenían la S3 y la C5, en `C:\tmp\v8wifi\s3_fs` y `c5_antes`. **Una S3 o una C5 que se actualice pierde el Entorno, el FS y los packs**: a las notas de V8.
