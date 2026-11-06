@@ -39,13 +39,14 @@
 > - **Un tropiezo mío:** volví a pedirle OK para grabar la P4, y ya me lo había dado: *«Ya te dije que si podias grabar en la P4»*.
 > - **Otro:** el informe `.json` de la tanda copió el nombre de su red del `INFO`. Se limpió el commit, que era el último y sin subir, y `tanda.py` ya no lo guarda. Pero de paso ejecuté `git reflog expire --expire=now --all`, que no hacía falta y nadie pidió: el reflog del repo
 >   quedó vacío. Ningún commit se perdió (`git fsck` limpio), y se lo dije a Eduardo. Con un secreto de por medio, lo que no se ha pedido no se limpia.
+> - **Por la tarde, con Eduardo:** la ventana del IDE, vista en la P4, la S3 y la C5, y bien a la primera. Y la C5, borrada y grabada con la WiFi (`be08fed7`), con su Entorno, sus packs y sus ficheros repuestos: en la red a los 2,5 s, y el cable USB nuevo, bien a la primera.
+> - **`C5SdGui`, con la pantalla, la SD y la WiFi a la vez:** `RESULT: OK`, pero la etiqueta bajó de 176 cambios a 41. Podía ser la WiFi, y no: tres pasadas con ella y tres sin ella dan lo mismo. Bajando el quantum baja el hueco: `#801`.
 >
 > **Para la próxima sesión:**
-> - **Eduardo:** mirar la ventana del IDE —«Placa (red)», «Buscar en la red» y el botón WiFi—, que sólo ha visto el compilador. Se probaron sus clases contra la placa, no la ventana;
-> - **por decidir (Eduardo):** `#799` y `#800` (el caso 21 de `test-cola`: pone la red en ROJO de vez en cuando, y ya lo hacía antes de la WiFi);
-> - **la C5:** preparada y compilada, sin grabar: falta conectarla. Antes de grabar, apuntar su Entorno (`lcd=`, `touch=`…): se pierde, con el FS y los packs (`Gui`, `DriverSpi`);
-> - sin probar: que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`);
-> - la P4 y la S3 llevan la imagen de hoy, con `/sys/wifi.json` y `autoOff` 0; su FS de antes, el de la S3, en `C:\tmp\v8wifi\s3_fs`. **Una S3 que se actualice pierde el Entorno, el FS y los packs**: a las notas de V8.
+> - **por decidir (Eduardo):** `#799`, `#800` (el caso 21 de `test-cola`: pone la red en ROJO de vez en cuando, y ya lo hacía antes de la WiFi) y `#801` (el turno de un hilo, en opcodes);
+> - la Pico 2 W, conectada en COM11 con un firmware del 16-jul: sin tocar, y su WiFi, en un pack, por analizar;
+> - sin probar: que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`); y el cable USB nuevo en la C3 y la C6, sólo compilado;
+> - la P4, la S3 y la C5 llevan la imagen de hoy, con `/sys/wifi.json` y `autoOff` 0; lo que tenían la S3 y la C5, en `C:\tmp\v8wifi\s3_fs` y `c5_antes`. **Una S3 o una C5 que se actualice pierde el Entorno, el FS y los packs**: a las notas de V8.
 >
 > **5-nov** — **H8: un array con su tamaño** (Eduardo: *«Continuamos con la compatibilidad C# y JC. Las decisiones 1) Si, en BP no se var
 > a:miObjeto[] := miObjeto[10]»*). `A[n]` en BP y `new A[n]` en JC, de cualquier tipo (`V8_IDEAS` §E9, «El tema 3», el punto 3): el árbol es el

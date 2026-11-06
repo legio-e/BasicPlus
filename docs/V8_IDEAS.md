@@ -1928,7 +1928,31 @@ wifi.turnOff()
 **Comprobado en la P4 y en la S3:** `AirWifi`, lo mismo que en el PC; un programa que pregunta al router y a `example.com` (el DNS, y `HTTP/1.1 200 OK`), en 120 ms, y un puerto cerrado da `false`; apagarla y encenderla desde un programa (6,4 s en la P4 y 1,3 en la S3); y la regla del final, en los dos sentidos. Salió un fallo mío: `isConnected()` daba `true` justo después de `turnOff()`,
 porque la IP se da de baja unos milisegundos después que el estado; la IP sólo cuenta con el enlace arriba.
 
-**La C5, preparada y sin probar:** su partición a 2 MB, los búferes en la PSRAM y el cable USB como cable, igual que la UART (y con él, la C3 y la C6, sin WiFi). Su imagen, 1,46 MB. Grabarla pierde su Entorno, su FS y sus packs (`Gui`, `DriverSpi`): hay que apuntar su Entorno antes.
+**La C5, preparada:** su partición a 2 MB, los búferes en la PSRAM y el cable USB como cable, igual que la UART (y con él, la C3 y la C6, sin WiFi). Su imagen, 1,46 MB. Se grabó esa misma tarde: lo siguiente.
+
+### La C5 y la ventana del IDE (6-nov, por la tarde)
+
+Eduardo: *«OK te he conectado la Pico2 con wifi y la C5. Cuando quieras miramos el IDE»*.
+
+**La ventana, vista por Eduardo** en la P4, en la S3 y en la C5: «Placa (red)», «Buscar en la red» con las placas encendidas, Connect y el árbol de ficheros, Run con su salida (`AirNet`, hasta el `HTTP/1.1 200 OK`), parar un programa (`exit 130`, sin perder la conexión) y el diálogo del botón WiFi, que trae lo que ya tiene la placa, con la clave oculta. Bien a la primera, y sin un error en el IDE.
+
+**La C5.** Borrada entera y grabada con la imagen de `be08fed7`. Se repusieron su Entorno (menos `part.fs.size`, que en esta placa no se aplica: el FS son los 16 MB de arriba, y `bpdata` se queda entera para los packs, ahora 14.240 KB), `Gui` y `DriverSpi`, sellados otra vez, `Stdlib` y sus cinco programas de `/app`. La copia de antes, en `C:\tmp\v8wifi\c5_antes`. **El cable USB nuevo** (`wire_v1_usbjtag.c` bajo `wire_cables.c`), que no había corrido en ninguna placa, bien a la primera; la C3 y la C6 lo llevan compilado, sin probar.
+
+- Encendida en 0,7 s, enlace a los 1,3 y IP a los 2,5.
+- Por la red: PING, 7 ms; subir 1 MB, 18,5 s; bajarlo, 5,1; 560 líneas de salida por segundo. Más lenta que la S3 (8 s y 1,6), con una señal floja, de -67 a -73 dBm; sin mirar si es por eso.
+- Pasan todas las pruebas del cable de la red y de `Air`: entrar por la red con un programa en marcha, turnos entre los dos cables, un cliente que se va, uno que deja de leer, y la regla del final en los dos sentidos.
+- La RAM interna: 144.923 B libres antes de encender, y un mínimo de 50.068 tras subir y bajar ficheros, con los búferes en la PSRAM.
+
+**La pantalla, la SD y la WiFi a la vez.** `C5SdGui`, lanzado desde el IDE por la red: `RESULT: OK`, 121 ficheros escritos y releídos, ninguno distinto, y la etiqueta contando sin manchas (Eduardo). La pantalla sola, calcada a la del 24-sep: 188 cambios y 30 ms. Con la tarjeta, no: la etiqueta, de 176 cambios a 41, y el peor hueco, de 63 ms a unos 155; y la tarjeta, de 30 ficheros a 124. Partido cambiando una sola cosa cada vez:
+
+| | cambios de la etiqueta | peor hueco | ficheros |
+|---|---|---|---|
+| WiFi encendida, tres pasadas | 41, 41, 41 | 156, 159, 155 ms | 124 |
+| WiFi apagada, tres pasadas | 41, 41, 41 | 189, 154, 154 ms | 124 |
+| `quantum=256` | 99 | 87 ms | 99 |
+| `quantum=128` | 100 | 55 ms | 99 |
+
+**No es la WiFi: es el turno de los hilos, contado en opcodes** (`#801`).
 
 ---
 
