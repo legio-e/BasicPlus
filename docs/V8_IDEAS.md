@@ -1475,6 +1475,9 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
 
 ### Lo que hay que decidir (Eduardo)
 
+> **6-nov:** decididos el 3 y el 8, el fichero, el Entorno y qué cuenta como actividad: abajo, «Lo decidido el 6-nov». El 4, el 5 y
+> el 7 (el módulo `Wifi`, el PC simulado y la IP desde BP) se quedan para cuando se llegue a lo de los programas.
+
 **De la conexión WiFi:**
 1. ~~Dónde guarda la placa su red~~: **decidido**, un JSON en `/sys` (arriba). Lo que lleva: la red, la clave y el
    país. Por concretar al diseñarlo: el nombre del fichero, si la IP de la interfaz va en él (un apartado `ip`) o en el
@@ -1698,9 +1701,79 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
 **Lo siguiente:** el paso 2, la conexión WiFi del sistema, con las decisiones que quedan (arriba, «Lo que hay que
 decidir») y las de este paso:
 - ~~el IDF 6.1 para la P4~~: **decidido**, para toda la familia ESP32 (`#707`);
-- qué cuenta como actividad para apagar a los 10 minutos; ~~dónde se dice que no se apague~~: **decidido**, en el
-  fichero de configuración, y con alimentación externa no se apaga;
-- cerrar `#706` porque el apagado del todo lo evita, o arreglar la C6.
+- ~~qué cuenta como actividad para apagar a los 10 minutos~~: **decidido el 6-nov** (abajo); ~~dónde se dice que no se apague~~:
+  **decidido**, en el fichero de configuración, y con alimentación externa no se apaga;
+- ~~cerrar `#706` porque el apagado del todo lo evita, o arreglar la C6~~: **cerrada el 4-nov**, por el diseño.
+
+### Lo decidido el 6-nov
+
+Eduardo: *«1 al 7 OK»*, sobre la propuesta de ese día, y tres matices suyos, que mandan sobre ella: *«Encontrar lo puede hacer cuando en
+el IDE le digamos que busque un dispositivo en la red local, si no se conecta con la IP que le indiquemos. La wifi se activa de forma
+opcional cuando en el environment pongamos wifi=1 o en fichero de configuración. Luego desde BP con una librería la podemos activar y
+desactivar a voluntad.»*
+
+1. **El orden:** primero el IDE por WiFi; después, lo de los programas (el módulo `Wifi` y `Net` en placa).
+2. **Dos ficheros**, por la separación del enlace y el TCP/IP. `/sys/wifi.json`: `ssid`, `password`, `country`, `autoStart` y `autoOff`.
+   `/sys/net.json`: `hostname` para el DHCP, o `ip`, `mask`, `gateway` y `dns` para la IP fija. La clave va en claro: cualquier programa de la
+   placa, o quien tenga el cable, puede leerla (*«la seguridad, de momento no»*).
+3. **Encenderla al arrancar es opcional:** `wifi=1` en el Entorno, o `"autoStart": true` en el fichero. Sin ninguna de las dos, apagada. `bt=1`,
+   para el Bluetooth, más adelante.
+4. **Un programa la enciende y la apaga a voluntad**, con la librería, aunque la haya encendido el arranque. Esto sustituye a lo que propuse en
+   el punto 4 (que el programa no pudiera apagar la del sistema, con una excepción).
+5. **La actividad:** hay actividad mientras haya una conexión TCP abierta, del programa o del IDE, y durante `autoOff` segundos desde que se
+   cerró la última, o desde una búsqueda o una conexión. Por defecto, 600; con 0, no se apaga. La S3 y la P4 no saben si van a pilas, y manda el
+   fichero. Con `wifi=1` y 600, una placa que se apaga sola sólo vuelve con un reinicio: para trabajar con el IDE, `"autoOff": 0`.
+6. **La S3 pasa de 1 a 2 MB de aplicación.** Medido hoy, compilando sin grabar: la estación WiFi del IDF 6.1 ocupa 586 592 bytes más que su hola
+   mundo, y nuestro firmware, 674 016: ~1,2 MB. En RAM interna, ~60 KB fijos más lo que pida al encenderse, sin medir, de los 166 KB libres. El
+   Entorno y el sistema de ficheros se mueven, y se pierden una vez. La P4 primero, y la S3 en cuanto funcione: el código es el mismo.
+7. **Cómo encuentra el IDE a la placa:** el `INFO` por el cable dice la IP, y el IDE la recuerda; con la IP que le indiquemos, o con «buscar en la
+   red local», que pregunta el IDE y contestan las placas. La placa no se anuncia sola: no gasta nada mientras nadie pregunta.
+
+### El algoritmo de los pasos 2 y 3 (6-nov; para su OK)
+
+**Lo común y lo de cada placa**, como el sonido (`bpvm_sonido.c`). En la HAL BP, `src/bpvm_wifi.c`: los ficheros, los estados, los reintentos y el
+apagado. Debajo, la parte de la familia, `esp32/common/wifi_esp32.c`: encender, apagar, conectarse, desconectarse y buscar, con `esp_wifi_*`. Esas funciones
+son las mismas en las dos placas: en la S3 van a su radio, y en la P4 el IDF 6.1 las lleva a la C6. Lo único propio de la P4 es abrir y cerrar el enlace con la
+C6 (`esp_hosted_init`, `esp_hosted_deinit` y su reset, el GPIO 54).
+
+**A. El enlace del sistema.**
+1. Un gancho nuevo de `bpvm_boot2`, `red`, tras el cable y antes del autorun.
+2. Lee `wifi` del Entorno y `/sys/wifi.json`. Si el Entorno dice `wifi=0`, manda él. Si no toca encenderla, no se inicializa nada y no cuesta RAM. En
+   la P4, la C6 se queda en reset desde el arranque: hoy nadie la sujeta (lo que gasta, sin medir).
+3. Si toca, una tarea corta enciende y se conecta, sin hacer esperar al cable ni al autorun: en la P4, encender son 2,1 s.
+4. Los estados: `off`, `starting`, `connecting`, `connected`, `noNetwork` y `badKey`. Si se pierde la red, reintenta a los 1, 2, 4… hasta 60 s. Con la clave
+   mala, a los tres intentos se para y lo dice en el log: seguir no arregla nada y gasta.
+5. Apagar del todo: `esp_wifi_stop` y `esp_wifi_deinit`, y en la P4 además cerrar el enlace y dejar la C6 en reset. Un fallo del enlace con la C6 no tumba la
+   placa (`TRANSPORT_RESTART_ON_FAILURE=n`): se queda en `off` y lo dice el log.
+6. El apagado por inactividad: una mirada cada 10 s con la regla de arriba.
+7. El `INFO` dice `wifi`, `ssid`, `rssi` e `ip`.
+
+**B. La IP.** Con el enlace arriba, `/sys/net.json`: sin fichero, DHCP con el nombre de la placa; con `ip`, la fija. Lo que hay que decidir de la IP desde BP, al llegar a `Net`.
+
+**C. El cable por TCP, a la vez que el de siempre.**
+1. `wire_v1_tcp.c` pasa al común de las ESP, sin el `accept` dentro de la lectura, y `esp32/common/wire_cables.c` pone las funciones `wire_v1_*` encima de los dos cables: el
+   local (UART o USB-Serial-JTAG) y el de la red. El REPL no cambia.
+2. **Habla uno a la vez: el último que ha mandado un mensaje válido.** Las respuestas y la salida del programa van a ése. Es lo que hace falta para que el IDE se enganche por WiFi a un
+   programa que ya corre, o a un autorun, y lo pare. Sólo cambia entre mensajes, y un byte que no empieza un mensaje (`{`) no cuenta.
+3. Sin nada que hacer, espera en el cable activo hasta 20 ms y mira el otro sin esperar: el activo no pierde tiempo. Durante un RUN, el sondeo mira los dos.
+4. Un cliente nuevo sustituye al anterior, que con la WiFi suele ser uno muerto. Y para no quedarse colgado con uno muerto: `SO_KEEPALIVE`, y un envío atascado más de 5 s cierra el
+   cliente. Al caer el cable de la red, el activo vuelve a ser el local.
+5. El servidor abre el 3333 al tener IP y cierra al perderla. Una conexión abierta cuenta como actividad.
+
+**D. El IDE.**
+1. `wire_serie.py` por TCP antes que el IDE: la herramienta primero, y con ella se prueba todo lo de C.
+2. En el IDE, «placa por la red», como la del puerto serie pero con `connectRemote`: la hora, el log y la memoria del `INFO`, que hoy no da el de la VM Java. Se escribe la IP, o se pulsa
+   «buscar en la red».
+3. Buscar: el IDE manda una difusión UDP al 3333, y cada placa con red contesta con su nombre, su micro, su IP y su puerto. Lo contesta el sondeo del cable, sin una tarea más.
+4. Un diálogo para escribir `/sys/wifi.json` por el cable: la preconfiguración desde el IDE que se decidió el 19-oct.
+
+**E. La S3:** su tabla de particiones y la misma imagen de código. **Después, lo de los programas:** el módulo `Wifi`, en Java, en C y en placa, con su PC simulado, y `Net` sobre lwIP.
+
+**Cómo se comprueba, en cada paso y en placa:** A, el `INFO` con la IP, un `ping` desde el PC, la SD a la vez, la clave mala y el apagado con un `autoOff` corto. C, por `wire_serie`:
+`INFO`, `LS`, subir y bajar ficheros, un `RUN` con su salida, `KILL`, los dos cables a la vez, y cortar la red a media sesión; y lo que tarda subir 1 MB. El ahorro de energía de la radio
+(`esp_wifi_set_ps`) mete latencia: se mide ahí.
+
+**Lo que queda por ver:** las SDIO de la C6 son de compilación: las de la P4 de Waveshare y las de la P4 Kit se comparten con `CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD`, sin probar en la Kit.
 
 ---
 
