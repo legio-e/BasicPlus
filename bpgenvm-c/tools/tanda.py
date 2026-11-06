@@ -1074,6 +1074,7 @@ def abrir_sim(spec):
 
 def sello_de(w, arranque=None):
     info = w.info(6) or {}
+    info.pop("ssid", None)     # V8/H3: el nombre de la red de quien prueba no va a un informe que entra en el repo
     h = w.hello
     return {
         "boardName": info.get("boardName", "?"),

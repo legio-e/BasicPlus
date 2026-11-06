@@ -1861,6 +1861,27 @@ se va con el programa en marcha y la salida vuelve al cable; un cliente nuevo su
 
 **Lo que falta por probar:** que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`; se probó el cliente que se va, no el que desaparece), y la ventana del IDE, que sólo la ha visto el compilador.
 
+### El paso E, la S3 (6-nov)
+
+El mismo código que en la P4, sin el enlace con la C6: `wifi_esp32_publicar(NULL)`, y `CHIP_TIENE_WIFI` en su `chip_cfg.h` (la C3, la C5 y la C6 no lo definen, y su imagen no enlaza la radio). Su aplicación pasa a 2 MB: la
+tabla de particiones nueva pide borrar la flash entera, y se pierden el Entorno, el FS y los packs de la placa, **una vez** (esto, a las notas de V8: una S3 que se actualice tiene que aprovisionarse otra vez). Sin NVS: la radio guarda su
+configuración en RAM y se calibra al encenderse.
+
+| | La S3 | |
+|---|---|---|
+| Encender | 96 ms | la radio está en el chip: no hay enlace que abrir |
+| Conectada, desde el arranque | 0,38 s; la IP por DHCP, a los 1,75 s | |
+| La imagen | 1 239 712 B | de 680 976: +559 KB |
+| RAM fija | +50 KB de datos y +26 KB de código en IRAM | más que los 60 KB que se estimaron |
+| `PING` del wire | 4 ms de mediana | |
+| Subir 1 MB | 8,1 s (126 KB/s) | el doble que la P4: su FS va más deprisa |
+| Bajar 1 MB | 1,6 s (660 KB/s) | |
+
+**La RAM interna fue lo que se movió.** Con los búferes de la WiFi y de lwIP en la RAM interna, la libre mínima pasó de 166 KB a 58 al conectarse, y a **24 KB** tras subir y bajar ficheros: de ahí salen las pilas de las tareas. Con
+`CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP` (los búferes, en la PSRAM) se queda en **57 KB** con la misma carga, y a la misma velocidad.
+
+La batería del cable, la misma que en la P4 y en verde, incluida la salida al cambiar de cable sin perder ni repetir línea: por el cable llega hasta la N y por la red sigue la N+1.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)

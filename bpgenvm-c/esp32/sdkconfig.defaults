@@ -123,3 +123,14 @@ CONFIG_PM_ENABLE=y
 # (medido: fib(28) de 22,4 a 14,9 s) y gasta más; cada placa lo sube sin regrabar con `cpu.mhz=240` en el ENV, y un
 # programa, con Machine.setCpuFreqMHz.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+
+# V8/H3 (6-nov): LA WIFI. La S3 no usa la NVS (nadie la inicia): la configuración de la radio va en RAM, la red la dice
+# /sys/wifi.json, y la calibración de la radio se hace al encenderla, sin escribir nada en la flash. Y la tarea de eventos del
+# IDF, a 4 KB: bpvm_red_hay_ip escribe en el log desde ella. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo
+# vuelve a sembrar.
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=n
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+# Los búferes de la WiFi y de lwIP, en la PSRAM: con ellos en la RAM interna, tras subir y bajar ficheros quedaban 24 KB libres
+# como mínimo (de los 166 de antes de la WiFi), y de ahí salen las pilas de las tareas.
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

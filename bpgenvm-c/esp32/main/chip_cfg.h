@@ -84,4 +84,8 @@
 #define CHIP_GPIO_OCTAL_DESDE  33
 #define CHIP_GPIO_OCTAL_HASTA  37
 
+/* V8/H3 (6-nov): esta imagen lleva la WiFi. En la S3, la radio está en el chip. La C3, la C5 y la C6, después: en la C3 y la C6
+ * son unos 60 KB de RAM fijos aunque no se use. */
+#define CHIP_TIENE_WIFI 1
+
 #endif /* BPVM_CHIP_CFG_H */
