@@ -2299,10 +2299,11 @@ strip.show()</code></pre>
 
 <h3 id="stdlib-net">14.15 <code>Net</code></h3>
 <p>
-  Simple TCP client (H11). Available on <strong>PC</strong> (both VMs:
-  OS sockets); on the micros <em>there is still no network backend</em>
-  (Pico 2 W and ESP32-S3 will arrive with lwIP) — there any operation raises
-  a <em>catchable</em> <code>RuntimeError</code>
+  Simple TCP client (H11). Available on the <strong>PC</strong> (both VMs:
+  OS sockets) and on the boards with WiFi: the P4, the S3 and the C5 (lwIP). The
+  WiFi has to be switched on first with <a href="#stdlib-air"><code>Air.Wifi</code></a>;
+  while it is off, <code>connect</code> gives <code>false</code>. On the other boards any
+  operation raises a <em>catchable</em> <code>RuntimeError</code>
   (&laquo;<code>Net: sin red en esta plataforma</code>&raquo;).
 </p>
 <pre><code><span class="kw">import</span> Net
@@ -2333,6 +2334,39 @@ strip.show()</code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+
+<h3 id="stdlib-air">14.19 <code>Air</code> (WiFi and Bluetooth)</h3>
+<p>
+  Wireless (<code>import Air</code>), two classes: <code>Air.Wifi</code> and <code>Air.Bluetooth</code>. From a program
+  you only switch it on and off: the network goes in a file, the same on every board, and the rest is sockets
+  (<a href="#stdlib-net"><code>Net</code></a>).
+</p>
+<pre><code><span class="kw">import</span> Air
+<span class="kw">import</span> Net
+
+<span class="kw">var</span> wifi: Air.Wifi := Air.Wifi()
+<span class="kw">if</span> wifi.turnOn() <span class="kw">then</span>            // switches on and waits for an IP
+  <span class="kw">var</span> c: Net.Tcp := Net.Tcp()
+  <span class="kw">if</span> c.connect("192.168.1.50", 8080, 3000) <span class="kw">then</span>
+    c.sendStr("hello")
+    c.close()
+  <span class="kw">endif</span>
+<span class="kw">endif</span>
+wifi.turnOff()</code></pre>
+<p>
+  <code>turnOn()</code> uses <code>/sys/wifi.json</code> and waits up to 20&nbsp;s for an IP without stopping the other threads:
+  <code>true</code> with an IP, <code>false</code> if not, with the reason in the log; on a board without WiFi or without the file,
+  a <code>RuntimeError</code>. <code>turnOff()</code> switches it off completely. <code>isConnected()</code>: there is a link and an IP.
+  <code>isAvailable()</code>: does this board have WiFi. <code>/sys/wifi.json</code> holds <code>ssid</code>, and if needed
+  <code>password</code>, <code>country</code>, <code>autoStart</code> and <code>autoOff</code> (seconds without activity; 600 by default, 0 never);
+  <code>/sys/net.json</code>, if needed, <code>hostname</code> for DHCP, or <code>ip</code>, <code>mask</code>, <code>gateway</code> and
+  <code>dns</code>. When the program ends, if it touched the WiFi, it goes back to what the configuration says.
+</p>
+<p>
+  Boards: the P4 (with <code>radio=c6</code> in its ENV), the S3 and the C5; not the C3 or the C6, which have no PSRAM. On the
+  <strong>PC</strong>, <code>turnOn()</code> always gives <code>true</code>. <code>Air.Bluetooth</code> has the same shape, and no board has it
+  yet: <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
+</p>
 
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>
 <p>
@@ -3594,7 +3628,7 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><td><code>sd</code> (SPI)</td><td><code>cs:N</code>; <code>sck</code>, <code>mosi</code> and <code>miso</code> if the bus is not in <code>spiN</code>; <code>bus:N</code> (0), <code>cd:N</code>, <code>cdalto:1</code>, <code>khz:N</code> (25000)</td><td>The SPI card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>RP2350 · C5 · C6</td><td>at boot</td></tr>
   <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, and <code>d1</code>, <code>d2</code> and <code>d3</code> all three (4 bits) or none (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = no LDO)</td><td>The SDMMC card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>WiFi</strong></td></tr>
-  <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: it is switched on at boot, with what <code>/sys/wifi.json</code> says. 0: it is not, even if the file says <code>"autoStart": true</code>. Without the key, the file decides; and without a file, it stays off</td><td>P4 · S3</td><td>at boot</td></tr>
+  <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: it is switched on at boot, with what <code>/sys/wifi.json</code> says. 0: it is not, even if the file says <code>"autoStart": true</code>. Without the key, the file decides; and without a file, it stays off</td><td>P4 · S3 · C5</td><td>at boot</td></tr>
   <tr><td><code>radio</code></td><td><code>c6</code></td><td>The board carries an ESP32-C6 as its radio (not every P4 does). Without this line it has no WiFi and its pins are free; with it, the SDIO and reset pins of the C6 belong to the system</td><td>P4</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>Storage</strong></td></tr>
   <tr><td><code>part.fs.size</code></td><td>bytes, a multiple of the sector (4 KB; on the STM32s, 8 KB)</td><td>The size of the file system; the packs take the rest of the zone. Not edited by hand: the IDE's partition wizard sets it</td><td>all except the C5 and the Waveshare P4 (32 MB: the file system goes on top)</td><td>at boot</td></tr>

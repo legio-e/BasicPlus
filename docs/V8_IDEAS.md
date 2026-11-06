@@ -1900,6 +1900,36 @@ C5 tiene PSRAM y no tiene este problema: sólo su partición, como la S3.
 
 **Lo que no se puede:** que lo pague sólo quien la use dentro de una imagen: la RAM fija es del enlazado, y un pack no vale (el censo de arriba). Lo que queda es otra imagen.
 
+**Decidido** (Eduardo): *«C3 y C6 sin wifi. De las que tenemos quedaría la C5 que como tiene PSRAM no habría problema.»*
+
+### Lo de los programas: el módulo `Air` y `Net` en las placas (6-nov)
+
+Eduardo: *«Desde un programa de momento con encender y apagar es suficiente. La configuración la hacemos con un fichero con el mismo sistema para todas las placas. El resto ya es cuestión de abrir sockets y en teoría eso ya lo tenemos.»* Y
+*«Haz un módulo inalambrico (el nombre que sea 'Air' por ejemplo). Dentro 2 clases, 1 para la Wifi y otra para el Bluetooth.»* Con eso se cierran las decisiones 4, 5 y 7 de arriba, y el esbozo de `Wifi.Radio` se queda en mucho menos.
+
+```
+import Air
+import Net
+
+var wifi: Air.Wifi := Air.Wifi()
+if wifi.turnOn() then                 // enciende y espera a tener IP
+  var t: Net.Tcp := Net.Tcp()
+  ...
+endif
+wifi.turnOff()
+```
+
+- **`Air.Wifi`:** `turnOn()`, que espera a tener IP hasta 20 s, en BP y con `sleep`, sin parar los demás hilos; `turnOff()`; `isConnected()`, lo único añadido a encender y apagar, porque un programa largo necesita saber si ha perdido la red; e `isAvailable()`, como en `Sound`.
+- **`Air.Bluetooth`:** la misma forma, sin firmware debajo: no está disponible hasta que se retome H2.
+- **Al acabar el programa, la WiFi vuelve a lo que diga la configuración**, si la ha tocado: encendida con `wifi=1` o `"autoStart"`, apagada si no. Así un programa que la apaga no deja al IDE fuera, y uno que la enciende no la deja gastando.
+- **En el PC, `turnOn()` da siempre `true`**, en las dos VMs: `wifi_host.c` es la radio más pequeña, y lo que corre encima es lo de la placa.
+- **`Net` en las placas:** «en teoría ya lo tenemos» era verdad en el PC; en las placas no había backend. `esp32/common/net_esp32.c`: `connect` con DNS y plazo, `send`, `recv` con plazo y `close`, ocho conexiones a la vez. Una abierta cuenta como actividad, y lo que un programa deje abierto se cierra al acabar.
+
+**Comprobado en la P4 y en la S3:** `AirWifi`, lo mismo que en el PC; un programa que pregunta al router y a `example.com` (el DNS, y `HTTP/1.1 200 OK`), en 120 ms, y un puerto cerrado da `false`; apagarla y encenderla desde un programa (6,4 s en la P4 y 1,3 en la S3); y la regla del final, en los dos sentidos. Salió un fallo mío: `isConnected()` daba `true` justo después de `turnOff()`,
+porque la IP se da de baja unos milisegundos después que el estado; la IP sólo cuenta con el enlace arriba.
+
+**La C5, preparada y sin probar:** su partición a 2 MB, los búferes en la PSRAM y el cable USB como cable, igual que la UART (y con él, la C3 y la C6, sin WiFi). Su imagen, 1,46 MB. Grabarla pierde su Entorno, su FS y sus packs (`Gui`, `DriverSpi`): hay que apuntar su Entorno antes.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)

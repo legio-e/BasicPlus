@@ -1787,6 +1787,22 @@ module Core
   function __overlayThreads(): integer   // cuántos hilos vivos hay, sin contar el que llama
     inline CALL_BUILTIN 302
   end __overlayThreads
+  // V8/H3 (6-nov) — LA WIFI, para la clase Air.Wifi. Sin `public`: la interfaz de Core no cambia; los públicos, en Air.bp.
+  function __wifiTurnOn()                // enciende con /sys/wifi.json y vuelve en seguida
+    inline CALL_BUILTIN 303
+  end __wifiTurnOn
+  function __wifiTurnOff()               // apaga, y vuelve en seguida
+    inline CALL_BUILTIN 304
+  end __wifiTurnOff
+  function __wifiGetState(): integer     // 0 off, 1 starting, 2 connecting, 3 connected, 4 noNetwork, 5 badKey
+    inline CALL_BUILTIN 305
+  end __wifiGetState
+  function __wifiHasIp(): boolean        // enlace e IP: se pueden abrir conexiones
+    inline CALL_BUILTIN 306
+  end __wifiHasIp
+  function __wifiIsAvailable(): boolean  // ¿tiene WiFi esta placa? Lo contesta la HAL BP, sin tocar nada
+    inline CALL_BUILTIN 307
+  end __wifiIsAvailable
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

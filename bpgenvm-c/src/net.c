@@ -40,6 +40,10 @@ void bpvm_net_close(int h) {
     if (g_net && g_net->close) g_net->close(h);
 }
 
+void bpvm_net_fin_de_run(void) {
+    if (g_net && g_net->fin_de_run) g_net->fin_de_run();
+}
+
 int bpvm_net_ip_dinamica(const char* nombre) {
     return (g_net && g_net->ip_dinamica) ? g_net->ip_dinamica(nombre) : -1;
 }

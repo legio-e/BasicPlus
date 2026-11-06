@@ -308,7 +308,12 @@ enum {
     BUILTIN_OVERLAY_TRACE                = 300,   /* __overlayTrace(): string */
     BUILTIN_CLASS_NAME                   = 301,   /* __className(o: any): string */
     BUILTIN_OVERLAY_THREADS              = 302,   /* __overlayThreads(): integer */
-    BUILTIN__CUANTOS = 303
+    BUILTIN_WIFI_TURN_ON                 = 303,   /* __wifiTurnOn() */
+    BUILTIN_WIFI_TURN_OFF                = 304,   /* __wifiTurnOff() */
+    BUILTIN_WIFI_GET_STATE               = 305,   /* __wifiGetState(): integer */
+    BUILTIN_WIFI_HAS_IP                  = 306,   /* __wifiHasIp(): boolean */
+    BUILTIN_WIFI_IS_AVAILABLE            = 307,   /* __wifiIsAvailable(): boolean */
+    BUILTIN__CUANTOS = 308
 };
 
 #endif

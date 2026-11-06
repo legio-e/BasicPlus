@@ -50,6 +50,7 @@ module Stdlib
   import Pwm
   import Rtc
   import Sound            // V8/H4 (#708) — un .wav por el altavoz, en paralelo al programa
+  import Air              // V8/H3 — lo inalámbrico: Air.Wifi y Air.Bluetooth
   import Spi
   import Uart
   import Wdt

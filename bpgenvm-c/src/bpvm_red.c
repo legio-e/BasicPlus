@@ -116,6 +116,8 @@ void bpvm_red_hay_ip(int hay) {
     if (s_al_cambiar) s_al_cambiar(hay);
 }
 
+int bpvm_red_hay(void) { return s_hay; }
+
 int bpvm_red_ip(char* buf, size_t n) {
     uint32_t ip = 0, m, p, d;
     if (n) buf[0] = 0;

@@ -18,6 +18,8 @@
 #include "bpvm_pulse.h"
 #include "bpvm_neopixel.h"
 #include "bpvm_uart.h"
+#include "bpvm_net.h"     /* V8/H3: y lo que siga abierto en la red */
+#include "bpvm_wifi.h"    /* V8/H3: y la WiFi, si el programa la tocó */
 #include "bpvm_sonido.h"  /* V8/H4 (#708): y el sonido que siga sonando */
 #include "bpvm_bus.h"     /* V7/H6.c G4.a1: y los buses del programa se sueltan */
 #include "bpvm_spi.h"
@@ -2055,6 +2057,8 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     /* V7 #667 — lo que el programa encendió y nadie soltó (sus destructores, en la fase del final de #668, ya lo han
      * hecho; esto es la red): el PWM, los contadores, las tiras y las UART. Antes que los pines. */
+    bpvm_net_fin_de_run();          /* V8/H3: lo que el programa dejó abierto en la red */
+    bpvm_wifi_fin_de_run();         /* V8/H3: y la WiFi, si la tocó, como diga la configuración */
     bpvm_pwm_fin_de_run();
     bpvm_pulse_fin_de_run();
     bpvm_neopixel_fin_de_run();

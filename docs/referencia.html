@@ -199,6 +199,7 @@
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — volumen aparte</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
     <li class="sub"><a href="#stdlib-sound">14.18 Sound</a></li>
+    <li class="sub"><a href="#stdlib-air">14.19 Air</a></li>
     <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 Qué es un pack, y qué no</a></li>
@@ -2297,10 +2298,11 @@ tira.show()</code></pre>
 
 <h3 id="stdlib-net">14.15 <code>Net</code></h3>
 <p>
-  Cliente TCP simple (H11). Disponible en <strong>PC</strong> (ambas VMs:
-  sockets del SO); en los micros <em>todavía no hay backend de red</em>
-  (Pico 2 W y ESP32-S3 llegarán con lwIP) — allí cualquier operación lanza
-  un <code>RuntimeError</code> <em>atrapable</em>
+  Cliente TCP simple (H11). Disponible en el <strong>PC</strong> (ambas VMs:
+  sockets del SO) y en las placas con WiFi: la P4, la S3 y la C5 (lwIP). Antes
+  hay que encenderla con <a href="#stdlib-air"><code>Air.Wifi</code></a>;
+  apagada, <code>connect</code> da <code>false</code>. En las demás placas
+  cualquier operación lanza un <code>RuntimeError</code> <em>atrapable</em>
   («<code>Net: sin red en esta plataforma</code>»).
 </p>
 <pre><code><span class="kw">import</span> Net
@@ -2681,6 +2683,53 @@ var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
   <code>false</code>.
   El códec y el amplificador sólo se encienden mientras suena. Al acabar el programa, lo que suene se para, el
   progreso vuelve a 0 y el volumen a 85.
+</p>
+
+<h3 id="stdlib-air">14.19 <code>Air</code> (la WiFi y el Bluetooth)</h3>
+<p>
+  Lo inalámbrico (<code>import Air</code>), dos clases: <code>Air.Wifi</code> y <code>Air.Bluetooth</code>. Desde un
+  programa sólo se enciende y se apaga: la red va en un fichero, el mismo en todas las placas, y lo demás son sockets
+  (<a href="#stdlib-net"><code>Net</code></a>).
+</p>
+<pre><code><span class="kw">import</span> Air
+<span class="kw">import</span> Net
+
+<span class="kw">var</span> wifi: Air.Wifi := Air.Wifi()
+<span class="kw">if</span> wifi.turnOn() <span class="kw">then</span>            // enciende y espera a tener IP
+  <span class="kw">var</span> c: Net.Tcp := Net.Tcp()
+  <span class="kw">if</span> c.connect("192.168.1.50", 8080, 3000) <span class="kw">then</span>
+    c.sendStr("hola")
+    c.close()
+  <span class="kw">endif</span>
+<span class="kw">endif</span>
+wifi.turnOff()</code></pre>
+<table>
+  <tr><th>Método</th><th>Qué hace</th></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Enciende con <code>/sys/wifi.json</code> y espera a tener IP, hasta 20&nbsp;s, sin parar los demás hilos. <code>true</code> con IP; <code>false</code> si no la consigue (no aparece la red, la clave no vale), con el motivo en el log. Si no llega a tiempo la radio sigue intentándolo. En una placa sin WiFi o sin fichero, un <code>RuntimeError</code> con el motivo</td></tr>
+  <tr><td><code>turnOff()</code></td><td>Apaga del todo, también si la encendió el arranque. Si el IDE estaba conectado por la red, se corta</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Hay enlace e IP: se pueden abrir conexiones. Si la red se pierde, la placa la busca sola</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td><td>¿Tiene WiFi esta placa? Sin encender nada</td></tr>
+</table>
+<p>
+  <strong>El fichero.</strong> <code>/sys/wifi.json</code>: <code>ssid</code>, y si hace falta <code>password</code>,
+  <code>country</code> (dos letras), <code>autoStart</code> (<code>true</code>: se enciende al arrancar la placa) y
+  <code>autoOff</code> (segundos sin actividad para apagarse sola; 600 por defecto, 0 no se apaga; una conexión abierta cuenta como
+  actividad). Se escribe con el botón <strong>WiFi</strong> del IDE, o como cualquier fichero. La clave va en claro.
+  <code>/sys/net.json</code>, si hace falta: <code>hostname</code>, para el DHCP, o <code>ip</code>, <code>mask</code>,
+  <code>gateway</code> y <code>dns</code> para una IP fija. La clave <code>wifi</code> del ENV manda sobre
+  <code>autoStart</code> (<a href="#env">apéndice A</a>).
+</p>
+<p>
+  <strong>Al acabar el programa</strong>, si la ha tocado, la WiFi vuelve a lo que diga la configuración: si la encendió
+  y el fichero no dice <code>autoStart</code>, se apaga; si la apagó y el fichero lo dice, se enciende, y así el IDE puede
+  volver a entrar por la red.
+</p>
+<p>
+  <strong>Dónde.</strong> La P4 (con <code>radio=c6</code> en su ENV), la S3 y la C5. La C3 y la C6 no: no tienen PSRAM, y sólo
+  por llevarla perderían entre 33 y 88&nbsp;KB de RAM. En la Pico 2 W, un pack, más adelante. En el <strong>PC</strong>,
+  <code>turnOn()</code> da siempre <code>true</code>, porque ya tiene red. <code>Air.Bluetooth</code> tiene la misma forma, y
+  todavía ninguna placa lo tiene: <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un
+  <code>RuntimeError</code>.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>
@@ -3668,7 +3717,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <tr><td colspan="5"><strong>El sonido</strong></td></tr>
   <tr><td><code>audio</code></td><td><code>&lt;códec&gt;,mclk:N,bclk:N,ws:N,dout:N</code>; y <code>i2c:N</code> (0), <code>dir:N</code> (0x18), <code>pa:P</code> (ninguno), <code>paalto:1</code> (1); <code>sda</code> y <code>scl</code>, si ese bus no lo declara ya la placa</td><td>El sonido de la placa (<code>Sound</code>, <a href="#stdlib-sound">§14.18</a>): el códec —de momento, <code>es8311</code>—, los pines de su I²S, su I²C y el amplificador, que sólo se enciende mientras suena. Sus pines pasan a ser del sistema. Sin la línea, la placa no tiene sonido y <code>Sound.play</code> lo dice. La P4 de Waveshare: <code>audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53</code></td><td>P4</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>La WiFi</strong></td></tr>
-  <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: se enciende al arrancar, con lo que diga <code>/sys/wifi.json</code>. 0: no se enciende, aunque el fichero diga <code>"autoStart": true</code>. Sin la clave, lo dice el fichero; y sin fichero, apagada</td><td>P4 · S3</td><td>al arrancar</td></tr>
+  <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: se enciende al arrancar, con lo que diga <code>/sys/wifi.json</code>. 0: no se enciende, aunque el fichero diga <code>"autoStart": true</code>. Sin la clave, lo dice el fichero; y sin fichero, apagada</td><td>P4 · S3 · C5</td><td>al arrancar</td></tr>
   <tr><td><code>radio</code></td><td><code>c6</code></td><td>La placa lleva una ESP32-C6 de radio (no todas las P4). Sin esta línea no tiene WiFi y sus pines son de quien los quiera; con ella, los de la SDIO y el reset de la C6 son del sistema</td><td>P4</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>El almacenamiento</strong></td></tr>
   <tr><td><code>part.fs.size</code></td><td>bytes, múltiplo del sector (4 KB; en las STM32, 8 KB)</td><td>El tamaño del sistema de archivos; los packs se llevan el resto de la zona. No se edita a mano: lo pone el asistente de particiones del IDE</td><td>todas, salvo la C5 y la P4 de Waveshare (32 MB: el sistema de archivos va arriba)</td><td>al arrancar</td></tr>

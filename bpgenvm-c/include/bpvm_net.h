@@ -7,10 +7,10 @@
  *   - Host (Windows/Linux/macOS): src/net_host.c — sockets reales
  *     (Winsock2 con WSAStartup lazy en Windows, POSIX en el resto).
  *     test/main.c llama a bpvm_net_register_host().
- *   - Firmwares: SIN backend por ahora (H11.b/c traerán lwIP en
- *     Pico 2 W / ESP32-S3). Backend NULL → los builtins lanzan
- *     RuntimeError ATRAPABLE ("sin red en esta plataforma") — patrón
- *     honesto, no un fallo silencioso. STM32 U575: NULL siempre.
+ *   - Firmwares con WiFi (V8/H3: la P4, la S3 y la C5):
+ *     esp32/common/net_esp32.c, sobre lwIP. Los demás, sin backend:
+ *     los builtins lanzan RuntimeError ATRAPABLE ("sin red en esta
+ *     plataforma") — patrón honesto, no un fallo silencioso.
  *
  * Semántica de la tabla (deliberadamente mínima — cliente simple):
  *
@@ -57,6 +57,7 @@ typedef struct {
     int  (*ip_dinamica)(const char* nombre);
     int  (*ip_fija)(uint32_t ip, uint32_t mascara, uint32_t puerta, uint32_t dns);
     int  (*ip_leer)(uint32_t* ip, uint32_t* mascara, uint32_t* puerta, uint32_t* dns);
+    void (*fin_de_run)(void);   /* opcional: cierra lo que el programa dejó abierto */
 } bpvm_net_backend_t;
 
 /* Cada plataforma llama una vez al boot (o nunca: sin red). */
@@ -73,6 +74,9 @@ int  bpvm_net_connect(const char* host, int port, int timeout_ms);
 int  bpvm_net_send(int h, const void* buf, int len);
 int  bpvm_net_recv(int h, void* buf, int max, int timeout_ms);
 void bpvm_net_close(int h);
+
+/* V8/H3: el fin de RUN. */
+void bpvm_net_fin_de_run(void);
 
 /* V8/H3: sin backend, o sin ellas, -1. */
 int  bpvm_net_ip_dinamica(const char* nombre);

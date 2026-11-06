@@ -312,7 +312,12 @@ public enum Builtin {
     OVERLAY_FREE("__overlayFree"),   // [299] __overlayFree()
     OVERLAY_TRACE("__overlayTrace"),   // [300] __overlayTrace(): string
     CLASS_NAME("__className"),   // [301] __className(o: any): string
-    OVERLAY_THREADS("__overlayThreads");   // [302] __overlayThreads(): integer
+    OVERLAY_THREADS("__overlayThreads"),   // [302] __overlayThreads(): integer
+    WIFI_TURN_ON("__wifiTurnOn"),   // [303] __wifiTurnOn()
+    WIFI_TURN_OFF("__wifiTurnOff"),   // [304] __wifiTurnOff()
+    WIFI_GET_STATE("__wifiGetState"),   // [305] __wifiGetState(): integer
+    WIFI_HAS_IP("__wifiHasIp"),   // [306] __wifiHasIp(): boolean
+    WIFI_IS_AVAILABLE("__wifiIsAvailable");   // [307] __wifiIsAvailable(): boolean
 
     public final String bpName;
     public final int id;

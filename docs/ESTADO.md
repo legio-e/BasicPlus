@@ -35,14 +35,15 @@
 > - **Los números:** subir 1 MB, 16 s en la P4 y 8 en la S3; bajarlo, 1,5; los tres packs de la P4, regrabados por la WiFi en 14 s. Encender: 2,2 s en la P4 (la C6 arranca de cero) y 96 ms en la S3.
 > - **Lo que no vi venir:** la RAM interna de la S3 bajó a 24 KB con tráfico, y los búferes de la WiFi fueron a la PSRAM (57 KB). Eduardo, enseguida: la C3 y la C6 no tienen PSRAM, y se midió lo mínimo que costaría.
 > - **`SleepCede` falla en las placas**, y no es de la WiFi: se reproduce en el simulador con el `Stdlib.pack` (`#799`).
+> - **Lo de los programas:** el módulo `Air`, con `Air.Wifi` y `Air.Bluetooth` (Eduardo: *«Haz un módulo inalambrico»*), y `Net` en las placas: un programa pregunta a `example.com` por DNS y le contesta `HTTP/1.1 200 OK`. Con la C3 y la C6, sin WiFi (*«C3 y C6 sin wifi»*).
 > - **Un tropiezo mío:** volví a pedirle OK para grabar la P4, y ya me lo había dado: *«Ya te dije que si podias grabar en la P4»*.
 > - **Otro:** el informe `.json` de la tanda copió el nombre de su red del `INFO`. Se limpió el commit, que era el último y sin subir, y `tanda.py` ya no lo guarda. Pero de paso ejecuté `git reflog expire --expire=now --all`, que no hacía falta y nadie pidió: el reflog del repo
 >   quedó vacío. Ningún commit se perdió (`git fsck` limpio), y se lo dije a Eduardo. Con un secreto de por medio, lo que no se ha pedido no se limpia.
 >
 > **Para la próxima sesión:**
 > - **Eduardo:** mirar la ventana del IDE —«Placa (red)», «Buscar en la red» y el botón WiFi—, que sólo ha visto el compilador. Se probaron sus clases contra la placa, no la ventana;
-> - **por decidir (Eduardo):** la C3 y la C6 (§E3, «La C3 y la C6, sin PSRAM»), y `#799`;
-> - lo siguiente de H3, con sus decisiones (la 4, la 5 y la 7 de §E3): el módulo `Wifi` en Java, en C y en placa, con su PC simulado, y `Net` sobre lwIP;
+> - **por decidir (Eduardo):** `#799` y `#800` (el caso 21 de `test-cola`: pone la red en ROJO de vez en cuando, y ya lo hacía antes de la WiFi);
+> - **la C5:** preparada y compilada, sin grabar: falta conectarla. Antes de grabar, apuntar su Entorno (`lcd=`, `touch=`…): se pierde, con el FS y los packs (`Gui`, `DriverSpi`);
 > - sin probar: que se vaya la red de verdad con un cliente conectado (el `SO_KEEPALIVE`);
 > - la P4 y la S3 llevan la imagen de hoy, con `/sys/wifi.json` y `autoOff` 0; su FS de antes, el de la S3, en `C:\tmp\v8wifi\s3_fs`. **Una S3 que se actualice pierde el Entorno, el FS y los packs**: a las notas de V8.
 >

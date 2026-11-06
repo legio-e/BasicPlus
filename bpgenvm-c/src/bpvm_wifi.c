@@ -178,10 +178,15 @@ int bpvm_wifi_cfg_parse(const char* json, size_t len, bpvm_wifi_cfg_t* c, char* 
     return 0;
 }
 
+static const bpvm_wifi_cfg_t* s_cfg_fija = NULL;
+
+void bpvm_wifi_cfg_fija(const bpvm_wifi_cfg_t* c) { s_cfg_fija = c; }
+
 /* Sin el fichero, -2: es lo normal en una placa sin configurar. Mal escrito, -1 con el motivo. */
 static int leer_fichero(bpvm_wifi_cfg_t* c, char* motivo, unsigned cap) {
     char json[WIFI_JSON_MAX];
     long n;
+    if (s_cfg_fija) { *c = *s_cfg_fija; return 0; }
     if (!bpvm_fs_exists(BPVM_WIFI_FICHERO)) { di(motivo, cap, "no hay " BPVM_WIFI_FICHERO); return -2; }
     n = bpvm_fs_read(BPVM_WIFI_FICHERO, (uint8_t*) json, sizeof json);
     if (n < 0) { di(motivo, cap, "no se puede leer " BPVM_WIFI_FICHERO); return -1; }
@@ -200,7 +205,7 @@ static radio_encender_fn s_encender;
 static radio_apagar_fn   s_apagar;
 static radio_conectar_fn s_conectar;
 static radio_rssi_fn     s_rssi;
-static char s_motivo[96] = "esta placa no tiene WiFi: nadie publica la radio";
+static char s_motivo[96] = "esta placa no tiene WiFi";
 
 /* La tabla, la primera vez que hace falta: un pack la publica al cargar, y puede ser después del arranque. */
 static int radio(void) {
@@ -238,6 +243,9 @@ static int s_hilo_vivo = 0;
 
 static bpvm_wifi_maq_t s_maq;
 static bpvm_wifi_cfg_t s_cfg;
+static int s_encendiendo = 0; /* la orden de encender, dada y sin atender: quien pregunta no debe ver «off» */
+static int s_env_wifi = -1;   /* la clave `wifi` del Entorno, para el fin de RUN */
+static int s_tocada = 0;      /* un programa la ha encendido o apagado */
 static struct { int entrada, dato; } s_cola[WIFI_COLA];
 static unsigned s_cola_cabeza = 0, s_cola_n = 0;
 
@@ -348,6 +356,7 @@ static void tarea(void* arg) {
         }
         antes  = s_maq.estado;
         accion = bpvm_wifi_maq_paso(&s_maq, entrada, bpvm_platform_now_ms());
+        if (entrada == BPVM_WIFI_E_ENCENDER) s_encendiendo = 0;
         foto   = s_maq;
         cfg    = s_cfg;
         bpvm_platform_mutex_unlock(&s_m);
@@ -384,6 +393,7 @@ static int encender_con(const bpvm_wifi_cfg_t* c, char* det, size_t n) {
     }
     s_cfg = *c;
     s_maq.auto_off = c->auto_off;
+    s_encendiendo = 1;
     meter(BPVM_WIFI_E_ENCENDER, 0);
     bpvm_platform_mutex_unlock(&s_m);
     return 0;
@@ -406,10 +416,35 @@ void bpvm_wifi_apagar(void) {
     if (s_listo) pasa(BPVM_WIFI_E_APAGAR, 0);
 }
 
+int bpvm_wifi_programa_enciende(char* det, size_t n) {
+    s_tocada = 1;
+    return bpvm_wifi_encender(det, n);
+}
+
+void bpvm_wifi_programa_apaga(void) {
+    s_tocada = 1;
+    bpvm_wifi_apagar();
+}
+
+/* Vuelve a lo que diga la configuración, si el programa la ha tocado. Lo que dice: encendida con `wifi=1`, o con "autoStart"
+ * sin `wifi=0`. Un fallo al encenderla no es del programa, que ya ha acabado: al log. */
+void bpvm_wifi_fin_de_run(void) {
+    bpvm_wifi_cfg_t c;
+    char motivo[96], det[128];
+    if (!s_tocada) return;
+    s_tocada = 0;
+    if (s_env_wifi == 1 || (s_env_wifi != 0 && leer_fichero(&c, motivo, sizeof motivo) == 0 && c.auto_start)) {
+        if (bpvm_wifi_encender(det, sizeof det) != 0) bpvm_diag("wifi: no se enciende: %s", det);
+    } else {
+        bpvm_wifi_apagar();
+    }
+}
+
 void bpvm_wifi_arranque(int env_wifi) {
     bpvm_wifi_cfg_t c;
     char motivo[96], det[128];
     int r;
+    s_env_wifi = env_wifi;
     if (!radio()) {
         if (env_wifi == 1) bpvm_diag("wifi: wifi=1, pero %s", s_motivo);
         return;
@@ -433,7 +468,7 @@ int bpvm_wifi_estado(void) {
     int e;
     if (!s_listo) return BPVM_WIFI_OFF;
     bpvm_platform_mutex_lock(&s_m);
-    e = s_maq.estado;
+    e = s_encendiendo ? BPVM_WIFI_STARTING : s_maq.estado;
     bpvm_platform_mutex_unlock(&s_m);
     return e;
 }

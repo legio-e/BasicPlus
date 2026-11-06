@@ -672,6 +672,15 @@ de paridad: el stdout, byte a byte).
 | 300 | `__overlayTrace` | `(): string` | `Overlay.getTrace()` |
 | 301 | `__className` | `(o: any): string` | `Overlay.getErrorClass()` |
 | 302 | `__overlayThreads` | `(): int` | `Overlay.tryExe(arg)`: cuántos hilos vivos hay, sin contar el que llama. Se mira antes y después: el programa no puede acabar dejando hilos |
+| 303 | `__wifiTurnOn` (y en `Air`) | `()` | `Air.Wifi.turnOn()`: da la orden y vuelve |
+| 304 | `__wifiTurnOff` | `()` | `Air.Wifi.turnOff()`: da la orden y vuelve |
+| 305 | `__wifiGetState` | `(): integer` | 0 off, 1 starting, 2 connecting, 3 connected, 4 noNetwork, 5 badKey |
+| 306 | `__wifiHasIp` | `(): boolean` | `Air.Wifi.isConnected()`: enlace e IP |
+| 307 | `__wifiIsAvailable` | `(): boolean` | `Air.Wifi.isAvailable()` |
+
+La WiFi, para el módulo `Air` (V8/H3, 6-nov). Lo común está en la HAL BP (`bpvm_wifi.c` y `bpvm_red.c`), con la radio como tabla `'WIFI'`; esperar a tener IP lo hace el módulo, en BP y con `sleep`, para no parar
+los demás hilos. En el PC, `wifi_host.c` y, en la VM-Java, un solo estado: encenderla es conectarse. Sin WiFi o sin fichero, `turnOn` lanza el motivo de la placa. El fin de RUN la deja como diga la configuración, si el programa la ha tocado.
+La prueba: `bpgenvm-c/samples/AirWifi.bp`.
 
 Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
 condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.
@@ -721,7 +730,7 @@ que los usa (`referencia.html` §13–§15 y `gui.html`):
   logs).
 
 (Los sockets TCP ya existen: `tcpConnect`…`tcpClose`, ids 131..134, con backend
-sólo en el PC; el de las placas llega con el WiFi, V8.)
+en el PC y, desde V8/H3, en las placas con WiFi: `esp32/common/net_esp32.c`.)
 
 Estos van con `id` consecutivo cuando se implementen, **siempre al
 final** del enum.

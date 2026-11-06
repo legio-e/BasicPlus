@@ -1,0 +1,93 @@
+dbg 3
+module Air
+source C:\lenguajes\pm\bpstdlib\Air.bp
+lines
+0 0
+24 0
+35 0
+38 67
+52 0
+55 76
+60 77
+63 78
+76 79
+84 80
+97 82
+102 83
+131 84
+144 86
+154 87
+162 89
+174 0
+177 95
+182 96
+185 97
+214 98
+224 99
+235 0
+238 106
+252 0
+258 0
+288 0
+302 0
+319 0
+333 0
+350 0
+367 0
+370 119
+382 0
+385 123
+395 0
+401 0
+404 130
+416 0
+422 0
+452 0
+466 0
+483 0
+497 0
+514 0
+vars
+func Wifi.isAvailable 35
+this -20 8 0 ?
+func Wifi.turnOn 52
+this -20 8 0 ?
+i 8 4 0 integer
+estado 12 4 0 integer
+func Wifi.turnOff 174
+this -20 8 0 ?
+i 4 4 0 integer
+func Wifi.isConnected 235
+this -20 8 0 ?
+func Wifi.__init 252
+this -20 8 0 ?
+func __cls_init_Wifi() 288
+this -20 8 0 ?
+func __cls_m_Wifi#isAvailable()z 302
+this -20 8 0 ?
+func __cls_m_Wifi#turnOff()V 319
+this -20 8 0 ?
+func __cls_m_Wifi#turnOn()z 333
+this -20 8 0 ?
+func __cls_m_Wifi#isConnected()z 350
+this -20 8 0 ?
+func Bluetooth.isAvailable 367
+this -20 8 0 ?
+func Bluetooth.turnOn 382
+this -20 8 0 ?
+func Bluetooth.turnOff 395
+this -20 8 0 ?
+func Bluetooth.isConnected 401
+this -20 8 0 ?
+func Bluetooth.__init 416
+this -20 8 0 ?
+func __cls_init_Bluetooth() 452
+this -20 8 0 ?
+func __cls_m_Bluetooth#isAvailable()z 466
+this -20 8 0 ?
+func __cls_m_Bluetooth#turnOff()V 483
+this -20 8 0 ?
+func __cls_m_Bluetooth#turnOn()z 497
+this -20 8 0 ?
+func __cls_m_Bluetooth#isConnected()z 514
+this -20 8 0 ?

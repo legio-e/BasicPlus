@@ -45,6 +45,9 @@ void bpvm_red_preparar(void);
 /* Lo que pasa, según la familia (hay IP) y según el enlace (se ha caído: ya no la hay). */
 void bpvm_red_hay_ip(int hay);
 
+/* 1 si hay IP. */
+int  bpvm_red_hay(void);
+
 /* La IP de ahora, en texto. 1, o 0 y "" si no hay. */
 int  bpvm_red_ip(char* buf, size_t n);
 

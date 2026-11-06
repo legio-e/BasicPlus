@@ -7,9 +7,11 @@
 //   - VM Java (PC):      java.net.Socket (siempre disponible).
 //   - VM C host:         sockets del SO via fachada bpvm_net
 //                        (Winsock2 en Windows, POSIX en el resto).
-//   - Firmwares:         SIN backend por ahora (H11.b/c traerán
-//                        lwIP en Pico 2 W / ESP32-S3). Cualquier
-//                        operación lanza RuntimeError ATRAPABLE
+//   - Placas con WiFi:   lwIP (V8/H3: la P4, la S3 y la C5). Antes hay
+//                        que encenderla: Air.Wifi.turnOn(). Apagada,
+//                        connect da false.
+//   - Las demás placas:  SIN backend: cualquier operación lanza
+//                        RuntimeError ATRAPABLE
 //                        "Net: sin red en esta plataforma".
 //
 // Contrato (paridad dual-VM byte-idéntica):

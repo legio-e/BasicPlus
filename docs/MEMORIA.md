@@ -191,5 +191,5 @@ La Nucleo (384 KB de heap de BP) y la DK2 (768) van holgadas: las justas siguen 
 
 ## La WiFi en la C3 y la C6 (6-nov)
 
-Sus imágenes no la llevan. Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las
-cifras y lo que queda por decidir, en `V8_IDEAS.md` §E3, «La C3 y la C6, sin PSRAM».
+Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las
+cifras, en `V8_IDEAS.md` §E3, «La C3 y la C6, sin PSRAM».

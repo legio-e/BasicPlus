@@ -349,6 +349,7 @@ public class VirtualMachine {
      * Guardado bajo vmLock.
      */
     private boolean gcInProgress = false;
+    private boolean wifiEncendida = false;   // V8/H3: el módulo Air, en el PC
 
     /**
      * tc.ids cuyos Java workers están bloqueados en vmLock.wait() dentro
@@ -6466,6 +6467,13 @@ public class VirtualMachine {
             case SOUND_IS_AVAILABLE: pushTc(tc, Sonido.hay() ? 1 : 0); break;
             case SOUND_GET_POSITION: pushTc(tc, Sonido.posicion()); break;   // el progreso: bytes del sonido entregados…
             case SOUND_GET_LENGTH:   pushTc(tc, Sonido.largo()); break;      // …y los que tiene
+            // V8/H3 (6-nov) — la WiFi (el módulo Air): el PC ya tiene red, y encenderla es conectarse. Lo mismo que wifi_host.c
+            // en la VM-C, con un solo estado: 3 es `connected`.
+            case WIFI_TURN_ON:       wifiEncendida = true;  pushTc(tc, 0); break;   // void
+            case WIFI_TURN_OFF:      wifiEncendida = false; pushTc(tc, 0); break;   // void
+            case WIFI_GET_STATE:     pushTc(tc, wifiEncendida ? 3 : 0); break;
+            case WIFI_HAS_IP:        pushTc(tc, wifiEncendida ? 1 : 0); break;
+            case WIFI_IS_AVAILABLE:  pushTc(tc, 1); break;
             // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
             case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {

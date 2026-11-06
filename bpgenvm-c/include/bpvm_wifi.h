@@ -143,6 +143,16 @@ void bpvm_wifi_arranque(int env_wifi);
 int  bpvm_wifi_encender(char* det, size_t n);
 void bpvm_wifi_apagar(void);
 
+/* Lo mismo, pedido por un programa (Air.Wifi): al acabar, bpvm_wifi_fin_de_run la deja como diga la configuración. */
+int  bpvm_wifi_programa_enciende(char* det, size_t n);
+void bpvm_wifi_programa_apaga(void);
+void bpvm_wifi_fin_de_run(void);
+
+/* El PC: no lee fichero, y usa esta configuración. */
+void bpvm_wifi_cfg_fija(const bpvm_wifi_cfg_t* c);
+/* El PC (wifi_host.c): una radio que se conecta en el acto. */
+void bpvm_wifi_register_host(void);
+
 int         bpvm_wifi_hay(void);       /* 1 si alguien ha publicado la radio */
 const char* bpvm_wifi_motivo(void);    /* por qué no la hay */
 int         bpvm_wifi_estado(void);

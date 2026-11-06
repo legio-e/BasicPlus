@@ -1,0 +1,135 @@
+// ============================================================
+// Air.bp — V8/H3 (6-nov): LO INALÁMBRICO. Dos clases: Air.Wifi y Air.Bluetooth.
+//
+// Eduardo: «Haz un módulo inalambrico (el nombre que sea 'Air' por ejemplo). Dentro
+// 2 clases, 1 para la Wifi y otra para el Bluetooth.»
+//
+//   import Air
+//   import Net
+//
+//   var wifi: Air.Wifi := Air.Wifi()
+//   if wifi.turnOn() then              // enciende y espera a tener IP
+//     var t: Net.Tcp := Net.Tcp()
+//     if t.connect("192.168.1.50", 8080, 3000) then
+//       t.sendStr("hola")
+//       t.close()
+//     endif
+//   endif
+//   wifi.turnOff()
+//
+// LA CONFIGURACIÓN NO ESTÁ AQUÍ: es un fichero, el mismo en todas las placas.
+// /sys/wifi.json dice la red y su clave, y /sys/net.json, la IP (por defecto, DHCP).
+// Eduardo: «Desde un programa de momento con encender y apagar es suficiente. La
+// configuración la hacemos con un fichero con el mismo sistema para todas las
+// placas. El resto ya es cuestión de abrir sockets». Un programa puede escribirlo
+// como cualquier fichero; entra la próxima vez que se encienda.
+//
+// AL ACABAR EL PROGRAMA, la WiFi vuelve a lo que diga la configuración: si la encendió
+// él y el fichero no dice que arranque encendida, se apaga; si la apagó y el fichero
+// lo dice, se enciende, y así el IDE puede volver a entrar por la red. Si el programa no
+// la toca, no pasa nada.
+//
+// EN EL PC, turnOn() da siempre true: el PC ya tiene red. En una placa sin WiFi, o sin
+// /sys/wifi.json, turnOn() lanza un RuntimeError que dice por qué, como Sound.play;
+// isAvailable() hace la pregunta sin tocar nada.
+//
+// EL AHORRO DE ENERGÍA: apagada de normal; encendida y sin actividad, se apaga sola a
+// los `autoOff` segundos del fichero (600 por defecto; una conexión abierta cuenta como
+// actividad).
+// ============================================================
+module Air
+  import Core
+
+  // Las primitivas. Públicas porque las clases sólo alcanzan lo público del módulo.
+  public function __wifiTurnOn()
+    inline CALL_BUILTIN 303
+  end __wifiTurnOn
+  public function __wifiTurnOff()
+    inline CALL_BUILTIN 304
+  end __wifiTurnOff
+  public function __wifiGetState(): integer
+    inline CALL_BUILTIN 305
+  end __wifiGetState
+  public function __wifiHasIp(): boolean
+    inline CALL_BUILTIN 306
+  end __wifiHasIp
+  public function __wifiIsAvailable(): boolean
+    inline CALL_BUILTIN 307
+  end __wifiIsAvailable
+
+  public class Wifi
+
+    public function Wifi()
+    end Wifi
+
+    // ¿Tiene WiFi esta placa? Sin encender nada.
+    public function isAvailable(): boolean
+      return __wifiIsAvailable()
+    end isAvailable
+
+    // Enciende con lo que diga /sys/wifi.json y espera a tener IP, hasta 20 s: los
+    // demás hilos del programa siguen. true con IP; false si no la consigue (no aparece
+    // la red, la clave no vale...), con el motivo en el log. Si la placa no tiene WiFi o
+    // no hay fichero, un RuntimeError. Si no consigue la IP a tiempo, la radio sigue
+    // intentándolo: turnOff() la apaga.
+    public function turnOn(): boolean
+      __wifiTurnOn()
+      var i: integer := 0
+      while i < 200 do
+        if __wifiHasIp() then
+          return true
+        endif
+        var estado: integer := __wifiGetState()
+        if estado == 0 or estado == 5 then     // apagada, o la clave no vale: no va a llegar
+          return false
+        endif
+        sleep(100)
+        i := i + 1
+      endwh
+      return false
+    end turnOn
+
+    // Apaga del todo, también si la encendió el arranque. Si el IDE estaba conectado por
+    // la red, se corta. Vuelve con la radio apagada.
+    public function turnOff()
+      __wifiTurnOff()
+      var i: integer := 0
+      while i < 100 and __wifiGetState() != 0 do
+        sleep(10)
+        i := i + 1
+      endwh
+    end turnOff
+
+    // true si hay enlace e IP: se pueden abrir conexiones. Un programa largo lo mira para
+    // saber si ha perdido la red; si se pierde, la placa la busca sola.
+    public function isConnected(): boolean
+      return __wifiHasIp()
+    end isConnected
+
+  end Wifi
+
+  // El Bluetooth, con la misma forma. Todavía no hay firmware debajo (V8, H2, parado): ninguna
+  // placa lo tiene, y se dice.
+  public class Bluetooth
+
+    public function Bluetooth()
+    end Bluetooth
+
+    public function isAvailable(): boolean
+      return false
+    end isAvailable
+
+    public function turnOn(): boolean
+      throw RuntimeError("Bluetooth: esta placa no lo tiene")
+    end turnOn
+
+    public function turnOff()
+    end turnOff
+
+    public function isConnected(): boolean
+      return false
+    end isConnected
+
+  end Bluetooth
+
+end Air

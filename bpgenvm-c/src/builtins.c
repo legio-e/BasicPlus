@@ -32,6 +32,8 @@
 #include "bpvm_rtc.h"
 #include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
 #include "bpvm_fs.h"     /* V7/H3 (#491) — el cursor */
+#include "bpvm_wifi.h"   /* V8/H3 — la WiFi, lo común de la HAL BP */
+#include "bpvm_red.h"
 #include "bpvm_sonido.h" /* V8/H4 (#708) — el sonido, lo común de la HAL BP */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2684,6 +2686,28 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     case BUILTIN_SOUND_GET_LENGTH:
         push_i32(vm, tc, bpvm_sonido_largo());
+        return BPVM_OK;
+
+    /* V8/H3 (6-nov) — LA WIFI (el módulo Air): lo común, en bpvm_wifi.c; la espera a tener IP, en BP, para no parar los
+     * demás hilos. En el PC, la radio de wifi_host.c; VirtualMachine hace lo mismo con un solo estado. */
+    case BUILTIN_WIFI_TURN_ON: {
+        char det[160];
+        if (bpvm_wifi_programa_enciende(det, sizeof det) != 0) return builtin_throw(vm, tc, det);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_WIFI_TURN_OFF:
+        bpvm_wifi_programa_apaga();
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    case BUILTIN_WIFI_GET_STATE:
+        push_i32(vm, tc, bpvm_wifi_estado());
+        return BPVM_OK;
+    case BUILTIN_WIFI_HAS_IP:   /* con el enlace arriba: al apagarla, la IP se da de baja unos milisegundos después que el estado */
+        push_i32(vm, tc, (bpvm_wifi_estado() == BPVM_WIFI_CONNECTED && bpvm_red_hay()) ? 1 : 0);
+        return BPVM_OK;
+    case BUILTIN_WIFI_IS_AVAILABLE:
+        push_i32(vm, tc, bpvm_wifi_hay() ? 1 : 0);
         return BPVM_OK;
 
     case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
