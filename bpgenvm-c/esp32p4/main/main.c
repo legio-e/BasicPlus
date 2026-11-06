@@ -34,6 +34,7 @@
 #include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
 #include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
 #include "bpvm_boot2.h"        /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
+#include "bpvm_wifi.h"         /* V8/H3: la WiFi, en el gancho `red` */
 #include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
 #include "pack_esp32.h"        /* V5/H7 → V7/H6: el pack nativo, común a la familia */
 #include "esp_log.h"
@@ -334,6 +335,7 @@ static void p4_con_fs(void) {
 /* 2b — el hardware: GPIO/UART/SPI/I2C (el reúso del S3, H14) y la pantalla, como 'PANT',
  * para el LVGL del pack (V7/H6 G5.a). */
 void p4_sonido_registrar(void);   /* sonido_p4.c — V8/H4 (#708) */
+void p4_radio_registrar(void);    /* radio_p4.c — V8/H3: la C6, si el ENV la declara */
 
 static void p4_hw(void) {
     esp32_hw_register();
@@ -341,6 +343,7 @@ static void p4_hw(void) {
     p4_pant_publicar();
 #endif
     p4_sonido_registrar();   /* V8/H4 (#708): el ES8311, si el ENV lo declara; tras la pantalla (el I2C del táctil) */
+    p4_radio_registrar();    /* V8/H3: la C6 en reset desde aquí; encenderla, si toca, en el gancho `red` */
 }
 
 /* 2b — el cable: el servidor TCP (:3333) o UART0 (el puente USB-UART). */
@@ -353,6 +356,11 @@ static void p4_cable(void) {
     wire_v1_transport_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
 #endif
+}
+
+/* 2b — la red: la WiFi, si el ENV (`wifi=1`) o /sys/wifi.json ("autoStart") lo piden. No bloquea. */
+static void p4_red(void) {
+    bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
 }
 
 static const bpvm_boot2_familia_t s_boot2 = {
@@ -373,6 +381,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .repl         = repl_esp32_run,
     .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: dos, y dos runs */
     .cpu_desde_env = 1,                      /* V8 #784: `cpu.mhz` del ENV (su silicio sólo da 360) */
+    .red          = p4_red,
 };
 
 /* ---- La tarea del cable: la VM corre AQUÍ (stack holgado). Una para los dos transportes.

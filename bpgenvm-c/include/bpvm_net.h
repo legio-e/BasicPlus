@@ -28,9 +28,18 @@
  * Los handles son ints pequeños (1..N) de una tabla DEL BACKEND — no
  * exponemos SOCKET/fd del SO (en Win64 SOCKET es UINT_PTR y no cabe
  * seguro en el i32 de BP).
+ *
+ * V8/H3 (6-nov) — LA IP DE LA PLACA, en la misma tabla, porque es la misma capa: lo que no es el enlace. Las usa
+ * bpvm_red.c; un backend que no las tenga las deja a NULL (el PC: la IP la lleva el sistema). Un firmware puede
+ * tenerlas y no tener todavía `connect`: los builtins Net.* siguen diciendo «sin red» hasta que lo tenga.
+ *   ip_dinamica(nombre) → 0, o -1: por DHCP, con ese nombre en la red.
+ *   ip_fija(ip, mascara, puerta, dns) → 0, o -1. Antes de conectarse.
+ *   ip_leer(...) → 0, o -1: la de ahora. Las direcciones, como en bpvm_red.h.
  */
 #ifndef BPVM_NET_H
 #define BPVM_NET_H
+
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +54,9 @@ typedef struct {
     int  (*send)(int h, const void* buf, int len);
     int  (*recv)(int h, void* buf, int max, int timeout_ms);
     void (*close)(int h);
+    int  (*ip_dinamica)(const char* nombre);
+    int  (*ip_fija)(uint32_t ip, uint32_t mascara, uint32_t puerta, uint32_t dns);
+    int  (*ip_leer)(uint32_t* ip, uint32_t* mascara, uint32_t* puerta, uint32_t* dns);
 } bpvm_net_backend_t;
 
 /* Cada plataforma llama una vez al boot (o nunca: sin red). */
@@ -61,6 +73,11 @@ int  bpvm_net_connect(const char* host, int port, int timeout_ms);
 int  bpvm_net_send(int h, const void* buf, int len);
 int  bpvm_net_recv(int h, void* buf, int max, int timeout_ms);
 void bpvm_net_close(int h);
+
+/* V8/H3: sin backend, o sin ellas, -1. */
+int  bpvm_net_ip_dinamica(const char* nombre);
+int  bpvm_net_ip_fija(uint32_t ip, uint32_t mascara, uint32_t puerta, uint32_t dns);
+int  bpvm_net_ip_leer(uint32_t* ip, uint32_t* mascara, uint32_t* puerta, uint32_t* dns);
 
 /* Solo host (net_host.c): registra el backend de sockets del SO. */
 void bpvm_net_register_host(void);

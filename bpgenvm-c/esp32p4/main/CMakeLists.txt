@@ -26,6 +26,9 @@ idf_component_register(
         "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
         "sonido_p4.c"                         # V8/H4 (#708): el sonido, la cintura del ES8311 (esp_codec_dev)
+        "radio_p4.c"                          # V8/H3: la radio, la de su C6 por SDIO (esp_hosted)
+        "../../esp32/common/wifi_esp32.c"     # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../../esp32/common/net_esp32.c"      # V8/H3: la IP de la familia (esp_netif)
         "../../esp32/common/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
         "../../src/wire_v1_proto.c"                # V6/U2.1: los builders JSON del wire, ya en el comun
@@ -72,6 +75,8 @@ idf_component_register(
         "../../src/bpvm_bios_hal.c"    # V7/H6: sus ranuras de HARDWARE (PORTABLE: las fachadas de la VM)
         "../../src/bpvm_bus.c"         # V7/H6.c G4.a1: los buses SPI/I2C, compartidos (la HAL BP)
         "../../src/bpvm_sonido.c"      # V8/H4 (#708): el sonido, lo común de la HAL BP
+        "../../src/bpvm_wifi.c"        # V8/H3: la WiFi, el enlace, lo común de la HAL BP
+        "../../src/bpvm_red.c"         # V8/H3: la IP de la placa, lo común
         "../../src/bpvm_npack.c"              # V5/I: escalera de validacion del pack nativo
         "../../src/bpvm_npack_carga.c"  # V7/H7 (Boot 2, fase 2): el cargador comun
         "../../src/bpvm_boot2.c"        # V7/H7 (Boot 2, fase 4): el arranque comun
@@ -118,6 +123,7 @@ idf_component_register(
         "../../esp32/common"   # V6/P1.C3.2: fuentes y cabeceras de la familia ESP32
     REQUIRES
         esp_eth
+        esp_wifi         # V8/H3: en la P4, sus funciones van a la C6 (esp_hosted, el IDF 6.1)
         esp_netif
         esp_event
         esp_timer

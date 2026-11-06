@@ -39,3 +39,15 @@ int bpvm_net_recv(int h, void* buf, int max, int timeout_ms) {
 void bpvm_net_close(int h) {
     if (g_net && g_net->close) g_net->close(h);
 }
+
+int bpvm_net_ip_dinamica(const char* nombre) {
+    return (g_net && g_net->ip_dinamica) ? g_net->ip_dinamica(nombre) : -1;
+}
+
+int bpvm_net_ip_fija(uint32_t ip, uint32_t mascara, uint32_t puerta, uint32_t dns) {
+    return (g_net && g_net->ip_fija) ? g_net->ip_fija(ip, mascara, puerta, dns) : -1;
+}
+
+int bpvm_net_ip_leer(uint32_t* ip, uint32_t* mascara, uint32_t* puerta, uint32_t* dns) {
+    return (g_net && g_net->ip_leer) ? g_net->ip_leer(ip, mascara, puerta, dns) : -1;
+}

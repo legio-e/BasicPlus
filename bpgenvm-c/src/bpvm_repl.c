@@ -797,10 +797,11 @@ static int falta_pieza(long id, const char* verbo, int hay,
 }
 
 static void repl_info(long id) {
-    /* 1024 y no menos: la Pico manda 29 campos (los 18 comunes + 11 propios por
-     * info_extra) y es la familia que mas dice. Su handler ya estaba
-     * dimensionado asi; recortarlo aqui seria cortarle el INFO por la mitad. */
-    char buf[1024];
+    /* 1280 y no menos: la Pico manda 29 campos (los 18 comunes + 11 propios por
+     * info_extra), y la P4 ya ocupaba 911 de los 1024 de antes cuando llegaron los
+     * cuatro de la WiFi (V8/H3, 6-nov: hasta 96 más, según la red). Un campo que no
+     * cabe no se recorta: el INFO entero se pierde. */
+    char buf[1280];
     bpvm_repl_info_t in;
     memset(&in, 0, sizeof in);
     s_ops->info(&in);

@@ -48,7 +48,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_npack_carga.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_nativa.c \
           src/net.c src/net_host.c \
-          src/bpvm_sonido.c src/sonido_host.c \
+          src/bpvm_sonido.c src/sonido_host.c           src/bpvm_wifi.c src/bpvm_red.c src/json_min.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
           third_party/littlefs/bd/lfs_filebd.c
@@ -107,7 +107,7 @@ ifeq ($(OS),Windows_NT)
   OBJ    += $(WIN_RES)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-wifi medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1173,6 +1173,12 @@ test-sqltexto: $(LIBOBJ) build/sql/sqlite3.o
 # y la tarea con una cintura que lo APUNTA todo —el formato, el volumen, cada muestra (las de 8 bits a 16 con signo)
 # y cómo se cierra (drenando al acabar; en seco al parar o al cambiar de sonido)—. Lo que tiene que salir, escrito a
 # mano en la prueba: ningún FALLO.
+test-wifi: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_wifi.c $(LIBOBJ) -o build/test_wifi.exe $(LDFLAGS)
+	@echo "--- V8/H3 lo comun de la WiFi (esperado: [status=OK], sin FALLO) ---"
+	./build/test_wifi.exe
+
 test-sonido: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_sonido.c $(LIBOBJ) -o build/test_sonido.exe $(LDFLAGS)
@@ -2254,7 +2260,7 @@ SIM_SD_SRC = src/bpvm_sd_placa.c src/bpvm_blk.c src/fs_fat.c third_party/fatfs/f
 
 sim: $(LIBOBJ) $(WIN_RES) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc -Ithird_party/fatfs tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_boot2.c src/bpvm_listdir.c $(SIM_SD_SRC) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) $(WIN_RES) -o $(SIM_OUT) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc -Ithird_party/fatfs tools/bpvm_sim.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_boot2.c src/bpvm_listdir.c $(SIM_SD_SRC) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) $(WIN_RES) -o $(SIM_OUT) $(LDFLAGS)
 	@echo "sim listo: $(SIM_OUT) [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG] [--sd=IMG]"
 
 # Los ingredientes de SQLITE=1, si no estan ya (los comparte con test-sqldemo).

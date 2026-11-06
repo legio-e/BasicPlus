@@ -106,6 +106,7 @@ typedef struct {
 #define BPVM_PIN_SIS_WIRE    2u      /* el cable del IDE (el wire): quitárselo corta la conexión */
 #define BPVM_PIN_SIS_PANTALLA 3u     /* #669: la pantalla de la IMAGEN (la reserva su driver al publicarse) */
 #define BPVM_PIN_SIS_SONIDO   4u     /* V8/H4 (#708): el sonido de la IMAGEN, su I2S y su amplificador */
+#define BPVM_PIN_SIS_RADIO    5u     /* V8/H3: la radio de la IMAGEN, si está en otro chip: la C6 de la P4 y su reset */
 
 typedef struct {
     const char*     micro;          /* "esp32c5" — el ID canónico (Machine.getMicro, INFO.boardName) */

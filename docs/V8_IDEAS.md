@@ -1775,6 +1775,56 @@ C6 (`esp_hosted_init`, `esp_hosted_deinit` y su reset, el GPIO 54).
 
 **Lo que queda por ver:** las SDIO de la C6 son de compilación: las de la P4 de Waveshare y las de la P4 Kit se comparten con `CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD`, sin probar en la Kit.
 
+### La WiFi en un pack, y el punto C (6-nov)
+
+Eduardo, sobre el algoritmo: *«OK pero el punto C de momento no, lo normal es que las placas no tengan conexión Ethernet. Un tema, ¿has pensado meter la wifi en un pack binario? Lo digo porque si
+queremos tener una sóla imagen en la Pico2, hay una que tiene wifi pero la mayoría no lo tiene. En la P4 no todas las placas llevan un C6.»*
+
+**El punto C no era Ethernet:** lo llamé «cable», que es como llamamos al canal del IDE. Es el IDE por WiFi, y se queda (*«1) si»*).
+
+**El pack, medido** (lo que pide de fuera lo enlazado de verdad, por el `.map` y `nm`; la BIOS de los packs tiene hoy 47 ranuras):
+
+| Placas | ¿Todas llevan radio? | Lo que pediría un pack | Decidido |
+|---|---|---|---|
+| S3, C3, C5, C6 | sí, en el chip | 367 funciones, 101 de ellas de la ROM o del enlazador; 46 KB que tienen que ir en RAM interna; binarios cerrados de Espressif (`net80211`, `pp`, `core`, `phy`) | en la imagen |
+| P4 | no: depende de la C6 | 125 funciones (FreeRTOS, el driver SDMMC, libc…), todo fuentes. Ahorraría 252 KB de una partición de 6 MB y 5,4 KB de RAM | en la imagen |
+| Pico 2 | no: sólo la W | sin medir (`cyw43-driver` y `lwip` están sin bajar). Sus dos firmwares van en huecos de 1 MB, y sin PSRAM: pagarían todas | un pack, opcional, al llegar ahí |
+
+Eduardo: *«OK que en las ESP vaya integrado y en la Pico 2 sea opcional»*. **Para que no haya que tocar nada ese día, la radio es una tabla con nombre, `'WIFI'`, como `'PANT'` con las pantallas**: hoy la
+publica la imagen, y mañana un pack; lo común la busca y no sabe quién la da (`bpvm_wifi.h`). Lo que queda para más adelante: en la C3 y la C6, la WiFi costará unos 60 KB de RAM fijos aunque no se use.
+
+### Los pasos A y B, hechos en la P4 (6-nov)
+
+**Lo común, probado en el PC antes que en la placa** (`make test-wifi`, 115 comprobaciones). `src/bpvm_wifi.c`: el enlace, con la máquina de estados aparte, sin hilos ni reloj, para probar los reintentos y el
+apagado con un reloj de mentira; y una tarea que nace al primer encender. `src/bpvm_red.c`: la IP, separada del enlace, con el backend de `bpvm_net.h` (la misma capa que `Net`, que sigue sin sockets en las
+placas). `esp32/common/wifi_esp32.c` publica `'WIFI'` y `net_esp32.c` es el backend; `esp32p4/main/radio_p4.c`, lo único de la P4: el enlace con la C6.
+
+**Cambios sobre el algoritmo, por lo que salió al escribirlo:**
+- **`radio=c6` en el Entorno.** No todas las P4 llevan C6, y en una que no la lleve el GPIO 54 y los de la SDIO son del usuario: sin esa línea no se toca ningún pin y la placa no tiene WiFi. Con ella, esos siete
+  pines son del sistema, como los del sonido (`BPVM_PIN_SIS_RADIO`).
+- **La «mirada cada 10 s» del apagado no hace falta:** la máquina sabe a qué hora toca apagar, y la tarea duerme hasta entonces.
+- **A los tres rechazos de la clave, la radio se apaga del todo**, y el estado sigue siendo `badKey`. Y si la radio no contesta en 30 s, el intento se da por perdido.
+- El búfer del `INFO`, de 1024 a 1280: la P4 ya ocupaba 911, y un campo que no cabe pierde el `INFO` entero.
+
+**Medido en la P4** (con la red de casa; el 6-nov):
+
+| | |
+|---|---|
+| Encender (el enlace con la C6, 1,93 s) | 2,17 s |
+| Conectada, desde el arranque | 5,5 s; la IP por DHCP, a los 6,5 s |
+| La clave mala (motivo 15) | tres intentos, y apagada a los 22 s |
+| Una red que no existe (motivo 201) | reintentos a 1, 2, 4 y 8 s; con `autoOff` 40, apagada a los 40,5 s |
+| `autoOff` 30 | apagada a los 30,0 s de conectarse |
+| IP fija, `hostname`, y un `net.json` mal escrito (se dice, y va por DHCP) | bien; el `ping` contesta |
+| `wifi=0` con `"autoStart": true` | apagada |
+| `SdCard`, con la WiFi conectada | «los seis» en 2,3 s |
+| `ping` desde el PC | 6 de 6, de 48 a 303 ms, media 179: el ahorro de energía de la radio |
+| La imagen | de 950 000 a 1 251 328 B |
+| RAM interna libre, en un RUN | 283 KB sin encenderla nunca; 230 KB conectada; 264 KB tras apagarse |
+
+Los 19 KB que no vuelven son lwIP, el bucle de eventos y la tarea de la WiFi, que se quedan para la vez siguiente. La imagen creció 5 páginas: la zona de packs se movió y `Gui` y `SQLite` dicen
+«realojado para OTRA dirección» hasta que se regraben.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)

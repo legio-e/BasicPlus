@@ -170,6 +170,8 @@ void bpvm_caps_pin_ausente(int pin, char* err, size_t cap) {
         snprintf(err, cap, "el pin %d de %s es de la pantalla: no se puede usar", pin, g_caps->micro);
     else if (sis == BPVM_PIN_SIS_SONIDO)   /* V8/H4 (#708) */
         snprintf(err, cap, "el pin %d de %s es del sonido: no se puede usar", pin, g_caps->micro);
+    else if (sis == BPVM_PIN_SIS_RADIO)    /* V8/H3 */
+        snprintf(err, cap, "el pin %d de %s es de la radio: no se puede usar", pin, g_caps->micro);
     else
         snprintf(err, cap, "el pin %d no existe en %s", pin, g_caps->micro);
 }

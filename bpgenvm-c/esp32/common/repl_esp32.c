@@ -29,6 +29,8 @@
 #include "board_mgr_esp32.h" /* H9: gestión de placa (STATE/ENV/PART) + board_boot_status */
 #include "log.h"             /* log persistente (post-mortem) → LOG_DUMP / LOG_CLEAR */
 #include "bpvm_dbg_wire.h"   /* #326: ramo de depuración, núcleo portable compartido */
+#include "bpvm_wifi.h"       /* V8/H3: lo que dice el INFO de la WiFi */
+#include "bpvm_red.h"
 #include "bpvm_io.h"         /* V6/A1.2: el segundo hilo, comun a todas las familias */
 #include "aot_registry.h"    /* H4 AOT: bpvm_aot_clear/count (hook esp_aot_register) */
 
@@ -678,6 +680,21 @@ static int esp32_repl_info_extra(char* buf, unsigned long buf_max, int off) {
      * programa) */
     long r2 = run2_pila_libre();
     if (r2 >= 0) off = wire_v1_field_long(buf, max, (size_t) off, "run2StackFreeBytes", r2);
+    if (off < 0) return off;
+    /* V8/H3 (6-nov) — la WiFi, en una placa que la tenga: cómo va, a qué red, con qué señal y con qué IP. Con esto el IDE
+     * aprende la IP por el cable y puede conectarse después por la red. */
+    if (bpvm_wifi_hay()) {
+        char t[40];
+        off = wire_v1_field_string(buf, max, (size_t) off, "wifi", bpvm_wifi_estado_nombre(bpvm_wifi_estado()));
+        if (off < 0) return off;
+        bpvm_wifi_ssid(t, sizeof t);
+        off = wire_v1_field_string(buf, max, (size_t) off, "ssid", t);
+        if (off < 0) return off;
+        off = wire_v1_field_long(buf, max, (size_t) off, "rssi", (long) bpvm_wifi_rssi());
+        if (off < 0) return off;
+        (void) bpvm_red_ip(t, sizeof t);
+        off = wire_v1_field_string(buf, max, (size_t) off, "ip", t);
+    }
     return off;
 }
 

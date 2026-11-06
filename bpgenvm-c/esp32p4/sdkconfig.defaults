@@ -124,3 +124,22 @@ CONFIG_CACHE_L2_CACHE_256KB=y
 # la máxima: sin pedir nada, la CPU va a la de la imagen, como antes. Cuesta unos KB de código, y los drivers piden y
 # sueltan un permiso en cada operación. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
 CONFIG_PM_ENABLE=y
+
+# V8/H3 (6-nov): LA WIFI, por la C6 de la placa (radio_p4.c), con lo que se probó el 19-oct en la prueba del paso 1.
+# Anfitrión de la C6 por SDIO (ranura 1), con los pines de la placa de Espressif, que Waveshare copia.
+CONFIG_ESP_HOSTED=y
+CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
+CONFIG_ESP_HOSTED_HOST_FEAT_BT=n
+# Un fallo del enlace con la C6 NO reinicia la placa (por defecto hace abort()): se ve en el log y se sigue.
+CONFIG_ESP_HOSTED_HOST_TRANSPORT_RESTART_ON_FAILURE=n
+# esp_hosted no arranca solo antes de app_main: el enlace se abre cuando se pide. El controlador SDMMC es del sistema
+# (Eduardo, 19-oct) y la SD funciona sin él.
+CONFIG_ESP_HOSTED_AUTO_CALL_INIT_BEFORE_APP_MAIN=n
+# La WiFi remota del IDF 6.1, con la C6 al otro lado, y sin NVS en la P4.
+CONFIG_ESP_WIFI_REMOTE_LIBRARY_HOSTED=y
+CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
+CONFIG_WIFI_RMT_NVS_ENABLED=n
+# La tarea de eventos del IDF: bpvm_red_hay_ip escribe en el log desde ella, y con los 2304 B de por defecto iría justa.
+# Como las de arriba: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar. Sólo gasta con la WiFi encendida.
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096

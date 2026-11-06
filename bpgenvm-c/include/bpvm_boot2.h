@@ -66,6 +66,11 @@ typedef struct {
      * HAL de la familia, que sabe qué valores da su chip). 0: no la mira —la RP2350, de momento: cambiar su reloj no
      * recalcula los divisores de la PSRAM ni de la flash—. Al final, como `nucleos`. */
     int cpu_desde_env;
+
+    /* V8/H3 (6-nov) — la red: encender la WiFi si el ENV o el fichero lo dicen (bpvm_wifi_arranque). Tras el cable y antes
+     * del autorun, y NO BLOQUEA: la enciende su tarea, sin hacer esperar a nadie. NULL: esta familia no tiene. Al final,
+     * como `nucleos`. */
+    void (*red)(void);
 } bpvm_boot2_familia_t;
 
 /* Las claves del ENV que REPARTEN (`stack=`, `quantum=`): se leen en el arranque y hace

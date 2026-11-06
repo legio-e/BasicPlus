@@ -17,7 +17,7 @@
  *   FS        la zona de packs, al lado · /lib · lo de la familia con el FS
  *   kernel    el hardware · los buses del ENV · registrar la SD
  *   FS        montar la SD
- *   kernel    la identidad · la cintura del REPL · el cable · volcar el log · `log=`
+ *   kernel    la identidad · la cintura del REPL · el cable · la red · volcar el log · `log=`
  *   app sana  el autorun
  *   —         el REPL
  */
@@ -204,6 +204,7 @@ void bpvm_boot2_subir(const bpvm_boot2_familia_t* f) {
     if (f->identidad) f->identidad();
     if (f->cintura)   f->cintura();
     if (f->cable)     f->cable();
+    if (f->red)       f->red();      /* V8/H3: no bloquea */
 
     /* El autorun, sólo con la placa SANA en la app (H9): una placa degradada se queda
      * esperando al IDE, que es quien la arregla. Y si no se mira, se dice. */
