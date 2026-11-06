@@ -1882,6 +1882,24 @@ configuración en RAM y se calibra al encenderse.
 
 La batería del cable, la misma que en la P4 y en verde, incluida la salida al cambiar de cable sin perder ni repetir línea: por el cable llega hasta la N y por la red sigue la N+1.
 
+### La C3 y la C6, sin PSRAM (6-nov; para decidir)
+
+Eduardo: *«Esos consumos de RAM en la C3 y en la C6 nos vamos a quedar sin RAM.»* Tal como está, no les afecta: sus imágenes no llevan `CHIP_TIENE_WIFI` y no enlazan la radio. Pero la solución de la S3, los búferes en la PSRAM, no les sirve.
+
+Medido compilando, sin grabar (`C:\tmp\v8wifi\medida_c3c6`): la RAM fija de la estación del IDF 6.1 sobre su hola mundo. Esa RAM se paga **aunque la WiFi no se encienda nunca**, por estar enlazada. «Con ahorro» es el código de la WiFi fuera de
+la IRAM, menos búferes, sin WPA3, sin AMPDU (más lenta) y sin IPv6.
+
+| | Libre hoy, en reposo | RAM fija | Con ahorro | Le quedaría con ahorro, apagada | Y flash |
+|---|---|---|---|---|---|
+| C3 | 108 KB | +54 KB | **+33 KB** | 75 KB | +505 KB: no cabe en su partición de 1 MB |
+| C6, con la GUI | 80 KB | +88 KB | **+60 KB** | 20 KB: la GUI pide 45 en su peor momento | +588 KB |
+| C6, sin la GUI | 216 KB | | | 156 KB | |
+
+Encendida pide además lo suyo: en la S3, unos 30 KB al conectarse y otros 30 con tráfico, sin medir con los búferes recortados. O sea: **en la C6 con pantalla no cabe; en la C3 y en la C6 sin pantalla cabría, pagando siempre esa RAM**, aunque nadie use la WiFi. La
+C5 tiene PSRAM y no tiene este problema: sólo su partición, como la S3.
+
+**Lo que no se puede:** que lo pague sólo quien la use dentro de una imagen: la RAM fija es del enlazado, y un pack no vale (el censo de arriba). Lo que queda es otra imagen.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)
