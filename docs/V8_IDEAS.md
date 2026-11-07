@@ -6203,6 +6203,23 @@ opciones; con ellas, todavía no), y con varios o ninguno, un `params ReadOnlySp
 y un `Object`, como se dejó en el tema 8) y `test-330` (`IFormattable foo = -1`: el `Integer` de BP tendría que
 implementar una interfaz de .NET). **El tema 9: 42 de 85; Mono, 846.**
 
+### El tema 11, los arrays (7-nov; cerrado)
+
+Con el lote de ese día (Mono, 846): 42 válidas, 13 funcionan, una falla (`test-673`, una de las 6 de siempre: mira las
+mitades UTF-16 de un carácter de fuera del plano básico, y una cadena de BP es UTF-8) y 28 no se traducen; de ellas, 14
+piden algo de fuera. De las otras 14, a V9 los arrays de varias dimensiones (11, 6 sólo eso), los arrays de arrays (3) y
+`fc = stack[sp++] = cc` (`test-527`, con el `++` dentro de una expresión). Hechas en el traductor (Eduardo: *«OK, la 1
+es correcta»*; caso `ForeachConvierte`):
+- **un `foreach` con la variable de otro tipo que los elementos** (`gtest-140`): C# convierte cada elemento; en JC, el
+  `foreach` con el tipo de los elementos y, dentro, la conversión: de una caja a otra, `Long x =
+  CsSystem.Nullable_ALong(e);` (en JC, `Long x = e;` y `(Long) e` no compilan: `Integer` y `Long` no tienen parentesco,
+  como en Java; que JC lo acepte sería un cambio del lenguaje, para V9); a una clase hija, `(Perro) e`; a un número más
+  ancho, `(long) e`;
+- **`ReferenceEquals(a, b)` y el `Equals` de un array** (`test-934`): el mismo objeto, `a == b`, con referencias que JC
+  compare (un array, sólo con otro de su tipo).
+
+**El tema 11: 15 de 42; Mono, 848.**
+
 ### El tema 10, los métodos de extensión (7-nov; cerrado sin cambios)
 
 Con el lote de ese día (Mono, 846): 36 válidas, 16 funcionan, ninguna falla, y 20 no se traducen. Lo que es del tema

@@ -204,6 +204,18 @@ namespace Cs2Jc
             ["System.String.Substring(System.Int32,System.Int32)"] = "CsSystem.String_Substring",
         };
 
+        /// ¿Se comparan `a == b` en JC por identidad, como hace C# con ReferenceEquals? Dos referencias (un null, también) del
+        /// mismo tipo o emparentadas; un array, sólo con otro de su tipo (en JC no es un objeto).
+        bool SeComparanPorIdentidad(ExpressionSyntax a, ExpressionSyntax b)
+        {
+            var ta = m.GetTypeInfo(a).Type;
+            var tb = m.GetTypeInfo(b).Type;
+            if (ta == null || tb == null) return true;                               // un null suelto
+            if (ta.IsValueType || tb.IsValueType || ta is ITypeParameterSymbol || tb is ITypeParameterSymbol) return false;
+            if (ta is IArrayTypeSymbol || tb is IArrayTypeSymbol) return SymbolEqualityComparer.Default.Equals(ta, tb);
+            return m.Compilation.ClassifyConversion(ta, tb).IsImplicit || m.Compilation.ClassifyConversion(tb, ta).IsImplicit;
+        }
+
         static string Firma(IMethodSymbol ms) => NombreCompleto(ms.ContainingType) + "." + ms.Name + "("
             + string.Join(",", ms.Parameters.Select(p => NombreCompleto(p.Type))) + ")";
 
@@ -324,6 +336,21 @@ namespace Cs2Jc
                     break;
                 case "System.IO.StringWriter.ToString()":
                     if (objeto != null) return Expr(objeto.Expression) + ".toString()";
+                    break;
+                // H8, tema 11 — `ReferenceEquals(a, b)`, y el `Equals` de un array (que no lo sobrescribe): si es el mismo
+                // objeto, que en JC es `a == b`. Sólo con referencias de tipos que JC compara (dos valores en sus cajas no son
+                // nunca el mismo objeto, y dos clases sin parentesco no se comparan)
+                case "System.Object.ReferenceEquals(System.Object,System.Object)":
+                {
+                    var x0 = inv.ArgumentList.Arguments[0].Expression;
+                    var x1 = inv.ArgumentList.Arguments[1].Expression;
+                    if (SeComparanPorIdentidad(x0, x1)) return "(" + ExprBase(x0) + " == " + ExprBase(x1) + ")";
+                    break;
+                }
+                case "System.Object.Equals(System.Object)":
+                    if (objeto != null && m.GetTypeInfo(objeto.Expression).Type is IArrayTypeSymbol
+                        && SeComparanPorIdentidad(objeto.Expression, inv.ArgumentList.Arguments[0].Expression))
+                        return "(" + ExprBase(objeto.Expression) + " == " + ExprBase(inv.ArgumentList.Arguments[0].Expression) + ")";
                     break;
                 // H8, tema 9 — `s.Split(c)`, `s.Split(c1, c2…)` y `s.Split()`: CsSystem.String_Split, con los separadores en
                 // un array. El primero, sin las opciones (StringSplitOptions, todavía no); el params de los otros es un

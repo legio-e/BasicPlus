@@ -1,0 +1,89 @@
+module CsForeachConvierte
+{
+   import CsSystem;
+
+   class Animal
+   {
+   }
+
+   class Perro : Animal
+   {
+   }
+
+   class ForeachConvierte
+   {
+      public static function int Main()
+      {
+         Integer[] valores = [null, new Integer(3), new Integer(4)];
+         long suma = 0;
+         int nulos = 0;
+         foreach (var elemento_s1 in valores)
+         {
+            Long x = CsSystem.Nullable_ALong(elemento_s1);
+            if (x == null)
+            {
+               nulos++;
+            }
+            else
+            {
+               suma += CsSystem.Nullable_Value(x);
+            }
+         }
+         if (suma != 7 || nulos != 1)
+         {
+            return 1;
+         }
+         Animal[] zoo = CsArray_Animal_2(new Perro(), new Perro());
+         int perros = 0;
+         foreach (var elemento_s2 in zoo)
+         {
+            Perro p = (Perro) elemento_s2;
+            if (p != null)
+            {
+               perros++;
+            }
+         }
+         if (perros != 2)
+         {
+            return 2;
+         }
+         int[] enteros = [1, 2, 3];
+         long total = 0;
+         foreach (var elemento_s3 in enteros)
+         {
+            long l = (long) elemento_s3;
+            total += l;
+         }
+         if (total != 6)
+         {
+            return 3;
+         }
+         byte[] a = new byte[0];
+         byte[] b = new byte[0];
+         byte[] c = a;
+         if ((a == b) || (a == b) || !(a == c) || !(a == c))
+         {
+            return 4;
+         }
+         println("ok");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = ForeachConvierte.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+
+   public function Animal[] CsArray_Animal_2(Animal v0, Animal v1)
+   {
+      Animal[] r = new Animal[2];
+      r[0] = v0;
+      r[1] = v1;
+      return r;
+   }
+}

@@ -677,13 +677,19 @@ namespace Cs2Jc
             var variable = m.GetDeclaredSymbol(fe);
             if (tc is IArrayTypeSymbol at && at.Rank == 1)
             {
-                if (!SymbolEqualityComparer.Default.Equals(variable.Type, at.ElementType))
-                {
-                    Rechaza(fe.Type, Porque.Pendiente("foreach con otro tipo que el de los elementos"));
-                    return;
-                }
                 var (coleccion, antes) = Condicion(fe.Expression);
                 foreach (var l in antes) Linea(l);
+                if (!SymbolEqualityComparer.Default.Equals(variable.Type, at.ElementType))
+                {
+                    // H8, tema 11 — `foreach (long? x in valores)` con un `int?[]`: C# convierte cada elemento al tipo de la
+                    // variable. En JC, el foreach con el de los elementos, y dentro, la conversión (Convierte: de una caja a
+                    // otra, CsSystem.Nullable_A…; un número o una clase, su conversión escrita)
+                    string x = "elemento_s" + (++sacados);
+                    Linea("foreach (var " + x + " in " + coleccion + ")");
+                    CuerpoConPrimera(fe.Statement, Tipo(variable.Type, fe.Type) + " " + Ident(variable.Name) + " = "
+                                     + Convierte(x, at.ElementType, variable.Type, fe.Type) + ";");
+                    return;
+                }
                 Linea("foreach (var " + Ident(variable.Name) + " in " + coleccion + ")");
                 CuerpoDe(fe.Statement);
                 return;
@@ -797,6 +803,7 @@ namespace Cs2Jc
         string Convierte(string x, ITypeSymbol de, ITypeSymbol a, SyntaxNode donde)
         {
             if (SymbolEqualityComparer.Default.Equals(de, a)) return x;
+            if (EsNullable(de) && EsNullable(a)) return CambiaDeCaja(x, de, a, donde);   // tema 11: de una caja a otra (Integer a Long…)
             if (!de.IsValueType && a.IsValueType && !EsEnum(a))
             {
                 string caja = ClaseDeCaja(a);
