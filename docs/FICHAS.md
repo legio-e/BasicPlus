@@ -7414,6 +7414,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Escribir una cadena eliminada:** la VM-C lanza «referencia a objeto eliminado (use-after-free)» (`PRINT_STRING`, `#660`); la VM-Java no lo mira.
 - **Un `Mutex` con un id que no vale:** la VM-Java lanza un `RuntimeError`, que se atrapa; la VM-C para la VM (`BPVM_ERR_RUNTIME`; con un `Mutex` null, `BPVM_ERR_NULL_RECEIVER`).
 - Ninguna sale en la red: son caminos de error. **Sin arreglar**, hasta que Eduardo diga; H7.5 pasa por esos mismos sitios.
+- **El orden (Eduardo, 7-nov):** *«#805 1) y 3) primero y 2) despues»*.
+- **La 2, más grande de lo que decía (medido el 7-nov),** con una cadena en una property `owner` que se cambia, y otra
+  referencia a la de antes: el `print`, `strlen` y `charAt` **tumban la VM-Java** (un fallo interno: `OutOfMemoryError`
+  o un índice fuera de su memoria); en la VM-C, el `print` lanza el `NullReferenceError` «referencia a objeto eliminado
+  (use-after-free)», `strlen` da 0 sin decir nada y `charAt`, «idx fuera de rango 0 (len=0)». Concatenar y comparar,
+  bien en las dos. La regla de un objeto eliminado (que falle ahí mismo) se aplica en unos sitios y no en otros: primero,
+  el censo de dónde lee cada VM una cadena; después, el arreglo.
+- **La 1, hecha (7-nov):** la VM-Java usa los textos de la VM-C, como `#657` con `removeFile`, `rename` y `copyFile`:
+  «mkdir('x'): no se pudo crear», «rmdir('x'): no se pudo borrar (¿no vacío?)» (la VM-C no distingue «no vacío» de los
+  demás fallos), «fileSize('x'): no se pudo leer el tamaño» y «lastModified('x'): no se pudo leer». El `mkdir` de las
+  dos ya era igual: recursivo, y vale si la carpeta ya está. Cuatro casos en `ErroresConTipo` (con el jar de antes, los
+  cuatro en FALLO: la VM-Java decía `fileSize('no_existe_h75.txt'): no_existe_h75.txt`); ahora, 31 bien, las dos VMs
+  iguales. El de `lastModified` acepta también el texto de una placa sin fechas en su FS («no implementado en esta
+  plataforma»).
 
 #### ✅ `#804` — el `super()` implícito no encuentra un constructor de la base con todos sus parámetros con valor por defecto (abierta el 7-nov; salió en el tema 4 de H8 · **CERRADA el 7-nov: no es un fallo, es la regla de Eduardo**, el commit de `#804`)
 

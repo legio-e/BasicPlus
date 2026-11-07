@@ -8,6 +8,7 @@ module ErroresConTipo
   import Core
   import Math
   import Collections
+  import IO
 
   var fallos: integer
 
@@ -158,10 +159,19 @@ module ErroresConTipo
     endtry
   end conversion
 
+  // #805: los textos de un fallo con ficheros, los mismos en las dos VMs (antes, en la VM-Java, el del sistema)
   function fichero(caso: integer): string
     try
       if caso == 1 then
         print readFile("no_existe_h75.txt")
+      elseif caso == 3 then
+        print IO.fileSize("no_existe_h75.txt")
+      elseif caso == 4 then
+        print IO.lastModified("no_existe_h75.txt")
+      elseif caso == 5 then
+        IO.mkdir("h805_fichero.txt")   // ya es un fichero: la carpeta no se puede crear
+      elseif caso == 6 then
+        IO.rmdir("h805_carpeta")       // no está vacía
       else
         var malo: byte[] := newByteArray(2)
         malo[0] := 0x41
@@ -293,6 +303,22 @@ module ErroresConTipo
     mira(r == "IOError: readFile('no_existe_h75.txt'): no se pudo abrir", "un fichero que no está: " + r)
     r := fichero(2)
     mira(r == "IOError: fromBytes: UTF-8 mal formado en el byte 1 (0xFF)", "UTF-8 malo, por IOError: " + r)
+    r := fichero(3)
+    mira(r == "IOError: fileSize('no_existe_h75.txt'): no se pudo leer el tamaño", "fileSize de uno que no está: " + r)
+    r := fichero(4)
+    // en una placa sin fechas en su FS (littlefs), el otro texto: no es un fallo de lectura
+    var bien4: boolean := (r == "IOError: lastModified('no_existe_h75.txt'): no se pudo leer") or (r == "IOError: lastModified('no_existe_h75.txt'): no implementado en esta plataforma")
+    mira(bien4, "lastModified de uno que no está: " + r)
+    writeFile("h805_fichero.txt", "x")
+    r := fichero(5)
+    IO.removeFile("h805_fichero.txt")
+    mira(r == "IOError: mkdir('h805_fichero.txt'): no se pudo crear", "mkdir sobre un fichero: " + r)
+    IO.mkdir("h805_carpeta")
+    writeFile("h805_carpeta/a.txt", "x")
+    r := fichero(6)
+    IO.removeFile("h805_carpeta/a.txt")
+    IO.rmdir("h805_carpeta")
+    mira(r == "IOError: rmdir('h805_carpeta'): no se pudo borrar (¿no vacío?)", "rmdir de una que no está vacía: " + r)
 
     r := soloRuntime()
     mira(r == "RuntimeError: División por cero", "RuntimeError las atrapa: " + r)

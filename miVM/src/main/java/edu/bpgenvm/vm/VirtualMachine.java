@@ -7163,11 +7163,13 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString(pathAbsoluteBp(p)));
                 break;
             }
+            // V8 #805 — los textos de mkdir, rmdir, fileSize y lastModified, los de la VM-C (como #657 con removeFile,
+            // rename y copyFile): antes, el del sistema (e.getMessage()), que cambia de un SO a otro y no sale en la placa.
             case MKDIR: {
                 String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.createDirectories(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
-                    throwBpError(tc, CLASE_ES, "mkdir('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "mkdir('" + p + "'): no se pudo crear");
                 }
                 pushTc(tc, 0);   // dummy void
                 break;
@@ -7175,10 +7177,8 @@ public class VirtualMachine {
             case RMDIR: {
                 String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
-                catch (java.nio.file.DirectoryNotEmptyException e) {
-                    throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): directorio no vacío");
-                } catch (java.io.IOException e) {
-                    throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): " + e.getMessage());
+                catch (java.io.IOException e) {   // la VM-C no distingue «no vacío» de los demás fallos: el mismo texto
+                    throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): no se pudo borrar (¿no vacío?)");
                 }
                 pushTc(tc, 0);
                 break;
@@ -7242,7 +7242,7 @@ public class VirtualMachine {
                         throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): tamaño > 2GB no representable en integer");
                     pushTc(tc, (int) sz);
                 } catch (java.io.IOException e) {
-                    throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): no se pudo leer el tamaño");   // #805
                 }
                 break;
             }
@@ -7257,7 +7257,7 @@ public class VirtualMachine {
                     long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(tc, p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
                 } catch (java.io.IOException e) {
-                    throwBpError(tc, CLASE_ES, "lastModified('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "lastModified('" + p + "'): no se pudo leer");   // #805
                 }
                 break;
             }
