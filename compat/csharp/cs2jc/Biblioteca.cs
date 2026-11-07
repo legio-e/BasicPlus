@@ -181,7 +181,7 @@ namespace Cs2Jc
             "System.Math.Floor(System.Double)", "System.Math.Ceiling(System.Double)", "System.Math.Round(System.Double)",
             "System.Math.Acos(System.Double)",
             "System.Double.IsNaN(System.Double)", "System.Single.IsNaN(System.Single)",
-            "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)",
+            "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)", "System.Boolean.Parse(System.String)",
             "System.String.Join(System.String,System.String[])", "System.String.IsNullOrEmpty(System.String)",
             "System.Char.IsDigit(System.Char)", "System.Char.IsLetter(System.Char)", "System.Char.IsLetterOrDigit(System.Char)",
             "System.Char.IsWhiteSpace(System.Char)", "System.Char.IsUpper(System.Char)", "System.Char.IsLower(System.Char)",
@@ -325,6 +325,19 @@ namespace Cs2Jc
                 case "System.IO.StringWriter.ToString()":
                     if (objeto != null) return Expr(objeto.Expression) + ".toString()";
                     break;
+                // H8, tema 9 — `s.Split(c)`, `s.Split(c1, c2…)` y `s.Split()`: CsSystem.String_Split, con los separadores en
+                // un array. El primero, sin las opciones (StringSplitOptions, todavía no); el params de los otros es un
+                // ReadOnlySpan<char>, que JC no tiene
+                case "System.String.Split(System.Char,System.StringSplitOptions)":
+                    if (objeto == null || inv.ArgumentList.Arguments.Count != 1) break;
+                    imports.Add("CsSystem");
+                    return "CsSystem.String_Split(" + Expr(objeto.Expression) + ", " + Expr(inv.ArgumentList.Arguments[0].Expression) + ")";
+                case "System.String.Split(System.ReadOnlySpan<System.Char>)":
+                    if (objeto == null || inv.ArgumentList.Arguments.Any(x => x.NameColon != null
+                        || m.GetTypeInfo(x.Expression).Type?.SpecialType != SpecialType.System_Char)) break;
+                    imports.Add("CsSystem");
+                    return "CsSystem.String_Split(" + Expr(objeto.Expression) + ", ["
+                           + string.Join(", ", inv.ArgumentList.Arguments.Select(x => Expr(x.Expression))) + "])";
             }
             switch (clave)
             {

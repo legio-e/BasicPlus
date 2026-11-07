@@ -6192,6 +6192,17 @@ Con el lote de ese día (Mono, 805): casi todo lo que falta en los tres pide alg
 - **El 7:** `test-29` es una regla distinta a propósito (C# prefiere el método de la hija aunque convierta peor; JC, el más exacto, como Java). Los métodos no virtuales (`new` en C#; los piden 9, 4 sólo eso) irían contra el modelo de Java: no.
 - **El 8, hecho** (Eduardo: *«OK 1) y 2)»*): **`==` y `!=` entre una clase y una antecesora suya** (`Object` incluido), la identidad, como en Java, en JC y en BP (`comparableForEquality`; `samples/IgualdadRefs.bp`, en la red; `IgualdadRefsTest`, que dos clases sin parentesco sigan sin compararse; con el compilador de antes y el nuevo, los mismos `.mod` en los 694 que ya compilaban); en el traductor, también un `T` de un genérico con una referencia, que en JC es un `Object`. Una cadena con un `Object` sigue fuera (`test-111`). Y **`ICloneable`** en `CsSystem`. **Mono: 810** (+5: `gtest-294`, `gtest-455`, `gtest-466`, `test-316` y `test-585`); fallan las mismas 6. Lo de implementar con un tipo concreto lo que la interfaz declara con `T` (25 lo piden, 12 sólo eso), con los genéricos.
 
+### El tema 9, cadenas, caracteres y conversiones (7-nov; cerrado)
+
+Con el lote de ese día (Mono, 844): 85 válidas, 40 funcionan, ninguna falla, y de las 45 que no se traducen, 41 piden
+algo de fuera (la reflexión, 13; `yield`, 11; `decimal`, 7; `dynamic`, 5; los tipos anónimos, 3…). De las otras cuatro,
+dos pedían la librería, y entraron (Eduardo: *«OK»*): **`bool.Parse`** (`gtest-419`) y **`string.Split`** (`test-88`),
+en `CsSystem` (caso `SplitParse`). `Split` con un separador elige en .NET 10 `Split(char, StringSplitOptions)` (sin las
+opciones; con ellas, todavía no), y con varios o ninguno, un `params ReadOnlySpan<char>`, que JC no tiene: los dos son
+`CsSystem.String_Split(s, …)`, con los separadores en un array. Las otras dos, fuera: `test-111` (`==` entre una cadena
+y un `Object`, como se dejó en el tema 8) y `test-330` (`IFormattable foo = -1`: el `Integer` de BP tendría que
+implementar una interfaz de .NET). **El tema 9: 42 de 85; Mono, 846.**
+
 ### H7.5, los errores de la VM con su tipo (7-nov; hecho)
 
 Eduardo: *«A ver los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen

@@ -1,0 +1,54 @@
+module CsSplitParse
+{
+   import CsSystem;
+
+   class SplitParse
+   {
+      public static function int Main()
+      {
+         if (!CsSystem.Boolean_Parse("True") || CsSystem.Boolean_Parse(" false ") || !CsSystem.Boolean_Parse("tRUE"))
+         {
+            return 1;
+         }
+         try
+         {
+            CsSystem.Boolean_Parse("si");
+            return 2;
+         }
+         catch (CsSystem.FormatException excepcion_cs1)
+         {
+         }
+         string[] a = CsSystem.String_Split("uno,dos,,tres", ',');
+         if (len(a) != 4 || a[0] != "uno" || a[2] != "" || a[3] != "tres")
+         {
+            return 3;
+         }
+         string[] b = CsSystem.String_Split("a-b c", ['-', ' ']);
+         if (len(b) != 3 || b[1] != "b" || b[2] != "c")
+         {
+            return 4;
+         }
+         string[] c = CsSystem.String_Split("uno dos\ttres", []);
+         if (len(c) != 3 || c[2] != "tres")
+         {
+            return 5;
+         }
+         string[] d = CsSystem.String_Split("", 'a');
+         if (len(d) != 1 || d[0] != "")
+         {
+            return 6;
+         }
+         println("ok");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = SplitParse.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

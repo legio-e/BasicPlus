@@ -416,6 +416,61 @@ module CsSystem
 
    /// s.Substring(i) y s.Substring(i, n): en .NET, el segundo es la LONGITUD; el substring de Core pide el final.
    public function string String_Substring(string s, int desde) { return substring(s, desde, strlen(s)); }
+
+   /// s.Split(c), s.Split(c1, c2…) y s.Split() (H8, tema 9): los trozos entre cada separador, vacíos incluidos; sin
+   /// separadores, por los espacios (char.IsWhiteSpace), como .NET. Un carácter de JC es su código.
+   public function string[] String_Split(string s, int sep)
+   {
+      return String_Split(s, [sep]);
+   }
+   public function string[] String_Split(string s, int[] seps)
+   {
+      int n = strlen(s);
+      int cuantos = 1;
+      int i = 0;
+      while (i < n)
+      {
+         if (String_EsSeparador(charCodeAt(s, i), seps)) cuantos++;
+         i++;
+      }
+      string[] r = new string[cuantos];
+      int k = 0;
+      int desde = 0;
+      i = 0;
+      while (i < n)
+      {
+         if (String_EsSeparador(charCodeAt(s, i), seps))
+         {
+            r[k] = substring(s, desde, i);
+            k++;
+            desde = i + 1;
+         }
+         i++;
+      }
+      r[k] = substring(s, desde, n);
+      return r;
+   }
+   function bool String_EsSeparador(int c, int[] seps)
+   {
+      if (len(seps) == 0) return Char_IsWhiteSpace(c);
+      int j = 0;
+      while (j < len(seps))
+      {
+         if (seps[j] == c) return true;
+         j++;
+      }
+      return false;
+   }
+
+   /// bool.Parse (H8, tema 9): «True» o «False», sin mirar mayúsculas ni los espacios de los lados, como .NET; si no,
+   /// FormatException.
+   public function bool Boolean_Parse(string s)
+   {
+      string t = lower(trim(s));
+      if (t == "true") return true;
+      if (t == "false") return false;
+      throw new FormatException("String '" + s + "' was not recognized as a valid Boolean.");
+   }
    public function string String_Substring(string s, int desde, int largo) { return substring(s, desde, desde + largo); }
 
    /// string.IsNullOrEmpty(s) (#774: una variable string de JC puede valer null, y con él no se puede medir).
