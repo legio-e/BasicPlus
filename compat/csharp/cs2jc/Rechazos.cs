@@ -25,6 +25,10 @@ namespace Cs2Jc
         public static string H7(string mejora) => "le falta a JC: " + mejora;
         public static string Fuera(string que) => "fuera: " + que;
         public static string Pendiente(string regla) => "el traductor todavía no: " + regla;
+        /// De los T? de C#, lo que no es su caja (V8, Eduardo, 7-nov: «Si el traductor traduce int? a Integer perfecto,
+        /// no se toca. n+null sinceramente no se que es ni que valor tiene, para mi eso es un error»): lo que ya hace
+        /// (Nullables.cs) se queda; lo demás, fuera.
+        public static string IntNullable(string que) => Fuera("lo de int? que no es su Integer: " + que);
         public static string Biblioteca(string miembro) => "la biblioteca: " + miembro;
 
         /// Un miembro o un tipo de .NET que no está en la tabla: su motivo, como en el censo de #745 (clasifica.py): la

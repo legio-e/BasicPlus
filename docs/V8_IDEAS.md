@@ -5446,6 +5446,13 @@ informe: el enum que puede ser `null` (`E?`, 9 pruebas: sacar su valor es conver
 `switch` sobre un `T?` (7: un `null` va al `default`, y el de JC no lo hace solo); un valor por defecto de un `T?` (3:
 en JC es un objeto, y JC sólo admite un literal); y el `T?` de un `struct` (H7).
 
+**Lo que queda de los `T?`, fuera** (7-nov). Eduardo: *«Lo de int? de C# no lo vamos a hacer, int? se traduce a
+Integer»*; y, preguntado si también lo que ya se hace: *«Si el traductor traduce int? a Integer perfecto, no se toca.
+n+null sinceramente no se que es ni que valor tiene, para mi eso es un error»*. Lo de arriba se queda como está; lo
+que el traductor todavía no escribía de los `T?` (un `null` suelto en una cuenta, `n + null`; las cuentas de un `uint?`;
+un `E?`; las asignaciones compuestas de uno estrecho…) pasa a «fuera» (`Porque.IntNullable`), y deja de contar como
+trabajo por hacer. El valor por defecto de un `T?` ya salía con el tema 4 (`new Integer(5)`, en la llamada).
+
 **`uint`, hecho** (`compat/csharp/cs2jc/SinSigno.cs`). Eduardo: *«No tenemos uint?»*: BP tiene sin signo sólo los
 estrechos, `byte` y `word` (`ushort` en JC), que el traductor ya pasaba; un `uint` cabe en un `long` (propuesto, y
 *«OK»*). Un `uint` es un `long` con su valor (0 … 4 294 967 295):
