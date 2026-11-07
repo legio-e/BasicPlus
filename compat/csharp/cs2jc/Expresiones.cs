@@ -512,6 +512,8 @@ namespace Cs2Jc
             {
                 case ILocalSymbol _ when renombradas.TryGetValue(s, out var nuevo):
                     return nuevo;                                  // una local de un case subida antes del switch
+                case ILocalSymbol lc when enCaja.Contains(lc):
+                    return Ident(s.Name) + ".v";                   // H7.4: vive en una caja (Cajas.cs)
                 case IParameterSymbol pp when !enPrimario && DelPrimario(pp):
                     return Rechaza(id, Porque.Pendiente("un parámetro del constructor primario, en un método"));
                 case ILocalSymbol _:
@@ -602,8 +604,14 @@ namespace Cs2Jc
         string Argumentos(BaseArgumentListSyntax args, IMethodSymbol ms)
         {
             if (args == null) return "";
-            foreach (var a in args.Arguments)
-                if (!a.RefKindKeyword.IsKind(SyntaxKind.None)) return Rechaza(a, Porque.H7(Porque.RefOut));
+            if (args.Arguments.Any(EsRefOut))                     // H7.4: a un var, la caja (`x::v`) u otro var (Cajas.cs)
+            {
+                if (ms == null || args.Arguments.Any(a => a.NameColon != null) || Expandido(ms, args))
+                    return Rechaza(args, Porque.Pendiente("ref u out con argumentos con nombre o con params"));
+                var declarados = ms.OriginalDefinition.Parameters;
+                return string.Join(", ", args.Arguments.Select((a, i) => EsRefOut(a) ? ArgumentoRef(a)
+                                       : EntraEnGenerico(a.Expression, i < declarados.Length ? declarados[i].Type : null)));
+            }
             if (args.Arguments.Any(a => a.NameColon != null)) return ConNombre(args, ms);
             if (Expandido(ms, args))
             {

@@ -214,6 +214,18 @@ namespace Cs2Jc
             if (d.Type is RefTypeSyntax) { Rechaza(d.Type, Porque.H7(Porque.RefOut)); return; }
             var primero = (ILocalSymbol) m.GetDeclaredSymbol(d.Variables[0]);
             string tipo = Tipo(primero.Type, d.Type);
+            // H7.4: una local que se pasa por ref u out, en su caja (Cajas.cs); cada una en su línea, que el tipo ya no es el mismo
+            if (!constante && d.Variables.Any(v => m.GetDeclaredSymbol(v) is ILocalSymbol lv && enCaja.Contains(lv)))
+            {
+                foreach (var v in d.Variables)
+                {
+                    var lv = (ILocalSymbol) m.GetDeclaredSymbol(v);
+                    if (enCaja.Contains(lv)) Linea(DeclaraEnCaja(v, lv));
+                    else Linea(tipo + " " + Ident(v.Identifier.ValueText)
+                               + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : SinValor(lv.Type, v)) + ";");
+                }
+                return;
+            }
             // `T x = new T(…) { A = 1 };`: el objeto, y luego sus asignaciones, en orden (como C#). Sólo en una declaración,
             // donde `x` no existía antes; en otro sitio, el nuevo valor se vería antes de tiempo
             if (d.Variables.Count == 1 && d.Variables[0].Initializer?.Value is ObjectCreationExpressionSyntax oc

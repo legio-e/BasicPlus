@@ -144,6 +144,10 @@ namespace Cs2Jc
             BuscaChoques(tipos);                 // las implementaciones explícitas que chocan (Explicitas.cs)
             tiposDelPrograma = tipos;            // el tipo de un objeto (Tipos.cs)
             BuscaEnumsEnteros(raiz);             // los enums que se operan (EnumsEnteros.cs)
+            BuscaCajas(raiz);                    // H7.4: las locales que se pasan por ref u out (Cajas.cs)
+            foreach (var s in tipos)             // la función de entrada del módulo se llama main (gtest-241)
+                if (s.Name == "main" && s.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is SyntaxNode dm)
+                    Rechaza(dm, Porque.Pendiente("una clase que se llama main, como la función de entrada del módulo"));
             BuscaSobrecargasIguales(tipos);
 
             // JC quiere la clase padre declarada antes que la hija («padre local … no es una clase abierta declarada
@@ -166,6 +170,7 @@ namespace Cs2Jc
             if (main == null) Rechaza(raiz, Porque.Pendiente("no hay Main"));
             if (usaTipoDe) EmiteTipoDe();
             EmiteNombresDeEnums();
+            EmiteCajas();                        // H7.4 (Cajas.cs)
 
             if (t.Rechazos.Count == 0)
             {
@@ -909,7 +914,12 @@ namespace Cs2Jc
             {
                 var ps = m.GetDeclaredSymbol(p);
                 if (ps == null) { partes.Add(Rechaza(p, Porque.Fuera(Porque.Interop))); continue; }     // __arglist
-                if (ps.RefKind != RefKind.None) Rechaza(p, Porque.H7(Porque.RefOut));
+                // H7.4: `ref` y `out` son `var`; `in` (sólo se lee), un parámetro más
+                if (ps.RefKind != RefKind.None && ps.RefKind != RefKind.In && !EsRefOut(ps)) Rechaza(p, Porque.H7(Porque.RefOut));
+                if (EsRefOut(ps) && ps.ContainingSymbol is IMethodSymbol mc && mc.MethodKind == MethodKind.Constructor)
+                    Rechaza(p, Porque.Pendiente("ref u out en un constructor (JC no lleva var en un constructor)"));
+                else if (EsRefOut(ps) && ps.ContainingSymbol is IMethodSymbol mr && SoloDifiereEnRef(mr))
+                    Rechaza(p, Porque.Pendiente("dos métodos que sólo difieren en ref u out (JC no los distingue)"));
                 // `int c = 0, params int[] oo` (gtest-optional-36): en JC, uno sin valor no va tras uno con él
                 if (ps.IsParams && pl.Parameters.Any(q => q.Default != null))
                     Rechaza(p, Porque.Pendiente("un params detrás de un valor por defecto"));
@@ -917,7 +927,7 @@ namespace Cs2Jc
                 var definicion = (ps.ContainingSymbol as IMethodSymbol)?.PartialDefinitionPart;
                 var conValor = definicion != null ? definicion.Parameters[ps.Ordinal] : ps;
                 var pValor = conValor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax ?? p;
-                partes.Add(Tipo(ps.Type, p.Type) + " " + Ident(ps.Name)
+                partes.Add((EsRefOut(ps) ? "var " : "") + Tipo(ps.Type, p.Type) + " " + Ident(ps.Name)
                            + (pValor.Default != null ? " = " + ValorPorDefecto(conValor, pValor) : ""));
             }
             return string.Join(", ", partes);
