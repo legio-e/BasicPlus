@@ -337,8 +337,9 @@ ocultos, y verlo pediría llamar al getter.
 
 `Overlay` carga un programa con sus módulos, lo ejecuta y lo descarga (manual §10.7, «Overlays: un programa que carga a otro»). Para
 qué: un programa deja en memoria sólo lo que usa siempre, y lo que se usa poco —la configuración, exportar o importar
-datos— va aparte y se carga cuando hace falta, como los overlays de MS-DOS con la barrera de los 640 K (Eduardo). Lo
-que no hace todavía, con su error o en el manual, y se hará cuando el uso lo pida (*«H9 necesita rodaje, que se utilice
+datos— va aparte y se carga cuando hace falta, como los overlays de MS-DOS con la barrera de los 640 K (Eduardo). Y otros
+usos (Eduardo): una línea de comandos que ejecuta otros programas, y un programa extensible, con una interfaz para
+intercambiar datos. Lo que no hace todavía, con su error o en el manual, y se hará cuando el uso lo pida (*«H9 necesita rodaje, que se utilice
 y que vayan apareciendo los problemas»*):
 - un error en un hilo del programa cargado no llega a `tryExe`: el programa entero acaba con código 1 (y los hilos que
   deje vivos son un error de `tryExe`: tiene que cerrarlos antes de salir);
@@ -349,7 +350,9 @@ y que vayan apareciendo los problemas»*):
 - `load` sólo desde `Main` (no desde un manejador de la GUI), y uno a la vez: dentro del programa cargado no valen otro
   `load` ni `Heap.compact`;
 - una global de un módulo que se queda con un literal del que se va no se detecta; y el tope de 16 módulos cuenta los
-  del lanzador y los del programa.
+  del lanzador y los del programa;
+- intercambiar datos con el programa cargado, con una interfaz, para un programa extensible: hoy, de ida, un `string`
+  (`tryExe(arg)`), y de vuelta, si acabó bien o su error (`getError()`, `getErrorClass()`, `getTrace()`).
 
 ### Los errores de la VM con su tipo: lo que no lo lleva (V8/H7.5, 7-nov)
 

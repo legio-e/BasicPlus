@@ -6996,6 +6996,10 @@ porque no se mueve ningún objeto. Y los pasos:
 **Cerrado el 7-nov** (H9). Eduardo: *«Si, cierralo. H9 necesita rodaje, que se utilice y que vayan apareciendo los problemas. Esto es muy útil en dispositivos con poca memoria. Por ejemplo en un programa, las opciones de configuración se utilizan pocas veces. Si se descarga a una librería aparte y que se carga solamente cuando hace falta, liberamos memoria. Lo mismo pasa con una opción de exportar o importar datos. De esta forma, en el programa dejamos solamente lo esencial que se utiliza habitualmente y nos ahorramos memoria. Esto era muy habitual en MS-DOS donde estaba la barrera de los 640K.»* Lo de abajo queda como límites conocidos (`PENDIENTES`, «Los
 overlays»), para cuando el uso los pida.
 
+Y otros usos, ese mismo día: *«Hay otros usos. Por ejemplo podemos hacer una línea de comandos que permita ejecutar otros programas. Y también podriamos hacer un programa extensible, con algún tipo de interface que permita intercambiar datos»*. La línea de comandos, con lo de hoy y sin
+probar, sería un bucle en `Main` que lee la orden y hace `load`, `tryExe` con sus argumentos y `unload`. Intercambiar
+datos con una interfaz no está hecho: hoy, de ida, un `string`, y de vuelta, si acabó bien o su error. Lo nuevo, a V9.
+
 **Lo que se deja para después, a sabiendas:**
 
 - **Un hilo que el programa deje vivo** impide descargar: el error lo dice, pero el lanzador no puede matarlo, sólo
