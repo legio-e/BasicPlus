@@ -7067,7 +7067,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   y parar el mundo, y meter en la capa de plataforma del PC (`platform_pthread.c`) el retraso que iguale esa
 >   proporción. La prueba de que sirve: que reproduzca lo que el PC no vio el 5-oct —un hilo que concatena con dos runs,
 >   igual en el PC y un 73 % más lento en la Pico 2 (`V7_IDEAS` §H12, «La 3.2»)—.
-> - **el micro simulado con periféricos, y su ventana de configuración** (Eduardo, 9-oct, al decidir `#647`: *«Estoy
+> - **el micro simulado con periféricos, y su ventana de configuración** **→ su `Uart` a un puerto del PC, a V9 el
+>   7-nov, con la UART de los streams (`#723`)**; la ventana, por decidir. Antes (Eduardo, 9-oct, al decidir `#647`: *«Estoy
 >   pensando en añadir algunos periféricos también al emulador empezando por la UART que nosotros mapearíamos a un
 >   puerto serie. Vamos a necesitar una ventana de configuración del emulador para poder decir la resolución de la
 >   pantalla, los puertos, etc. Esto último iría en V8»*): la `Uart` de un programa, en el simulado, a un puerto serie
@@ -7112,7 +7113,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   el otro no toca, lo que en Java es un TLAB—, reservar sería sin cerrojo y sólo rellenar el trozo lo pediría (de
 >   16 000 a unas 250 veces en el bucle de cadenas). El GC seguiría parando el mundo. Es el corazón del asignador
 >   (`#593`; de ahí `#603`, `#610`, `#611`): con estrés, sabotajes y la placa. Si sobra tiempo en V7, antes.
-> - **los builtins que esperan, que cedan el HILO BP en vez de dormir el run** (Eduardo, 5-oct: *«OK, apúntalo»*): hoy
+> - **los builtins que esperan, que cedan el HILO BP en vez de dormir el run** **→ A V9 el 7-nov, con los streams
+>   (`#723`)**: un `Reader` que espera bytes es el mismo caso. Antes (Eduardo, 5-oct: *«OK, apúntalo»*): hoy
 >   `Uart.read(datos, n, timeoutMs)` espera a nivel del sistema —la tarea del run duerme de milisegundo en milisegundo
 >   hasta que llegan bytes o vence el plazo (`src/uart.c`, `rx_drenar`)—: con UN run, mientras un hilo espera ahí, los
 >   demás hilos BP se paran. Con `sleep` de BP no pasa (duerme sólo su hilo), y con dos runs la espera retiene sólo el
@@ -9898,6 +9900,11 @@ preguntas, cada una con su propuesta, en §E8).
 **A V9 (Eduardo, 7-nov):** *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»* Con él van los dispositivos de la lista «Lo que ya es de V8»: la PIO del
 RP2350, las UART de las ESP32 y el DMA de `Uart`; y lo que cambie en las clases de dispositivos (`File`, `Uart`,
 `Socket`…) al tener sus streams.
+
+**La UART, de Eduardo (7-nov):** *«OK, veamos la UART. Primero definiremos una interfaz. Despues definimos al menos 2 clases que implementan esa interfaz. En un microcontroller una clase tiene un constructor donde el primer parámetro es el número de UART. La segunda clase, casi igual a la primera pero el constructor el primer parámetro es un nombre, serviría para VM que se ejecuten en Windows y Linux. Habría que mirar si necesitamos una tercera implementación para puertes serie que corran sobre USB p Bluetooth. Pero todo eso es V9»*. O sea: una interfaz, y la clase del micro (el número de UART en el
+constructor) y la del PC (el nombre del puerto, `COM3` o `/dev/ttyUSB0`), casi iguales; quizá una tercera para los puertos
+serie sobre USB o Bluetooth. Con ella, la `Uart` del micro simulado a un puerto del PC, y los builtins que esperan
+(`Uart.read`) cediendo el hilo BP.
 
 #### ✅ `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
 
