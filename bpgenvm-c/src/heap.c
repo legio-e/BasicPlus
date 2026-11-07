@@ -1845,13 +1845,17 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
          * soltó puede habérselo gastado ya el resto, y rendirse entonces era un «No space in heap» con el heap lleno de
          * basura. (La VM-Java siempre colectó ella: heapAlloc.) */
         int propia;
-        if (vm->smp != NULL && vm->smp->ensayo_reserva_ms > 0) {   /* SOLO PRUEBAS (test_cola, la 21): la ventana ensanchada */
-            bpvm_platform_mutex_unlock(&vm->smp->vm_lock);
-            bpvm_platform_thread_sleep_ms(vm->smp->ensayo_reserva_ms);
-            bpvm_platform_mutex_lock(&vm->smp->vm_lock);
-        }
+        int fingida = bpvm_la_cola.ensayo_colecta_ajena;   /* SÓLO PRUEBAS (test_cola, la 21; #800) */
         do {
-            propia = gc_stw(vm);
+            if (fingida) {
+                /* SÓLO PRUEBAS: la primera, como si la hubiera hecho otro y no hubiera dejado sitio —lo que con dos runs
+                 * pasa de vez en cuando, y con uno nunca—, sin colectar. La reserva tiene que ir a colectar ella. */
+                fingida = 0;
+                propia = 0;
+                bpvm_la_cola.colectas_ajenas_fingidas++;
+            } else {
+                propia = gc_stw(vm);
+            }
             if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado (#659: la marca, de la tarea) */
                 bpvm_aot_callctx()->reserva_descarrilada = 1;
                 return 0;

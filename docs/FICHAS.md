@@ -7430,7 +7430,7 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Por qué con el turno corto no vuelve a 188:** los dos hilos se alternan uno a uno (99 cambios y 99 ficheros, 86 y 87, 125 y 126). La etiqueta espera a que acabe cada `writeFile` o `readFile`, que ocupa la tarea de la VM.
 - **Sin hacer: por decidir (Eduardo).** Quien lo necesite hoy tiene `quantum=256` en el Entorno, a cambio de un 20 % menos de ficheros. Lo de fondo sería que un builtin largo cuente para el turno, como en la VM-Java, que lo mide en tiempo: eso llegaría a esos 100 cambios. Para pasar de ahí, el fichero tendría que dejar de ocupar la tarea de la VM.
 
-#### 🔵 `#800` — el caso 21 de `test-cola` falla de vez en cuando: `sin sitio: 1` con basura en el heap, con dos runs (abierta el 6-nov; se vio en la red de H3)
+#### ✅ `#800` — el caso 21 de `test-cola` falla de vez en cuando: `sin sitio: 1` con basura en el heap, con dos runs (abierta el 6-nov; se vio en la red de H3 · **CERRADA el 7-nov**, el commit de `#800`)
 
 - **Lo que pasa:** `ReservaAjena` (`#762`: dos hilos, cada uno en un run, con el heap justo) acaba bien, pero una reserva se quedó sin sitio. Pone la red en ROJO sin que nada esté roto en lo que se probaba.
 - **Medido** (6-nov, sólo ese caso, con la máquina en reposo y alternando): el código de esa mañana, `2df8c842`, sin nada de WiFi, 199 de 200; con la WiFi y `Air`, 293 de 300. **Ya estaba antes de la WiFi.** La diferencia (0,5 % y 2,3 %) no es concluyente con tan pocos fallos, y lo cambiado no pasa por el heap ni por el planificador: lo más probable, un cambio de tiempos. Con 10 pasadas por red, a ese ritmo sale en una de cada cinco.
@@ -7443,6 +7443,18 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   colecta fue de otro y no queda sitio, colecta ella), sin esperas ni heap justo: un gancho de prueba da por hecha «por
   otro» la primera colecta de cada reserva que no cabe; un sample pide 200 bloques de 2 KB sin guardar ninguno; con 1
   run y con 2 (dos hilos, uno en cada uno); «sin sitio: 0», y el sabotaje, mayor que 0.
+- **Lo hecho (7-nov, por la tarde; *«Seguimos #800»*):** lo de arriba. Un gancho de prueba en `heap.c`
+  (`ensayo_colecta_ajena`) da por hecha «por otro», y sin colectar, la primera colecta de cada reserva que no cabe: la
+  reserva tiene que ir a colectar ella, que es la decisión de `#762`. `ReservaAjena`, nuevo: dos hilos piden 100 bloques
+  de 2 KB cada uno sin guardar ninguno, con la colecta por volumen apagada (el umbral, a 0), en 256 KB: lo vivo son unos
+  pocos KB, y lo que se pide llena el heap varias veces. Con 1 run y con 2, y la prueba exige además que el gancho se
+  use en cada pasada (un camino ejecutado no es un camino probado). Lo de antes, fuera: las dos esperas (la de la
+  reserva, `ensayo_reserva_ms`, quitada de la VM; la del mundo parado sigue en la parte 2) y el heap de 47 104 B.
+- **Medido:** con 100 pasadas por número de runs, 200 de 200, con 3 colectas fingidas o más en cada pasada, con 1 run y
+  con 2; saboteada (`--sabotaje-reserva`: se rinde, como antes), 0 de 200. Las 200 pasadas, 3 s. En `test-cola`, 10 y 10.
+- **Lo que no se sabe:** por qué fallaba la de antes. Lo más probable, la prueba misma: con el `Core` de H7.5, que ocupa
+  más en el mismo heap fijo, fallaba mucho más, porque lo vivo ya no cabía. La VM no cambia: el gancho y el sabotaje son
+  sólo de prueba.
 
 #### 🔵 `#799` — `SleepCede` falla con `Core` en un pack: el `File` que murió sin cerrar no se recoge en el primer `gc()` (abierta el 6-nov; se vio en la tanda de H3)
 

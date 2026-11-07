@@ -51,8 +51,9 @@
  *     parado; --sabotaje-anidada: vuelve a entrar sin fin, como antes: el programa colgado (lo para el plazo).
  * 20. dos hilos crean controles en el mismo contenedor (GuiMismoPadre): ni uno perdido (el cerrojo del árbol de Gui.bp;
  *     el control, medido a mano con la Gui de antes).
- * 21. (#762) la reserva que espera la colecta de otro (ReservaAjena, el heap justo y la ventana ensanchada): colecta ella
- *     si sigue sin caber —--sabotaje-reserva: se rinde, como antes: «No space in heap» con el heap lleno de basura—.
+ * 21. (#762, #800) la reserva que no cabe tras la colecta de otro (ReservaAjena, con 1 run y con 2; la primera colecta de
+ *     cada reserva que no cabe, fingida «de otro»): colecta ella —--sabotaje-reserva: se rinde, como antes: «No space in
+ *     heap» con el heap lleno de basura—.
  *
  * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod
  *                FicherosDosRuns.mod
@@ -70,9 +71,8 @@
 #include <string.h>
 
 #define PASADAS 20
-#define RESERVA_AJENA_PASADAS 10
-#ifndef RESERVA_AJENA_MEM
-#define RESERVA_AJENA_MEM 47104
+#ifndef RESERVA_AJENA_PASADAS
+#define RESERVA_AJENA_PASADAS 10   /* con cada número de runs (para medir, -DRESERVA_AJENA_PASADAS=N) */
 #endif
 
 typedef struct { char buf[8192]; size_t n; } salida_t;
@@ -95,6 +95,9 @@ static int cuenta(const char* s, const char* sub) {
 /* El error del programa (bpvm_runtime_error, lo que dice el EXITED) de la última pasada. */
 static char s_error[256];
 
+/* La 21 (#800): sin la colecta por volumen (el umbral, a 0: el heap se llena de basura y la reserva que no cabe colecta). */
+static int s_sin_umbral;
+
 /* Una pasada: `mod` en un bloque de `mem_size` B con el heap hasta `heap` (0: la mitad), con `runs` runs; la salida, a
  * `cb` (con `user`). */
 static bpvm_status_t corre_con(const char* mod, size_t mem_size, size_t heap, int runs,
@@ -112,6 +115,7 @@ static bpvm_status_t corre_con(const char* mod, size_t mem_size, size_t heap, in
         return s;
     }
     bpvm_set_output(vm, cb, user);
+    if (s_sin_umbral) vm->gc_bump_threshold = 0;   /* lo fija el cargador; nadie más lo toca en el RUN */
     s = (runs > 1) ? bpvm_run_smp(vm, runs) : bpvm_run(vm);
     snprintf(s_error, sizeof s_error, "%s", bpvm_runtime_error(vm));
     bpvm_destroy(vm);
@@ -606,25 +610,44 @@ static int gui_mismo_padre(void) {
                    PASADAS, NULL, ultimo);
 }
 
-/* 21. (#762) La reserva que espera la colecta de otro (ReservaAjena: dos hilos, cada uno en un run, con el heap justo; la
- * ventana, ensanchada: el que esperó tarda en volver, y el otro se gasta lo que se soltó): colecta ella si sigue sin
- * caber, y nadie se queda sin sitio. Sabotaje (--sabotaje-reserva: se rinde, como antes): «sin sitio» con basura. */
+/* 21. (#762, #800) LA RESERVA QUE NO CABE TRAS LA COLECTA DE OTRO (ReservaAjena: dos hilos piden bloques de 2 KB sin
+ * guardar ninguno, con la colecta por volumen apagada: el heap se llena de basura). Se prueba la decisión de #762 —si la
+ * colecta fue de otro y sigue sin caber, colecta ella— sin depender de que la carrera salga: el gancho da por hecha «por
+ * otro», sin colectar, la primera colecta de cada reserva que no cabe. Con 1 run y con 2 (Eduardo: los hilos de BP se
+ * ejecutan de forma diferente). Bien: «sin sitio: 0», con el gancho usado en cada pasada. Sabotaje (--sabotaje-reserva:
+ * se rinde, como antes): «sin sitio» con el heap lleno de basura. (La de antes, del 4-nov, buscaba la carrera de verdad,
+ * con el heap justo y la ventana ensanchada, y fallaba de vez en cuando sin nada roto: #800.) */
 static int reserva_ajena(int sabotaje) {
-    enum { MEM = RESERVA_AJENA_MEM };
-    int malos = 0; char ultimo[80] = "";
-    bpvm_la_cola.ensayo_stw_ms = 1;
-    bpvm_la_cola.ensayo_reserva_ms = 1;
+    int malos = 0, pasadas = 0; char ultimo[96] = ""; char detalle[128];
+    uint32_t menos[3] = { 0, 0xFFFFFFFFu, 0xFFFFFFFFu };   /* con 1 y con 2 runs, las fingidas de la pasada que menos */
+    s_sin_umbral = 1;
+    bpvm_la_cola.ensayo_colecta_ajena = 1;
     bpvm_la_cola.sabotaje_reserva = sabotaje;
-    for (int i = 0; i < RESERVA_AJENA_PASADAS; i++) {
-        salida_t o;
-        bpvm_status_t s = corre("ReservaAjena.mod", MEM, MEM - bpvm_stack_region_bytes(MEM), 2, &o);
-        if (s != BPVM_OK || strstr(o.buf, "sin sitio: 0") == NULL) { malos++; resume(ultimo, sizeof ultimo, s, o.buf); }
+    for (int runs = 1; runs <= 2; runs++) {
+        for (int i = 0; i < RESERVA_AJENA_PASADAS; i++, pasadas++) {
+            salida_t o;
+            bpvm_la_cola.colectas_ajenas_fingidas = 0;
+            /* 256 KB, la mitad de heap: lo vivo son unos pocos KB, y los 400 KB que se piden lo llenan varias veces */
+            bpvm_status_t s = corre("ReservaAjena.mod", 256 * 1024, 0, runs, &o);
+            uint32_t f = bpvm_la_cola.colectas_ajenas_fingidas;
+            if (f < menos[runs]) menos[runs] = f;
+            if (s != BPVM_OK || strstr(o.buf, "sin sitio: 0") == NULL) {
+                malos++;
+                resume(ultimo, sizeof ultimo, s, o.buf);
+            } else if (f == 0) {   /* un camino ejecutado no es un camino probado */
+                malos++;
+                snprintf(ultimo, sizeof ultimo, "con %d run%s, ninguna reserva sin sitio: el gancho, sin usar", runs,
+                         runs > 1 ? "s" : "");
+            }
+        }
     }
-    bpvm_la_cola.ensayo_stw_ms = 0;
-    bpvm_la_cola.ensayo_reserva_ms = 0;
+    s_sin_umbral = 0;
+    bpvm_la_cola.ensayo_colecta_ajena = 0;
     bpvm_la_cola.sabotaje_reserva = 0;
-    return informe("21. la reserva que espera la colecta de otro, con dos runs: nadie sin sitio con basura", sabotaje, malos,
-                   RESERVA_AJENA_PASADAS, NULL, ultimo);
+    snprintf(detalle, sizeof detalle, " (colectas «de otro» fingidas por pasada: con 1 run, %u o más; con 2, %u o más)",
+             (unsigned) menos[1], (unsigned) menos[2]);
+    return informe("21. la reserva que no cabe tras la colecta de otro, con 1 run y con 2: nadie sin sitio con basura",
+                   sabotaje, malos, pasadas, detalle, ultimo);
 }
 
 int main(int argc, char** argv) {

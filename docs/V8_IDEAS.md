@@ -6218,7 +6218,7 @@ Eduardo: *«OK. Y con eso el lote de pruebas de C# pasan a ser pruebas de BP y J
   arrays, el `++` dentro de una expresión.
 - **Lo que salió y sigue abierto en V8**, para los pendientes: `#804` (el `super()` implícito y los valores por
   defecto), `#805` (tres caminos de error en los que las VMs difieren), `#806` (`throw` de una excepción null) y `#800`
-  (la prueba de `test-cola`, que se simplifica ahora).
+  (la prueba de `test-cola`, que se simplifica ahora: cerrada esa tarde, con 1 run y con 2).
 
 ### El tema 11, los arrays (7-nov; cerrado)
 
