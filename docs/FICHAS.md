@@ -7385,6 +7385,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#805` — las dos VMs difieren en tres caminos de error (abierta el 7-nov; salió en el inventario de H7.5)
+
+- **El texto de un fallo con ficheros:** `mkdir`, `rmdir`, `fileSize` y `lastModified` dan en la VM-Java el mensaje del sistema (`e.getMessage()`), y en la VM-C uno suyo (`mkdir('x'): no se pudo crear`). Un programa que escribe `e.msg` saca otra cosa en cada VM.
+- **Escribir una cadena eliminada:** la VM-C lanza «referencia a objeto eliminado (use-after-free)» (`PRINT_STRING`, `#660`); la VM-Java no lo mira.
+- **Un `Mutex` con un id que no vale:** la VM-Java lanza un `RuntimeError`, que se atrapa; la VM-C para la VM (`BPVM_ERR_RUNTIME`; con un `Mutex` null, `BPVM_ERR_NULL_RECEIVER`).
+- Ninguna sale en la red: son caminos de error. **Sin arreglar**, hasta que Eduardo diga; H7.5 pasa por esos mismos sitios.
+
 #### 🔵 `#804` — el `super()` implícito no encuentra un constructor de la base con todos sus parámetros con valor por defecto (abierta el 7-nov; salió en el tema 4 de H8)
 
 - **Lo que pasa:** en BP y en JC, con `function Base(n: integer := 2)` en la base, no compila una hija cuyo constructor no llama a `super(...)`, ni una sin constructor: «el constructor de 'Hija' debe llamar a 'super(...)': el constructor de la clase base 'Base' requiere argumentos». `Base()` se puede llamar sin argumentos, pero el semántico sólo busca un constructor sin parámetros (`SemanticAnalyzer`, la búsqueda de `#509`).
