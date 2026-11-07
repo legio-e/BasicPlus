@@ -27,6 +27,8 @@
 
 ## Última sesión
 
+> **7-nov** — **La WiFi de la Pico 2 W, aplazada a otra versión** (Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP32 de momento. Ya veremos mas adelante, en otras versiones.»*). Se leyó su esquema y la licencia de su driver; no se programó ni se bajó nada. Lo leído, en `V8_IDEAS` §E3, «La Pico 2 W, aplazada». De H3 sólo queda que se vaya la red con un cliente conectado.
+>
 > **6-nov** — **H3, la WiFi: el IDE por WiFi, en la P4 y en la S3** (Eduardo: *«Hoy continuamos con la wifi»*; `V8_IDEAS` §E3). Decidido lo que quedaba, y programado y probado en las dos placas: `b0ab7416` (el enlace y la IP),
 > `061bd7ae` (dos cables a la vez y el IDE) y `4db351e7` (la S3). La placa se conecta sola a la red con `/sys/wifi.json`, y por la red se suben ficheros, se graban packs y se entra en un programa en marcha para pararlo.
 > - **La WiFi en un pack**, la pregunta de Eduardo: medido, no sale a cuenta en las ESP, y sí en la Pico 2 W, donde la radio es opcional. Por eso la radio es una tabla con nombre, `'WIFI'`. Y **el punto C no era Ethernet**: lo llamé «cable», y lo leyó como

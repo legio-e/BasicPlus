@@ -1956,6 +1956,18 @@ Eduardo: *«OK te he conectado la Pico2 con wifi y la C5. Cuando quieras miramos
 
 **No es la WiFi, ni el bus que comparten la pantalla y la SD** (las dos en el SPI 2; Eduardo: *«En la C5 la SD y la pantalla comparten el bus SPI (creo)»*): **es el turno de los hilos, contado en opcodes** (`#801`).
 
+### La Pico 2 W, aplazada (7-nov)
+
+Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP32 de momento. Ya veremos mas adelante, en otras versiones.»* No se programó nada ni se bajó ninguna librería. Lo leído antes de decidirlo, para cuando se retome:
+
+- **El esquema** (Raspberry Pi Pico 2 W, Rev 2; `files.waveshare.com/wiki/Raspberry%20Pi%20Pico%202%20W/Pico-2-w-schematic.pdf`): RP2350A, 4 MB de flash, sin PSRAM, y la CYW43439, con WiFi de 2,4 GHz y Bluetooth en el mismo chip.
+- **Cuatro pines, los que en la Pico 2 hacen otra cosa:** GPIO 23, `WL_ON` (allí, el modo de la fuente); 24, `WL_D`, los datos en los dos sentidos y el aviso de la radio (allí, detectar el USB); 25, `WL_CS` (allí, el LED); y 29, `WL_CLK` (allí, el ADC 3, `VSYS`). El LED, el modo de la fuente y la detección del USB pasan a pines de la radio: en la W, el LED sólo va con la radio encendida.
+- **Una imagen única:** propuse `radio=cyw43` en el Entorno, como `radio=c6` en la P4, con esos cuatro pines del sistema, y sin el LED del firmware.
+- **El pack:** el bus va por PIO y DMA, con una interrupción, y la BIOS de los packs no da eso, ni tareas, ni semáforos. O crece la BIOS, o el transporte se queda en la imagen.
+- **El coste:** el firmware de la radio, 225 KB (`CYW43_WIFI_FW_LEN` 224.190 y `CYW43_CLM_LEN` 984), que se manda al chip en cada encendido. Con el driver y lwIP, unos 330 KB de flash y unos 50 KB de RAM: estimado, sin medir.
+- **La licencia de `cyw43-driver`:** `LICENSE`, sólo uso no comercial; `LICENSE.RP`, usarlo y redistribuirlo con chips de Raspberry Pi, conservando su aviso. Esa cubriría un pack para la RP2350.
+- **La placa de Eduardo** lleva un firmware del 16-jul, sin packs. `cyw43-driver` y `lwip` siguen sin bajar en `pico-sdk`.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)
