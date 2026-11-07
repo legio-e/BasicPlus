@@ -333,6 +333,24 @@ un objeto declarado como interfaz (en la llamada no se sabe su ranura), las `own
 constructor, un evento ni una `native`. Y el depurador no enseña el valor de un parámetro `var`: son dos valores
 ocultos, y verlo pediría llamar al getter.
 
+### Los overlays: lo que no hacen todavía (V8/H9, cerrado el 7-nov)
+
+`Overlay` carga un programa con sus módulos, lo ejecuta y lo descarga (manual §10.7, «Overlays: un programa que carga a otro»). Para
+qué: un programa deja en memoria sólo lo que usa siempre, y lo que se usa poco —la configuración, exportar o importar
+datos— va aparte y se carga cuando hace falta, como los overlays de MS-DOS con la barrera de los 640 K (Eduardo). Lo
+que no hace todavía, con su error o en el manual, y se hará cuando el uso lo pida (*«H9 necesita rodaje, que se utilice
+y que vayan apareciendo los problemas»*):
+- un error en un hilo del programa cargado no llega a `tryExe`: el programa entero acaba con código 1 (y los hilos que
+  deje vivos son un error de `tryExe`: tiene que cerrarlos antes de salir);
+- si usó la GUI, sus widgets se quedan, y sus manejadores impiden descargarlo; los eventos en cola para sus objetos,
+  también;
+- el depurador no pone puntos de ruptura en sus módulos (las trazas sí los nombran), y sus `native` corren
+  interpretadas;
+- `load` sólo desde `Main` (no desde un manejador de la GUI), y uno a la vez: dentro del programa cargado no valen otro
+  `load` ni `Heap.compact`;
+- una global de un módulo que se queda con un literal del que se va no se detecta; y el tope de 16 módulos cuenta los
+  del lanzador y los del programa.
+
 ### Los errores de la VM con su tipo: lo que no lo lleva (V8/H7.5, 7-nov)
 
 `ArithmeticError`, `NullReferenceError`, `IndexError`, `CastError` e `IOError` (con su hija `EncodingError`), todas

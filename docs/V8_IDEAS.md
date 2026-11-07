@@ -6993,6 +6993,9 @@ porque no se mueve ningún objeto. Y los pasos:
    despachadores de la GUI y la marca por clase de los destructores. Si no, otra carga en la misma dirección
    heredaría datos del anterior.
 
+**Cerrado el 7-nov** (H9). Eduardo: *«Si, cierralo. H9 necesita rodaje, que se utilice y que vayan apareciendo los problemas. Esto es muy útil en dispositivos con poca memoria. Por ejemplo en un programa, las opciones de configuración se utilizan pocas veces. Si se descarga a una librería aparte y que se carga solamente cuando hace falta, liberamos memoria. Lo mismo pasa con una opción de exportar o importar datos. De esta forma, en el programa dejamos solamente lo esencial que se utiliza habitualmente y nos ahorramos memoria. Esto era muy habitual en MS-DOS donde estaba la barrera de los 640K.»* Lo de abajo queda como límites conocidos (`PENDIENTES`, «Los
+overlays»), para cuando el uso los pida.
+
 **Lo que se deja para después, a sabiendas:**
 
 - **Un hilo que el programa deje vivo** impide descargar: el error lo dice, pero el lanzador no puede matarlo, sólo
