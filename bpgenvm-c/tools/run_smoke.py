@@ -14,7 +14,9 @@ commit —el diff dice qué cambió—:
      la tiraba entera);
   4. un carácter UTF-8 que cae en el byte 512 (el hilo `io` trocea a 512 B sin mirar caracteres): el sink común guarda
      el byte suelto y el carácter sale ENTERO en la trama siguiente (antes, partido en dos tramas);
-  5. un KILL sin programa: NO_SESSION, como en las placas (antes, en el sim, KILL_REPLY).
+  5. un KILL sin programa: NO_SESSION, como en las placas (antes, en el sim, KILL_REPLY);
+  6. un PING con un programa en marcha: PONG, como en la VM-Java (#803: iba a la cola del depurador, y sólo se leía en
+     una pausa). Es el latido de un cliente por la red: sin respuesta, da por perdida una conexión viva.
 
 Lee el cable en BYTES (un carácter partido no es UTF-8 válido y un lector estricto lo tiraría). Necesita el compilador
 (lexer-java) y la librería de packs (packs/Stdlib.pack), como env_smoke.
@@ -122,6 +124,16 @@ USA = """module RunUsa
 end RunUsa
 """
 
+CALLADO = """module RunCallado
+  import Core
+
+  function Main()
+    sleep(1500)
+    print "despierto"
+  end Main
+end RunCallado
+"""
+
 
 def compila(dest, nombre, fuente):
     src = os.path.join(dest, nombre + ".bp")
@@ -157,7 +169,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="run_smoke_")
     print("=== run_smoke (el RUN común): lo que hace el RUN del micro simulado ===")
     mods = {}
-    for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA)):
+    for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA), ("RunCallado", CALLADO)):
         mods[nombre] = compila(tmp, nombre, fuente)
         check(mods[nombre] is not None, "compila %s" % nombre)
     if None in mods.values():
@@ -200,6 +212,25 @@ def main():
         check(not partida and any(ene + b"z" in t for t in tramas),
               "4. una ñ en el byte 512 -> ENTERA en una trama (antes: partida en dos)")
         check(todo.endswith(b"fin\n"), "y lo último, «fin»")
+
+        # 6 — el PING con un programa en marcha (#803)
+        with open(mods["RunCallado"], "rb") as f:
+            check(c.call_bulk("PUT", f.read(), path="/app/RunCallado.mod").get("type") == "PUT_REPLY", "PUT de RunCallado")
+        r = c.call("RUN", path="/app/RunCallado.mod")
+        check(r.get("type") == "RUN_REPLY", "6. el programa arranca")
+        c.id += 1
+        ping = c.id
+        c.s.sendall((json.dumps({"type": "PING", "id": ping}) + "\n").encode())
+        pong, ex = None, None
+        while ex is None:
+            m = c.linea()
+            if m.get("id") == ping:
+                pong = m
+            elif m.get("type") == "EXITED":
+                ex = m
+        check(pong is not None and pong.get("type") == "PONG",
+              "6. un PING en marcha -> PONG antes del EXITED, como en la VM-Java (dice %r)" % (pong,))
+        check(ex.get("status") == "OK", "6. y el programa acaba bien (dice %r)" % ex.get("status"))
     finally:
         try:
             sock.close()

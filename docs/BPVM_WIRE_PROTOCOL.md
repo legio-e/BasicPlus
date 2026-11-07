@@ -319,7 +319,8 @@ Reply: `{"type":"TIME_REPLY","id":N}`
 
 #### `PING` (request)
 
-Keep-alive. Útil para detectar conexiones muertas.
+Keep-alive. Útil para detectar conexiones muertas. Se contesta siempre, también con un programa en marcha o parado en
+el depurador (`#803`).
 
 Request: `{"type":"PING","id":N}`
 
@@ -630,7 +631,7 @@ arranca no se pierde: el poll se queda con él hasta que el programa para.
 
 #### Durante un RUN
 
-Mientras corre un programa, la placa atiende `HELLO` (un IDE que se conecta con algo en marcha), `KILL` y `RESET`, el
+Mientras corre un programa, la placa atiende `HELLO` (un IDE que se conecta con algo en marcha), `PING`, `KILL` y `RESET`, el
 ramo de depuración y —desde V7/H8 `#495`, paso 4— los de lectura que no monopolizan el cable: **`STAT` y el `GET` y el
 `LIST` troceados**, cuyos trozos van entre la salida del programa. Lo demás contesta `BUSY` con el mismo texto en las
 cuatro familias (*«ejecución en curso: sólo HELLO, KILL, RESET, STAT y GET/LIST troceados»*): los enteros (un `GET`
@@ -1022,9 +1023,10 @@ de timeout: `FATAL` + cierre de conexión.
 
 ### 8.6 Conexión muerta
 
-Si el cliente no oye nada en >30 s y no hay nada en vuelo, debe
-enviar `PING`. Si no llega `PONG` en 5 s, considerar conexión muerta
-y reconectar.
+Por la red, si la otra punta desaparece sin despedirse, TCP no avisa. Si el cliente no oye nada en 10 s y no hay nada
+en vuelo, envía `PING`; vale cualquier respuesta. Si en 5 s más no llega ni un byte, la conexión está muerta: la cierra y
+lo dice. El programa no se toca: puede seguir en marcha, y al volver a conectar se puede parar. Por el cable no hace
+falta: quitar el USB da un error en el acto. (`#803`.)
 
 ### 8.7 Línea a medias (V8, `#693`)
 

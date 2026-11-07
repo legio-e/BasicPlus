@@ -27,7 +27,10 @@
 
 ## Última sesión
 
-> **7-nov** — **La WiFi de la Pico 2 W, aplazada a otra versión** (Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP32 de momento. Ya veremos mas adelante, en otras versiones.»*). Se leyó su esquema y la licencia de su driver; no se programó ni se bajó nada. Lo leído, en `V8_IDEAS` §E3, «La Pico 2 W, aplazada». De H3 sólo queda que se vaya la red con un cliente conectado.
+> **7-nov** — **La WiFi de la Pico 2 W, aplazada a otra versión** (Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP32 de momento. Ya veremos mas adelante, en otras versiones.»*). Se leyó su esquema y la licencia de su driver; no se programó ni se bajó nada. Lo leído, en `V8_IDEAS` §E3, «La Pico 2 W, aplazada».
+> - **Cuando la red se va (`#803`):** sin poder apagar el router, `AirApaga` desde el IDE hizo de red caída, y el IDE se quedó colgado, con los botones en gris y sin decir nada. Arreglado con un latido en el IDE: 10 s sin oír nada, un `PING`, y 5 s más. Eduardo, en la ventana: *«OK, todo funciona»*.
+> - **Un error mío:** le dije que no hacía falta tocar el firmware, porque la placa contestaría `BUSY`. No contestaba nada: el `PING` se iba a la cola del depurador. La placa de mentira contestaba y la P4 no. La VM-Java contesta siempre, así que era una diferencia entre las VMs, y se arregló en la VM-C, con su caso en `run_smoke`. La P4 lleva esa imagen.
+> - **Para la próxima sesión:** la S3 y la C5 llevan la imagen de antes, y hay que grabarlas antes de usarlas por la red con este IDE: un programa callado más de 15 s daría «conexión perdida» sin estarlo. De H3 queda el caso contrario, un cliente que desaparece, que pide otra placa con WiFi conectada.
 >
 > **6-nov** — **H3, la WiFi: el IDE por WiFi, en la P4 y en la S3** (Eduardo: *«Hoy continuamos con la wifi»*; `V8_IDEAS` §E3). Decidido lo que quedaba, y programado y probado en las dos placas: `b0ab7416` (el enlace y la IP),
 > `061bd7ae` (dos cables a la vez y el IDE) y `4db351e7` (la S3). La placa se conecta sola a la red con `/sys/wifi.json`, y por la red se suben ficheros, se graban packs y se entra en un programa en marcha para pararlo.

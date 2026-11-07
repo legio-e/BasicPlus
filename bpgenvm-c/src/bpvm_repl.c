@@ -1410,6 +1410,7 @@ int bpvm_repl_hay_transferencia(void) {
 int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj) {
     if (type == NULL) return 0;
     if (strcmp(type, "STAT") == 0) return 1;
+    if (strcmp(type, "PING") == 0) return 1;    /* #803: el latido de un cliente por la red, como en la VM-Java */
     if (strcmp(type, "GET") == 0 || strcmp(type, "LIST") == 0) return json_get_bool(obj, "chunked", 0);
     return 0;
 }
@@ -2025,7 +2026,7 @@ static void run_latido(bpvm_t* vm) {
  *                   sin leer más —`preparar_run` borra la bandera al empezar, y un KILL que llegara entre arrancar `io`
  *                   y `bpvm_run` se perdía (V7_IDEAS: «el poll, pegajoso»)—;
  *   HELLO         → se contesta al vuelo (el IDE puede conectar con algo corriendo y ofrecer Stop);
- *   STAT, GET y LIST troceados → se atienden (#495, paso 4);
+ *   STAT, GET y LIST troceados → se atienden (#495, paso 4); y PING (#803);
  *   el depurador  → a la cola de control, de donde lo saca el lazo de pausa (un solo lector del cable, A1.7);
  *   lo demás      → BUSY. */
 static int run_poll(void* user) {

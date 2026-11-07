@@ -171,11 +171,12 @@ public abstract class AbstractBpvmBackend implements Backend {
      */
     @Override public String run(String path, String arg, Consumer<String> lineSink) throws IOException {
         require();
+        final BpvmClient c = this.client;                    // #803: close() lo pone a null desde otro hilo
         runActive = true;                                    // #256 — ver isRunActive()
         final StringBuilder lineBuf = new StringBuilder();
         final CompletableFuture<String> done = new CompletableFuture<>();
 
-        client.setOutputSink(chunk -> {
+        c.setOutputSink(chunk -> {
             if (chunk == null || chunk.isEmpty()) return;
             int last = 0;
             for (int i = 0; i < chunk.length(); i++) {
@@ -192,7 +193,7 @@ public abstract class AbstractBpvmBackend implements Backend {
             }
         });
 
-        client.setEventListener(ev -> {
+        c.setEventListener(ev -> {
             if (ev instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
                 if (lineBuf.length() > 0) {
                     String trailing = lineBuf.toString();
@@ -219,7 +220,7 @@ public abstract class AbstractBpvmBackend implements Backend {
                 // no-debug: auto-CONTINUE al primer paused. En el firmware
                 // Pico la capability DEBUG no está expuesta todavía, así
                 // que esto nunca se dispara — listener inocuo allí.
-                client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
+                c.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
             }
             // ExceptionEvent ya no se emite — el wire v1 fold runtime
             // errors dentro de EXITED.status="RUNTIME_ERROR". Si algún
@@ -231,13 +232,13 @@ public abstract class AbstractBpvmBackend implements Backend {
             /* V6/#412; V8 #694 — el RUN espera su RUN_REPLY (la placa lo manda al poner el programa en marcha): si la
              * placa lo rechaza (NOT_FOUND, BUSY…) o no contesta, se dice aquí, en vez de esperar el EXITED una hora. */
             try {
-                client.runModuleConRespuesta(path, arg, TIMEOUT_MS);
+                c.runModuleConRespuesta(path, arg, TIMEOUT_MS);
             } catch (BpvmClient.WireError we) {
                 throw new IOException("la placa rechaza el RUN: " + we.getMessage(), we);
             } catch (IOException ioe) {
                 throw new IOException("la placa no contesta al RUN: " + ioe.getMessage(), ioe);
             }
-            return done.get(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS);   // ← kill() desbloquea vía EXITED
+            return esperaElFin(c, done);                     // ← kill() desbloquea vía EXITED
         } catch (TimeoutException te) {
             throw new IOException("timeout esperando EXITED del programa");
         } catch (InterruptedException ie) {
@@ -247,8 +248,26 @@ public abstract class AbstractBpvmBackend implements Backend {
             throw new IOException("fallo en RUN", ee.getCause());
         } finally {
             runActive = false;                               // #256
-            client.setOutputSink(null);
-            client.setEventListener(null);
+            c.setOutputSink(null);
+            c.setEventListener(null);
+        }
+    }
+
+    /** V8/H3 (#803) — el EXITED, por rodajas: con la conexión perdida no va a llegar, y esperarlo una hora dejaba los
+     *  botones en gris sin decir nada. El programa no se toca: puede seguir en marcha en la placa. */
+    private static String esperaElFin(BpvmClient c, CompletableFuture<String> done)
+            throws IOException, InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
+        final long tope = System.currentTimeMillis() + RUN_TIMEOUT_MS;
+        for (;;) {
+            try {
+                return done.get(250, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException te) {
+                if (c.conexionPerdida())
+                    throw new IOException("se ha perdido la conexión: el programa puede seguir en marcha");
+                if (c.cerrado())
+                    throw new IOException("desconectado: el programa puede seguir en marcha");
+                if (System.currentTimeMillis() > tope) throw te;
+            }
         }
     }
 

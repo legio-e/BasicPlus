@@ -492,7 +492,9 @@
   <strong>Buscar en la red</strong> pregunta a toda la red qué placas hay. El IDE recuerda la
   última, y si te conectas por el cable aprende su IP. La placa escucha por los dos sitios a la
   vez y habla con el último que le ha mandado algo, así que puedes entrar por la red con un
-  programa en marcha y pararlo. El botón <strong>WiFi</strong> escribe la red y su clave en
+  programa en marcha y pararlo. Si la placa desaparece, porque se cae la red o se apaga, el IDE lo
+  dice en unos 15 s y vuelve a desconectado; un programa que estuviera corriendo puede seguir en
+  marcha en la placa. El botón <strong>WiFi</strong> escribe la red y su clave en
   <code>/sys/wifi.json</code>; para que entre, hay que reiniciar la placa. La clave queda en
   claro en la placa, y la placa acepta a cualquier ordenador de la red: úsala en una red de
   confianza.

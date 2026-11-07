@@ -1771,15 +1771,7 @@ public final class PicoExplorer extends JPanel {
 
     private void onConnect() {
         if (isConnected()) {
-            backend.close();
-            backend = null;
-            deviceArch = 0;              // H11: la arch se va con la conexión
-            deviceFlagsCrc = 0; deviceReceta = "";   // #441: y la receta
-            deviceMdnAbi = 0;                        // V7/H5: y la ABI de helpers
-            setConnectedUI(false);
-            rootNode.removeAllChildren();
-            treeModel.reload();
-            status.setText("Disconnected");
+            soltarConexion("Disconnected");
             return;
         }
         final boolean serial = rbSerial.isSelected();
@@ -1812,6 +1804,7 @@ public final class PicoExplorer extends JPanel {
             return hello;
         }, hello -> {
             this.backend = b;
+            vigilarRed(b);
             this.ultimoEndpoint = endpoint;   // V7/H10 (D7): para reconectar tras un reset
             this.ultimaFabrica = fabrica;
             sentCrc.clear();   // nueva conexión → cache de subidas limpia
@@ -1822,6 +1815,33 @@ public final class PicoExplorer extends JPanel {
             fetchDeviceArch();           // H11: la arch, ANTES de que haga falta compilar
             if (connectedSink != null) connectedSink.accept(debugClient());   // H9 escrutinio
         });
+    }
+
+    private void soltarConexion(String estado) {
+        backend.close();
+        backend = null;
+        deviceArch = 0;              // H11: la arch se va con la conexión
+        deviceFlagsCrc = 0; deviceReceta = "";   // #441: y la receta
+        deviceMdnAbi = 0;                        // V7/H5: y la ABI de helpers
+        setConnectedUI(false);
+        rootNode.removeAllChildren();
+        treeModel.reload();
+        status.setText(estado);
+    }
+
+    /** V8/H3 (#803) — una placa por la red que desaparece: que el IDE lo diga y vuelva a desconectado. */
+    private void vigilarRed(Backend b) {
+        if (!(b instanceof RedBackend)) return;
+        BpvmClient c = ((RedBackend) b).debugClient();
+        if (c != null) c.alPerderse(() -> SwingUtilities.invokeLater(() -> alPerderseLaRed(b)));
+    }
+
+    private void alPerderseLaRed(Backend b) {
+        if (this.backend != b) return;                       // ya se soltó: Disconnect, un reset
+        final boolean enRun = ((AbstractBpvmBackend) b).isRunActive();   // entonces lo dice el RUN, al acabar
+        final String aviso = "se ha perdido la conexión con la placa";
+        soltarConexion(aviso);
+        if (!enRun && outputSink != null) outputSink.accept("[Explorer] " + aviso);
     }
 
     /* #398/#408 — EL REFRESCO, CRONOMETRADO EN TRES TRAMOS.
@@ -2364,6 +2384,7 @@ public final class PicoExplorer extends JPanel {
                 try {
                     Object[] r = get();
                     backend = (Backend) r[0];
+                    vigilarRed(backend);
                     sentCrc.clear();
                     setConnectedUI(true);
                     status.setText(endpoint + " — " + r[1] + " (reiniciada)");

@@ -517,6 +517,75 @@ public final class BpvmClient implements AutoCloseable {
         try { p.close(); } catch (Throwable ignored) {}
     }
 
+    /* V8/H3 (#803) — UNA CONEXIÓN QUE SE VA SIN DESPEDIRSE. Por el cable, quitar el USB da un error en el acto; por la
+     * red, si la otra punta desaparece (se apaga su radio, se cae la red, se va la luz), TCP no avisa de nada, y el IDE se
+     * quedaba esperando el fin del programa, con los botones en gris y sin decir nada (Eduardo, 7-nov). Es lo que pide el
+     * protocolo (§8.6): tras un rato sin oír nada, y sin nada en vuelo, un PING, que las dos VMs contestan también con un
+     * programa en marcha. Cualquier respuesta vale. Si no llega ni un byte, la conexión está muerta. */
+    private static final long LATIDO_CALLADO_MS = 10_000L;
+    private static final long LATIDO_PLAZO_MS   = 5_000L;
+
+    private volatile boolean perdida = false;
+    private volatile Runnable alPerderse;
+    private final java.util.concurrent.atomic.AtomicBoolean avisada = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** La conexión se ha ido sin que nadie la cerrara desde aquí. */
+    public boolean conexionPerdida() { return perdida; }
+
+    /** Se cerró desde aquí: Disconnect, un reset. */
+    public boolean cerrado() { return closed; }
+
+    /** Quién se entera de que se ha perdido: una vez, y desde otro hilo. Si ya se perdió, en el acto. */
+    public void alPerderse(Runnable r) {
+        alPerderse = r;
+        if (perdida) avisa();
+    }
+
+    /** Empieza a vigilar la conexión: la de la red, porque por el cable no hace falta. */
+    public void vigilarConexion() { vigilarConexion(LATIDO_CALLADO_MS, LATIDO_PLAZO_MS); }
+
+    /** Con otros plazos, para LatidoSmoke. */
+    void vigilarConexion(long calladoMs, long plazoMs) {
+        Thread t = new Thread(() -> latir(calladoMs, plazoMs), "bp-vmclient-latido");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void latir(long calladoMs, long plazoMs) {
+        final long vuelta = Math.max(20L, Math.min(1000L, calladoMs / 4));
+        while (!closed && !perdida) {
+            try {
+                Thread.sleep(vuelta);
+            } catch (InterruptedException ie) {
+                return;
+            }
+            if (System.currentTimeMillis() - lastRxMillis < calladoMs) continue;
+            synchronized (pendingLock) {
+                if (!pendingRequests.isEmpty()) continue;    // lo que está en vuelo tiene su plazo
+            }
+            try {
+                pideUnaVez("PING", null, null, plazoMs);
+            } catch (WireError we) {
+                /* un ERROR también es una respuesta: ha contestado, que es lo que se preguntaba */
+            } catch (IOException e) {
+                seHaPerdido();
+                return;
+            }
+        }
+    }
+
+    private void seHaPerdido() {
+        if (closed) return;
+        perdida = true;
+        try { if (socket != null) socket.close(); } catch (IOException ignored) {}   // despierta al lector
+        avisa();
+    }
+
+    private void avisa() {
+        Runnable r = alPerderse;
+        if (r != null && avisada.compareAndSet(false, true)) r.run();
+    }
+
     /** Cierra el socket o el puerto serie, mata el subproceso (si lo hay),
      *  junta los threads. Idempotente. */
     @Override public void close() {
@@ -2056,6 +2125,7 @@ public final class BpvmClient implements AutoCloseable {
                     f.completeExceptionally(ex);
                 }
             }
+            seHaPerdido();                                   // #803: si la cerramos desde aquí, no hace nada
         }
     }
 

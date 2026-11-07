@@ -1968,6 +1968,15 @@ Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP
 - **La licencia de `cyw43-driver`:** `LICENSE`, sólo uso no comercial; `LICENSE.RP`, usarlo y redistribuirlo con chips de Raspberry Pi, conservando su aviso. Esa cubriría un pack para la RP2350.
 - **La placa de Eduardo** lleva un firmware del 16-jul, sin packs. `cyw43-driver` y `lwip` siguen sin bajar en `pico-sdk`.
 
+### Cuando la red se va (7-nov; `#803`)
+
+Lo que quedaba de H3 era que se fuera la red con un cliente conectado. Apagar la WiFi del router no se puede (Eduardo: *«nos quedamos sin conexión»*), así que se parte en dos casos:
+
+1. **La placa desaparece, y hay que ver qué hace el IDE.** Con `AirApaga` desde el IDE, que apaga la radio de golpe. El IDE se quedaba colgado: `#803`, arreglado, con un latido en el IDE y el `PING` contestado en marcha en la VM-C. Medido en la P4: lo dice a los 11 s, porque la WiFi ya ha vuelto y contesta que esa conexión no existe; con la red caída del todo, a los 15.
+2. **El cliente desaparece, y hay que ver qué hace la placa.** Es el `SO_KEEPALIVE`, que debe echarlo en unos 25 s. Sin probar: hace falta otra placa con WiFi que se conecte como cliente y se reinicie sin despedirse.
+
+Lo único sin probar en placa, ni con estos dos casos, es que desaparezca el router de verdad y la placa se reconecte sola: eso lo cubre `make test-wifi`, en el PC.
+
 ---
 
 ## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)
