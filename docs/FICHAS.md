@@ -7045,16 +7045,16 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > - **la prueba de resistencia de días** (Eduardo, 2-oct: *«la prueba de resistencia de días lo dejamos para V8, cuando
 >   lo trabajemos un poco más»*): días de carga variada con una marca periódica en el log-anillo (un RUN largo Y muchos
 >   RUN); venía de H9. (La batería de rendimiento, en cambio, se queda en V7: se mide en H12, con dos núcleos.)
-> - **la PIO del RP2350, programable desde BP** (Eduardo, 2-oct: *«Más adelante, si tenemos tiempo de V7, si no en
+> - **la PIO del RP2350, programable desde BP** **→ A V9 el 7-nov, con los streams (`#723`)**: Eduardo, *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»*. Antes (Eduardo, 2-oct: *«Más adelante, si tenemos tiempo de V7, si no en
 >   V8»*: si sobra tiempo en V7, entra antes): un módulo `RP2350` con la clase `StateMachine`, que guarda su programa y lo
 >   escribe con métodos (`sm.addJump`, `sm.addLabel`…), sin ensamblador; en el PC, como el I2C y el SPI. El planteamiento,
 >   decidido entero, en `V7_IDEAS` §H10 «la PIO del RP2350»; un prototipo dio los códigos de `pioasm` en las dos VMs.
-> - **más puertos serie en las ESP32** (Eduardo, 2-oct: *«la opción 1 para V8. El RMT para enviar se puede estudiar, el
+> - **más puertos serie en las ESP32** **→ A V9 el 7-nov, con los streams (`#723`)**. Antes (Eduardo, 2-oct: *«la opción 1 para V8. El RMT para enviar se puede estudiar, el
 >   Neopixel o equivalente salen casi directo»*): las UART que el silicio ya tiene —las tres de la P4 que el backend no
 >   da (`gpio_esp32.c`: `b <= 2`) y la UART de bajo consumo de la C5, la C6 y la P4—; y ENVIAR por el RMT, a estudiar
 >   (el `Neopixel` de la familia ya va por él desde el 26-sep, `6a53f91f`). El detalle, en `V7_IDEAS` §H10 «la PIO del
 >   RP2350» («¿Y las ESP32?»).
-> - **el DMA de `Uart`** donde la familia lo tenga (Eduardo, 2-oct, al vaciar H10: *«A V8»*): V6 dejó el anillo por
+> - **el DMA de `Uart`** donde la familia lo tenga **→ A V9 el 7-nov, con los streams (`#723`)**. Antes (Eduardo, 2-oct, al vaciar H10: *«A V8»*): V6 dejó el anillo por
 >   interrupción en todas, y basta para las velocidades de hoy; con el DMA, la CPU no atiende cada byte.
 > - **el simulador con disfraces** y **la inyección de eventos en la placa** (Eduardo, 2-oct, al vaciar H9: *«A V8»*):
 >   un `bpvm-sim --familia=pico|s3|p4|stm32` que imite lo que distingue a cada familia (el bloque de borrado, la GUI,
@@ -7147,7 +7147,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >
 > 📌 **El rumbo de los próximos días** (Eduardo, 22-oct): *«De momento estos dias podemos ir solucionando temas pendientes. Mas adelante podemos retomar el Bluetooth y la Wifi.»*
 >
-> 🧭 **El rumbo hasta el final de V8, y V9** (Eduardo, 6-nov, al cerrar el día de la WiFi): *«La wifi y el Bluetooth van muy bien encaminados, faltan cosillas pero una vez terminadas daremos los hitos por terminados. La verficación de la compatibilidad ente C# y JC también va muy bien. Cuando lleguemos a los grupos 10 u 11 lo daremos por terminado, con la pruebas que pasen como buenas. […] Después de la versión 8 vendrá una versión 9 y ahí complementaremos algunas de las cosas de la versión 8, entre ellas las pruebas de compatilidad. Lo del ahorro de energía lo pasaremos a la V9. Es demasiado complejo y depende mucho del hardware así que hay que analizarlo con detalle, ya lo haremos. Con todo esto a la V8 ya le queda poco relativamente.»* O sea: H2 y H3 se cierran al terminar lo que les falta; H8, al llegar a los temas 10 u 11 («métodos de extensión» y «arrays»), con las que pasen como buenas; y lo demás de C# y el bajo consumo (`#490`) pasan a V9. **Por decidir (Eduardo):** lo que sigue en la lista «Lo que ya es de V8», que viene de V7 y sigue sin tocar (la PIO, las UART, el DMA, el simulador, `M5`, la robustez en campo…): si se hace en V8 o pasa a V9.
+> 🧭 **El rumbo hasta el final de V8, y V9** (Eduardo, 6-nov, al cerrar el día de la WiFi): *«La wifi y el Bluetooth van muy bien encaminados, faltan cosillas pero una vez terminadas daremos los hitos por terminados. La verficación de la compatibilidad ente C# y JC también va muy bien. Cuando lleguemos a los grupos 10 u 11 lo daremos por terminado, con la pruebas que pasen como buenas. […] Después de la versión 8 vendrá una versión 9 y ahí complementaremos algunas de las cosas de la versión 8, entre ellas las pruebas de compatilidad. Lo del ahorro de energía lo pasaremos a la V9. Es demasiado complejo y depende mucho del hardware así que hay que analizarlo con detalle, ya lo haremos. Con todo esto a la V8 ya le queda poco relativamente.»* O sea: H2 y H3 se cierran al terminar lo que les falta; H8, al llegar a los temas 10 u 11 («métodos de extensión» y «arrays»), con las que pasen como buenas; y lo demás de C# y el bajo consumo (`#490`) pasan a V9. **Por decidir (Eduardo):** lo que sigue en la lista «Lo que ya es de V8», que viene de V7 y sigue sin tocar (la PIO, las UART, el DMA, el simulador, `M5`, la robustez en campo…): si se hace en V8 o pasa a V9. **Y el 7-nov, la fase final** (Eduardo): *«No hay muchos pendientes gracias a que hemos ido cerrando muchos. Cuando acabemos los pendientes y el bluetooth la v8 entra en fase final.»* Los pendientes y H2, y después documentar, las pruebas finales y publicar; H4, la C5, al final o a V9. **Y los streams y los dispositivos, a V9** (Eduardo, ese día): *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»* De la lista, los de dispositivos —la PIO, las UART de las ESP32 y el DMA de `Uart`— van con `#723`; lo demás sigue por decidir.
 >
 > 🔒 **El alcance de V8, cerrado** (Eduardo, 6-nov, tras hablar de Micro32 Suite, `#802`): *«Y con eso cerraremos V8, no añadiremos mas temas, cerramos lo que ya tenemos y cuando esté hacemos lo de siempre: terminar los pendientes, documentar, pruebas finales y publicar.»* Lo que venga nuevo, a V9.
 >
@@ -9879,7 +9879,7 @@ blob. Lo hecho, con la regla de `#711` —los bytes por un lado y el descodifica
   (las mismas entradas). **En placa, en el próximo lote**: el `SQLite.pack` nuevo en la Metro y en la P4 (con
   `SqlTexto` y `SqlDemo`) y el texto del motivo 3 en las imágenes. Hasta entonces, las placas siguen como hoy.
 
-#### 🔵 `#723` — los streams: las fuentes de bytes, y un `Reader` encima que espera el resto de un carácter (la idea de Eduardo del 22-oct), por diseñar (abierta el 23-oct, al cerrar `#711`)
+#### 🔵 `#723` — los streams: las fuentes de bytes, y un `Reader` encima que espera el resto de un carácter (la idea de Eduardo del 22-oct), por diseñar (abierta el 23-oct, al cerrar `#711` · **a V9 el 7-nov, como tema importante, con los dispositivos**)
 
 Eduardo: *«Los streams los podemos hacer siempre de bytes (creo que en Java son así). Pero luego se encapsulan en un
 Reader. […] el problema no es la lectura de los bytes, el problema es de codificación y ahí si le faltan bytes lo que
@@ -9894,6 +9894,10 @@ un `flush()`; y encima, un `Reader` o un `Writer` que recibe el stream en su con
 `TextWriter`, UTF-8, y otras codificaciones en el futuro. *«Lo que aporta los streams es separar la lectur/escritura de
 la codificación […] En esto seguimos el sistema de Java, un poco mas sencillo.»* Los detalles, por decidir (diez
 preguntas, cada una con su propuesta, en §E8).
+
+**A V9 (Eduardo, 7-nov):** *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»* Con él van los dispositivos de la lista «Lo que ya es de V8»: la PIO del
+RP2350, las UART de las ESP32 y el DMA de `Uart`; y lo que cambie en las clases de dispositivos (`File`, `Uart`,
+`Socket`…) al tener sus streams.
 
 #### ✅ `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
 

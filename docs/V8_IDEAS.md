@@ -4924,7 +4924,7 @@ reemplazando a value.»*
 - y, se haga lo que se haga, **de sólo lectura** (mi recomendación): en C# la tupla se copia; en BP es un objeto que se
   comparte, y si un elemento se pudiera cambiar, `t2 := t` y cambiar `t2` cambiaría también `t`.
 
-## E8 · Los streams: el modelo (Eduardo, 24-oct; `#723`, por decidir los detalles)
+## E8 · Los streams: el modelo (Eduardo, 24-oct; `#723`, por decidir los detalles; a V9 el 7-nov, como tema importante, con los dispositivos)
 
 Viene de la idea del 22-oct (§E5, «El stream»: los streams, siempre de bytes, y encima un Reader que espera el resto de
 un carácter). El 24-oct, Eduardo, el modelo entero:
