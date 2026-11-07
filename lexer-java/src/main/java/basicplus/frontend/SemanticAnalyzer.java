@@ -2197,10 +2197,12 @@ public final class SemanticAnalyzer {
         }
 
         // Auto-super (modelo Java): un constructor que no llama super() explícito
-        // invoca implícitamente al constructor del padre SIN argumentos. Si el
-        // constructor del padre EXIGE argumentos, la llamada debe ser explícita →
-        // error. Si el padre no tiene constructor (NEW_OBJECT ya inicializa los
-        // campos), no hay nada que llamar.
+        // invoca implícitamente al constructor del padre SIN parámetros. Si el
+        // constructor del padre TIENE parámetros, aunque tengan valor por defecto,
+        // la llamada debe ser explícita → error (#804, Eduardo, 7-nov: el constructor
+        // que se define es el oficial, y la hija que define el suyo llama a base con
+        // sus parámetros). Si el padre no tiene constructor (NEW_OBJECT ya inicializa
+        // los campos), no hay nada que llamar.
         if (fs.isConstructor && !seenSuperCallInCtor && fs.delegaA == null
                 && currentClass != null && currentClass.baseClass != null) {
             FunctionSymbol baseCtor = currentClass.baseClass.findConstructor();
@@ -2215,9 +2217,10 @@ public final class SemanticAnalyzer {
                     fs.implicitSuperCtor = sinArgs;
                     checkVisibilidadCtor(f.line, f.column, sinArgs, currentClass.baseClass);   // #515
                 } else {
-                    err(f.line, f.column, "el constructor de '" + currentClass.name
-                            + "' debe llamar a 'super(...)': el constructor de la clase base '"
-                            + currentClass.baseClass.name + "' requiere argumentos");
+                    String base = currentClass.baseClass.name;
+                    err(f.line, f.column, "el constructor de '" + currentClass.name + "' debe llamar a 'super(...)': "
+                            + (baseCtor.overloaded ? "los constructores de la clase base '" + base + "' tienen parámetros"
+                                                   : "el constructor de la clase base '" + base + "' tiene parámetros"));
                 }
             }
         }

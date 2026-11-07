@@ -2,7 +2,9 @@
 // (2) delegarse en ciclo; (3) delegar y ademas llamar a super(...) (que ya no seria la primera sentencia); (4) construir desde fuera una
 // clase con constructor private; (5) construir desde fuera una con constructor protegido (sin
 // modificador); (6) super() implicito a un constructor private del padre; (7) super(...) con argumentos a un padre sin
-// constructor (sin ellos vale, y no hace nada: #753, 1-nov).
+// constructor (sin ellos vale, y no hace nada: #753, 1-nov); (8) un constructor sin super(...) cuando el del padre tiene
+// parametros, aunque tengan valor por defecto (#804, 7-nov: el constructor que se define es el oficial, y la hija que
+// define el suyo llama a base con sus parametros; una hija SIN constructor se sigue construyendo con los del padre).
 module CtorMal
   import Core
   public class A
@@ -64,6 +66,16 @@ module CtorMal
       super(5)
     end ConArgs
   end ConArgs
+  public class ConValor
+    var n: integer
+    public function ConValor(n: integer := 2)
+      this.n := n
+    end ConValor
+  end ConValor
+  public class HijaDeConValor extends ConValor
+    public function HijaDeConValor()
+    end HijaDeConValor
+  end HijaDeConValor
   function main()
     var c: Cerrada := Cerrada()
     var f: Familiar := Familiar()

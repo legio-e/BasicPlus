@@ -1671,9 +1671,12 @@ end Perro</code></pre>
 </p>
 <ul>
   <li><strong>Nada</strong> — <code>super()</code> implícito (modelo Java): si la clase tiene base,
-      el compilador <em>inyecta</em> la llamada al constructor sin argumentos del padre. Si el
-      constructor del padre <em>exige</em> argumentos, la llamada explícita es obligatoria (error
-      de compilación si falta). Si el padre no tiene constructor, no hay nada que llamar.</li>
+      el compilador <em>inyecta</em> la llamada al constructor sin parámetros del padre. Si el
+      constructor del padre <em>tiene</em> parámetros, aunque tengan valor por defecto, la llamada
+      explícita es obligatoria (error de compilación si falta): el constructor que una clase define es
+      su constructor oficial, y la hija que define el suyo llama al del padre con sus parámetros. Una
+      hija <em>sin</em> constructor se construye con los del padre (ver «Inicializadores»). Si el padre
+      no tiene constructor, no hay nada que llamar.</li>
   <li><strong><code>super(args)</code></strong> — el padre por ese constructor; debe ser la
       primera sentencia. Hacia un padre sin constructor —<code>Object</code>, el de toda clase sin
       padre escrito, o una clase que no lo declara—, <code>super()</code> vale y no hace nada, como

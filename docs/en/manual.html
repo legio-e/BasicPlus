@@ -1317,9 +1317,12 @@ end Base</code></pre>
 </p>
 <ul>
   <li><strong>Nothing</strong> — implicit <code>super()</code> (Java model): if the class has a
-      base, the compiler <em>injects</em> the call to the parent's no-argument constructor. If the
-      parent's constructor <em>requires</em> arguments, the explicit call is mandatory (compile
-      error if missing). If the parent has no constructor, there is nothing to call.</li>
+      base, the compiler <em>injects</em> the call to the parent's parameterless constructor. If the
+      parent's constructor <em>has</em> parameters, even with default values, the explicit call is
+      mandatory (compile error if missing): the constructor a class defines is its official
+      constructor, and a child that defines its own calls the parent's with its parameters. A child
+      <em>without</em> a constructor is built with the parent's (see «Initializers»). If the parent
+      has no constructor, there is nothing to call.</li>
   <li><strong><code>super(args)</code></strong> — the parent through that constructor; it must be
       the first statement.</li>
   <li><strong><code>ClassName(args)</code></strong> — <em>delegation</em>: this same object is
