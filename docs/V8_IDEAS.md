@@ -10,7 +10,7 @@
 >
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
 > **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**
-> (E3, abajo), en análisis desde el 19-oct. **H4 = el sonido en la P4** (E4, abajo): el `.wav` suena desde el 19-oct;
+> (E3, abajo), cerrado el 7-nov. **H4 = el sonido en la P4** (E4, abajo): el `.wav` suena desde el 19-oct;
 > parado. **H5 = los strings** (E5, abajo): sus operaciones, de la más lenta a la más rápida, y las que viven en la
 > PSRAM; en análisis desde el 21-oct.
 
@@ -1976,6 +1976,16 @@ Lo que quedaba de H3 era que se fuera la red con un cliente conectado. Apagar la
 2. **El cliente desaparece, y hay que ver qué hace la placa.** Es el `SO_KEEPALIVE`. La S3 se conectó a la P4 como cliente, con `Net`, y apagó su radio sin cerrar: la P4 la dio por ida a los 25,6 s (10 + 3 × 5) y volvió a hablar por la UART. Reiniciarla no servía: a los 2 s vuelve con la misma IP y contesta que esa conexión no existe, que no es lo que se quería probar.
 
 Lo único sin probar en placa, ni con estos dos casos, es que desaparezca el router de verdad y la placa se reconecte sola: eso lo cubre `make test-wifi`, en el PC.
+
+### Cerrado (7-nov)
+
+Eduardo: *«Cierra H3»*.
+
+- **Hecho, en la P4, la S3 y la C5:** la placa se conecta sola con `/sys/wifi.json` y coge su IP, por DHCP o fija; el IDE por WiFi, con «Placa (red)», «Buscar en la red» y el botón WiFi; los dos cables a la vez; `Air.Wifi` para encender y apagar desde un programa; y `Net` para abrir sockets, con DNS.
+- **Sin WiFi:** la C3 y la C6 (sin PSRAM) y las STM32. **La Pico 2 W, aplazada** (arriba).
+- **Fuera, como estaba decidido:** el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de configuración, la placa como punto de acceso y la hora por NTP. Y la lista de redes de un programa: Eduardo, 6-nov: *«Desde un programa de momento con encender y apagar es suficiente»*.
+- **Para V9 o más adelante** (Eduardo): un módulo de radio externo, para ampliar la WiFi y el Bluetooth, y un micro STM32 con WiFi.
+- **Queda suelta `#798`**, del log, y sin probar en placa que se caiga el router de verdad.
 
 ---
 

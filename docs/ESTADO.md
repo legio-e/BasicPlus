@@ -31,7 +31,7 @@
 > - **Cuando la red se va (`#803`):** sin poder apagar el router, `AirApaga` desde el IDE hizo de red caída, y el IDE se quedó colgado, con los botones en gris y sin decir nada. Arreglado con un latido en el IDE: 10 s sin oír nada, un `PING`, y 5 s más. Eduardo, en la ventana: *«OK, todo funciona»*.
 > - **Un error mío:** le dije que no hacía falta tocar el firmware, porque la placa contestaría `BUSY`. No contestaba nada: el `PING` se iba a la cola del depurador. La placa de mentira contestaba y la P4 no. La VM-Java contesta siempre, así que era una diferencia entre las VMs, y se arregló en la VM-C, con su caso en `run_smoke`. La P4 lleva esa imagen.
 > - **El caso contrario:** la S3 se conectó a la P4 como cliente y apagó su radio sin cerrar, y la P4 la dio por ida a los 25,6 s. La S3 y la C5 ya llevan la imagen nueva, y sus packs aguantan.
-> - **Para la próxima sesión:** de H3 sólo queda sin probar en placa que se caiga el router de verdad.
+> - **H3, cerrado** (Eduardo: *«Cierra H3»*). La radio de la Pico 2 W se ignora de momento también para el Bluetooth, y un módulo de radio externo y un STM32 con WiFi quedan para V9 o más adelante: *«de momento nos quedamos con lo que tenemos»*.
 >
 > **6-nov** — **H3, la WiFi: el IDE por WiFi, en la P4 y en la S3** (Eduardo: *«Hoy continuamos con la wifi»*; `V8_IDEAS` §E3). Decidido lo que quedaba, y programado y probado en las dos placas: `b0ab7416` (el enlace y la IP),
 > `061bd7ae` (dos cables a la vez y el IDE) y `4db351e7` (la S3). La placa se conecta sola a la red con `/sys/wifi.json`, y por la red se suben ficheros, se graban packs y se entra en un programa en marcha para pararlo.
