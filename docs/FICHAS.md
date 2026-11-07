@@ -7663,7 +7663,7 @@ programas de hoy, en `C:\tmp\ide694`, fuera del repo. La prueba nueva tiene que 
   colectas y 58 KB libres, y `OvCargaFalla` pasa. `mem: malloc en uso 226984 B | MAXIMO 235152 B de 304784`: el mapa son los
   193 KB que decía la cuenta, y sobran 68 KB. La P4 y la Nucleo, igual que antes.
 
-#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **decidida la A el 4-nov, con la clase `Overlay`; es el hito H9**, y su estado va en «🧩 H9»: `V8_IDEAS` §E13)
+#### ✅ `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **decidida la A el 4-nov, con la clase `Overlay`; es el hito H9**, y su estado va en «🧩 H9»: `V8_IDEAS` §E13 · **CERRADA el 7-nov, con H9**)
 
 - **La idea** (Eduardo, 4-nov): *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos
   pasar como argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque
@@ -7689,6 +7689,8 @@ programas de hoy, en `C:\tmp\ide694`, fuera del repo. La prueba nueva tiene que 
   todos, y lo que se mueve es el heap (compactar, apartar los objetos hasta arriba, cargar, devolverlos). Así, ni el
   cargador ni las cadenas cambian. `tryExe` está escrito en BP con un `try … catch`, y `HALT` vuelve si a `__startup` lo
   llamaron. Los literales de un overlay, en el heap (`LEA_STR`), idea de Eduardo.
+- **Cerrada el 7-nov, con H9** (Eduardo: *«Si, cierralo. H9 necesita rodaje, que se utilice y que vayan apareciendo los
+  problemas»*): lo que no hace todavía, en `PENDIENTES`, «Los overlays». (Se me pasó al cerrar H9; lo corrijo el mismo día.)
 
 #### ✅ `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730` · **CERRADA el 4-nov**, `571bf24a`, medida en la Nucleo; la DK2, compilada, se graba en el próximo lote)
 
