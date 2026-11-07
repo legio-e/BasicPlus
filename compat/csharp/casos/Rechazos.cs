@@ -22,7 +22,7 @@ class Programa
 {
     static T Primero<T>() { return default(T); }      // fuera: lo que pide saber T al ejecutar
 
-    static void Doble(ref int x) { x *= 2; }          // le falta a JC: ref / out
+    static void Doble(ref int x) { x *= 2; }          // ya se traduce (H7.4): un parámetro var
 
     static int Main()
     {
@@ -49,7 +49,7 @@ class Programa
 
 class ConLlamada
 {
-    static void ConParams(int a = 0, params int[] resto) { }   // el traductor todavía no: JC, uno sin valor tras uno con él
+    static void ConParams(int a = 0, params int[] resto) { }   // ya se traduce (H8, tema 4): los valores, en la llamada
 
     static ConLlamada() { Console.WriteLine("hola"); }  // le falta a JC: un constructor estático que hace algo (Estaticos)
 }

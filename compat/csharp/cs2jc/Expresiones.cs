@@ -140,13 +140,15 @@ namespace Cs2Jc
         }
 
         /// `{ 1, 2 }`: `[1, 2]`. Un array de valores de JC toma el tipo de sus valores: uno que no sea del tipo del array,
-        /// si es un número, con su conversión (`(long) 1`); si no (una clase hija, cosas mezcladas), JC no lo escribe.
+        /// si es un número, con su conversión (`(long) 1`); si no (una clase hija, cosas mezcladas, sólo nulls), una función
+        /// que lo crea con su tipo (H8, tema 4; Argumentos.cs).
         string ValoresDeArray(IEnumerable<ExpressionSyntax> valores, IArrayTypeSymbol at, SyntaxNode donde)
         {
             string tipo = Tipo(at, donde);
             if (tipo == Hueco) return Hueco;
             var partes = new List<string>();
             var lista = valores.ToList();
+            bool deVarios = false;
             foreach (var x in lista)
             {
                 var tx = m.GetTypeInfo(x).Type;
@@ -154,11 +156,11 @@ namespace Cs2Jc
                 else if (tx == null && !at.ElementType.IsValueType && !EsCadena(at.ElementType)) partes.Add(Expr(x));   // null
                 else if (EsNullable(at.ElementType)) partes.Add(Expr(x));            // un T?: null, o el valor en su caja
                 else if (EsNumerico(tx) && EsNumerico(at.ElementType)) partes.Add("(" + Tipo(at.ElementType, x) + ") " + Atomo(x));
-                else return Rechaza(donde, Porque.H7(Porque.ArrayDeVarios));
+                else { partes.Add(Expr(x)); deVarios = true; }      // con la conversión de C# a su casilla (una caja, o nada)
             }
             // un null vale si otro valor le da al array su tipo: `[null]` solo, en JC, no tiene ninguno
-            if (partes.Count > 0 && partes.All(x => x == "null")) return Rechaza(donde, Porque.H7(Porque.ArrayDeVarios));
-            return "[" + string.Join(", ", partes) + "]";
+            if (partes.Count > 0 && partes.All(x => x == "null")) deVarios = true;
+            return deVarios ? ArrayDeVarios(at, partes, donde) : "[" + string.Join(", ", partes) + "]";
         }
 
         /// El tipo que ve JC: el de C#, salvo tras una conversión hacia arriba, que se quita (Conversion): el de dentro.
@@ -601,33 +603,60 @@ namespace Cs2Jc
             }
         }
 
-        string Argumentos(BaseArgumentListSyntax args, IMethodSymbol ms)
+        /// Los argumentos de una llamada a `ms`. Los que se salta, si el método los quiere en la llamada, escritos (H8, tema 4;
+        /// Argumentos.cs); `donde`, para una llamada sin lista (`new T { … }`).
+        string Argumentos(BaseArgumentListSyntax args, IMethodSymbol ms, SyntaxNode donde = null)
         {
-            if (args == null) return "";
+            if (args == null) return donde != null ? string.Join(", ", Faltan(ms, 0, donde)) : "";
             if (args.Arguments.Any(EsRefOut))                     // H7.4: a un var, la caja (`x::v`) u otro var (Cajas.cs)
             {
                 if (ms == null || args.Arguments.Any(a => a.NameColon != null) || Expandido(ms, args))
                     return Rechaza(args, Porque.Pendiente("ref u out con argumentos con nombre o con params"));
                 var declarados = ms.OriginalDefinition.Parameters;
                 return string.Join(", ", args.Arguments.Select((a, i) => EsRefOut(a) ? ArgumentoRef(a)
-                                       : EntraEnGenerico(a.Expression, i < declarados.Length ? declarados[i].Type : null)));
+                                       : EntraEnGenerico(a.Expression, i < declarados.Length ? declarados[i].Type : null))
+                                       .Concat(Faltan(ms, args.Arguments.Count, args)));
             }
             if (args.Arguments.Any(a => a.NameColon != null)) return ConNombre(args, ms);
             if (Expandido(ms, args))
             {
-                // `f(1, 2, 3)` con `params int[]`: el array, escrito, `f([1, 2, 3])` (C# lo crea igual, en orden)
+                // `f(1, 2, 3)` con `params int[]`: el array, escrito, `f([1, 2, 3])` (C# lo crea igual, en orden); los fijos que
+                // se salta, con sus valores (tema 4)
                 int fijos = ms.Parameters.Length - 1;
-                if (args.Arguments.Count < fijos) return Rechaza(args, Porque.Pendiente("params sin todos los fijos"));
-                var partes = args.Arguments.Take(fijos).Select(a => Expr(a.Expression)).ToList();
+                if (args.Arguments.Count < fijos && !DefectoEnLaLlamada(ms)) return Rechaza(args, Porque.Pendiente("params sin todos los fijos"));
+                bool sobrecargado = Sobrecargado(ms);
+                var partes = args.Arguments.Take(fijos)
+                    .Select((a, i) => sobrecargado && VaASinSigno(ms.Parameters[i]) ? ArgumentoDe(a.Expression, ms.Parameters[i]) : Expr(a.Expression)).ToList();
+                for (int i = partes.Count; i < fijos; i++) partes.Add(ValorEnLaLlamada(ms.Parameters[i], ms, args));
                 partes.Add(ValoresDeArray(args.Arguments.Skip(fijos).Select(a => a.Expression).ToList(),
                                           (IArrayTypeSymbol) ms.Parameters.Last().Type, args));
                 return string.Join(", ", partes);
             }
-            return ArgumentosEnGenerico(args.Arguments, ms.OriginalDefinition.Parameters);
+            string dados = ArgumentosEnPosicion(args.Arguments, ms);
+            var faltan = Faltan(ms, args.Arguments.Count, args);
+            return faltan.Count == 0 ? dados : string.Join(", ", (args.Arguments.Count > 0 ? new[] { dados } : new string[0]).Concat(faltan));
         }
 
-        /// `f(b: 2, a: 1)`: en el orden de los parámetros, `f(1, 2)`. C# los calcula en el orden escrito: si cambia, sólo
-        /// cuando ninguno calcula nada (la segunda regla de fondo). Uno que se salta, en medio, con su valor por defecto.
+        /// Los argumentos por su posición. A un uint o un ulong de un método con sobrecargas, un número con su conversión
+        /// escrita (como #783 con los nombres): en JC los dos son un long, y JC elige por los tipos de lo que se le pasa; sin
+        /// ella, `Arg (0, 0)` con `Arg (uint a, long b)` y `Arg (int a, ulong b, int c = 9)` iría a la segunda, que en JC es
+        /// `(int, long, int)` (gtest-optional-36).
+        string ArgumentosEnPosicion(SeparatedSyntaxList<ArgumentSyntax> args, IMethodSymbol ms)
+        {
+            var declarados = ms.OriginalDefinition.Parameters;
+            bool sobrecargado = Sobrecargado(ms);
+            return string.Join(", ", args.Select((a, i) =>
+                sobrecargado && i < ms.Parameters.Length && VaASinSigno(ms.Parameters[i]) ? ArgumentoDe(a.Expression, ms.Parameters[i])
+                : EntraEnGenerico(a.Expression, i < declarados.Length ? declarados[i].Type : null)));
+        }
+
+        /// ¿Es un parámetro uint o ulong, que JC escribe como un long (SinSigno.cs)?
+        static bool VaASinSigno(IParameterSymbol p) => !p.IsParams && (EsUInt(p.Type) || EsULong(p.Type));
+
+        /// `f(b: 2, a: 1)`: en el orden de los parámetros, `f(1, 2)`. C# los calcula en el orden escrito: si cambia y alguno
+        /// calcula algo, lo que calcula, a temporales delante de la sentencia, en el orden de C# (la segunda regla de fondo;
+        /// tema 4, Argumentos.cs). Uno que se salta, en medio, con su valor por defecto; si el método los quiere en la
+        /// llamada, todos.
         string ConNombre(BaseArgumentListSyntax args, IMethodSymbol ms)
         {
             if (ms == null) return Rechaza(args, Porque.Pendiente("argumentos con nombre sin resolver"));
@@ -642,12 +671,22 @@ namespace Cs2Jc
                 porParametro[p] = a.Expression;
             }
             var escritos = args.Arguments.Select(a => a.Expression).ToList();
+            Dictionary<ExpressionSyntax, string> sacados = null;
             if (!escritos.SequenceEqual(porParametro.Where(x => x != null)) && !escritos.All(EsSimple))
-                return Rechaza(args, Porque.Pendiente("argumentos con nombre que cambian el orden de lo que se calcula"));
-            int ultimo = Array.FindLastIndex(porParametro, x => x != null);
+            {
+                sacados = EnSuOrden(args, ms, porParametro);
+                if (sacados == null) return Rechaza(args, Porque.Pendiente("argumentos con nombre que cambian el orden de lo que se calcula"));
+            }
+            bool conValores = DefectoEnLaLlamada(ms);
+            int ultimo = conValores ? porParametro.Length - 1 : Array.FindLastIndex(porParametro, x => x != null);
             var partes = new List<string>();
             for (int p = 0; p <= ultimo; p++)
-                partes.Add(porParametro[p] != null ? ArgumentoDe(porParametro[p], ms.Parameters[p]) : ConstanteDe(ms.Parameters[p], args));
+            {
+                var e = porParametro[p];
+                if (e != null) partes.Add(sacados != null && sacados.TryGetValue(e, out var t) ? t : ArgumentoDe(e, ms.Parameters[p]));
+                else if (conValores) partes.Add(ms.Parameters[p].IsParams ? "[]" : ValorEnLaLlamada(ms.Parameters[p], ms, args));
+                else partes.Add(ConstanteDe(ms.Parameters[p], args));
+            }
             return string.Join(", ", partes);
         }
 
@@ -735,7 +774,7 @@ namespace Cs2Jc
             if (oc.Initializer != null && !sinInicializador) return NuevoConInicializador(oc, tipo);
             if (!DelPrograma(tipo)) return BibliotecaNuevo(oc, ctor, tipo);
             CompruebaAcceso(ctor, oc);
-            return "new " + Tipo(tipo, oc.Type) + "(" + Argumentos(oc.ArgumentList, ctor) + ")";
+            return "new " + Tipo(tipo, oc.Type) + "(" + Argumentos(oc.ArgumentList, ctor, oc) + ")";
         }
 
         string Binaria(BinaryExpressionSyntax b)
@@ -929,11 +968,11 @@ namespace Cs2Jc
                 // `(string) null` (#774: una variable string de JC puede valer null), `(object) null`, `(X[]) null`: null,
                 // que en JC no se convierte (ni hace falta)
                 // como argumento de un método con sobrecargas, el tipo del null elige cuál (`Foo((X[]) null)`): JC no lo
-                // escribe, y sin él la llamada es ambigua
+                // escribe, y una función que devuelve un X, sí (H8, tema 4; Argumentos.cs)
                 if (c.Parent is ArgumentSyntax arg && arg.Parent?.Parent is ExpressionSyntax llamada
                     && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol ms
                     && ms.ContainingType.GetMembers(ms.Name).OfType<IMethodSymbol>().Count(x => x.Parameters.Length == ms.Parameters.Length) > 1)
-                    return Rechaza(c, Porque.H7(Porque.NullConTipo));
+                    return NullDe(a, c);
                 if (!a.IsValueType) return "null";
             }
             if (EsNullable(a) || EsNullable(de)) return ConversionEscritaNullable(c, de, a);      // un T? (Nullables.cs)

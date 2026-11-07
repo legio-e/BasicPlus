@@ -171,6 +171,7 @@ namespace Cs2Jc
             if (usaTipoDe) EmiteTipoDe();
             EmiteNombresDeEnums();
             EmiteCajas();                        // H7.4 (Cajas.cs)
+            EmiteFuncionesDeLlamadas();          // H8, tema 4: los null con su tipo y los arrays de varios (Argumentos.cs)
 
             if (t.Rechazos.Count == 0)
             {
@@ -329,6 +330,7 @@ namespace Cs2Jc
             // .NET. Las de la librería tienen el suyo sin argumentos, y lo llama el implícito de JC.
             if (MensajeSinArgumentos(b, s) is string porDefecto && s.InstanceConstructors.All(c => c.IsImplicitlyDeclared))
                 Linea("public function " + NombreTipo(s) + "() : base(" + Cadena(porDefecto) + ") { }");
+            else ImplicitoConValores(s);         // H8, tema 4: la base, con sus valores escritos (Argumentos.cs; #804)
             // un struct siempre se puede crear sin argumentos; una clase de JC con un constructor, no: se escribe
             if (s.TypeKind == TypeKind.Struct && s.InstanceConstructors.Any(c => !c.IsImplicitlyDeclared)
                 && s.InstanceConstructors.Any(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0))
@@ -739,6 +741,8 @@ namespace Cs2Jc
             }
             else if (MensajeSinArgumentos(b, claseActual) is string porDefecto)
                 cabecera += " : base(" + Cadena(porDefecto) + ")";
+            else if (BaseConValores(c) is IMethodSymbol baseConValores)         // H8, tema 4 (Argumentos.cs; #804)
+                cabecera += " : base(" + string.Join(", ", ValoresDesde(baseConValores, 0, c)) + ")";
             Linea(cabecera);
             Cuerpo(c.Body, c.ExpressionBody, true);
         }
@@ -920,15 +924,20 @@ namespace Cs2Jc
                     Rechaza(p, Porque.Pendiente("ref u out en un constructor (JC no lleva var en un constructor)"));
                 else if (EsRefOut(ps) && ps.ContainingSymbol is IMethodSymbol mr && SoloDifiereEnRef(mr))
                     Rechaza(p, Porque.Pendiente("dos métodos que sólo difieren en ref u out (JC no los distingue)"));
-                // `int c = 0, params int[] oo` (gtest-optional-36): en JC, uno sin valor no va tras uno con él
-                if (ps.IsParams && pl.Parameters.Any(q => q.Default != null))
+                // H8, tema 4: los valores que JC no admite aquí (null, un enum, un T? con valor), y los de un método con un
+                // params detrás de uno, se escriben en cada llamada, como hace C# (Argumentos.cs); aquí, ninguno
+                bool enLaLlamada = DefectoEnLaLlamada(ps.ContainingSymbol as IMethodSymbol);
+                // `int c = 0, params int[] oo` (gtest-optional-36) en un indexador: en JC, uno sin valor no va tras uno con él
+                if (ps.IsParams && pl.Parameters.Any(q => q != p && q.Default != null) && !enLaLlamada)
                     Rechaza(p, Porque.Pendiente("un params detrás de un valor por defecto"));
                 // de un método partial, el valor por defecto es el de su declaración sin cuerpo: la que lo define en C#
                 var definicion = (ps.ContainingSymbol as IMethodSymbol)?.PartialDefinitionPart;
                 var conValor = definicion != null ? definicion.Parameters[ps.Ordinal] : ps;
                 var pValor = conValor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax ?? p;
                 partes.Add((EsRefOut(ps) ? "var " : "") + Tipo(ps.Type, p.Type) + " " + Ident(ps.Name)
-                           + (pValor.Default != null ? " = " + ValorPorDefecto(conValor, pValor) : ""));
+                           // el de un params (una sobrescritura que lo hereda: `int[] args = null`, gtest-optional-32), no: C#
+                           // no lo usa, la llamada va con su array
+                           + (pValor.Default != null && !enLaLlamada && !ps.IsParams ? " = " + ValorPorDefecto(conValor, pValor) : ""));
             }
             return string.Join(", ", partes);
         }
@@ -1044,43 +1053,15 @@ namespace Cs2Jc
         string ValorPorDefecto(IParameterSymbol ps, ParameterSyntax p) => ConstanteDe(ps, p.Default);
 
         /// El valor por defecto de un parámetro, como literal: el de su declaración, o el de uno que se salta una llamada
-        /// con argumentos con nombre.
+        /// con argumentos con nombre. Los que no son un literal (null, un enum, un T? con valor) se escriben en cada llamada
+        /// (H8, tema 4; Argumentos.cs): aquí sólo llegan los de un método de la biblioteca.
         string ConstanteDe(IParameterSymbol ps, SyntaxNode donde)
         {
             if (!ps.HasExplicitDefaultValue) return Rechaza(donde, Porque.Pendiente("un valor por defecto sin valor"));
             string porTipo = PorTipo(ps.Type);
             if (porTipo != null) return Rechaza(donde, porTipo);
-            var v = ps.ExplicitDefaultValue;
-            if (v is ulong grande) v = unchecked((long) grande);       // un ulong, sus 64 bits (SinSigno.cs)
-            // un T? con valor (`int? x = 5`): en JC, un objeto, y JC sólo admite un literal (null, como siempre: H7)
-            if (EsNullable(ps.Type) && v != null) return Rechaza(donde, Porque.Pendiente("un valor por defecto de un T? (en JC, un objeto)"));
-            // un enum (`Dia d = Dia.Martes`): JC sólo admite un literal, y un miembro de un enum no lo es
-            if (EsEnum(ps.Type)) return Rechaza(donde, Porque.H7(Porque.EnumPorDefecto));
-            var ci = System.Globalization.CultureInfo.InvariantCulture;
-            switch (v)
-            {
-                case null: return Rechaza(donde, Porque.H7(Porque.NullPorDefecto));   // también un string (#774: JC pide un literal)
-                case bool b: return b ? "true" : "false";
-                case string s: return Cadena(s);
-                case char ch: return ((int) ch).ToString(ci);           // un char, su código: en JC es un entero
-                case int i: return i == int.MinValue ? "(-2147483647 - 1)" : i.ToString(ci);
-                case long l: return l == long.MinValue ? "(-9223372036854775807L - 1L)" : l.ToString(ci) + "L";
-                case uint u: return u.ToString(ci) + "L";                    // un uint es un long (SinSigno.cs)
-                case short _: case sbyte _: case byte _: case ushort _: return System.Convert.ToString(v, ci);
-                case double d:
-                {
-                    if (double.IsNaN(d) || double.IsInfinity(d)) break;
-                    string r = d.ToString("R", ci);
-                    return r.Contains('.') || r.Contains('E') ? r : r + ".0";
-                }
-                case float f:
-                {
-                    if (float.IsNaN(f) || float.IsInfinity(f)) break;
-                    string r = f.ToString("R", ci);
-                    return (r.Contains('.') || r.Contains('E') ? r : r + ".0") + "f";
-                }
-            }
-            return Rechaza(donde, Porque.Pendiente("un valor por defecto " + v));
+            return LiteralDeDefecto(ps)
+                   ?? Rechaza(donde, Porque.Pendiente("un valor por defecto que no es un literal (" + (ps.ExplicitDefaultValue ?? "null") + "), de la biblioteca"));
         }
 
         string NombreMetodo(IMethodSymbol s) => EsToString(s) ? "toString" : NombreDe(s);

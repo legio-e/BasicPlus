@@ -47,7 +47,7 @@ class Programa
         return 0;
     }
 
-    static int Tono(Tonos t = Tonos.Alto) { return 0; }       // le falta a JC: un enum como valor por defecto
+    static int Tono(Tonos t = Tonos.Alto) { return 0; }       // ya se traduce (H8, tema 4): el valor, en la llamada
     static string Nombre() { return null; }
     static string Une(string a, string b) { return a + b; }
 }

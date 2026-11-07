@@ -1,0 +1,256 @@
+module CsLlamadas
+{
+   import CsSystem;
+
+   enum Color
+   {
+      Rojo = 0,
+      Verde = 1,
+      Azul = 2
+   }
+
+   enum Talla
+   {
+      Chica = 0,
+      Media = 1,
+      Grande = 2
+   }
+
+   class Animal
+   {
+      public function string Nombre()
+      {
+         return "animal";
+      }
+   }
+
+   class Perro : Animal
+   {
+      @override{}
+      public function string Nombre()
+      {
+         return "perro";
+      }
+   }
+
+   class Gato : Animal
+   {
+      @override{}
+      public function string Nombre()
+      {
+         return "gato";
+      }
+   }
+
+   class Base
+   {
+      public int Tono { get; set; }
+      public function Base(int c = 2)
+      {
+         this.Tono = c;
+      }
+   }
+
+   class Hija : Base
+   {
+      public function Hija() : base(2)
+      {
+      }
+   }
+
+   class Nieta : Base
+   {
+      public function Nieta() : base(2) { }
+   }
+
+   class Llamadas
+   {
+      private static string traza = "";
+      private static function int Anota(int n)
+      {
+         Llamadas.traza += n;
+         return n;
+      }
+      private static function string Pinta(int c, string s, Integer n)
+      {
+         return Cs_Nombre_Color(c) + ":" + (s == null ? "null" : s) + ":" + (n == null ? "null" : CsSystem.Nullable_ToString(n));
+      }
+      private static function bool EsMedia(Talla t)
+      {
+         return t == Talla.Media;
+      }
+      private static function int Junta(int a, int[] resto)
+      {
+         int s = a;
+         foreach (var x in resto)
+         {
+            s += x;
+         }
+         return s;
+      }
+      private static function string Elige(string s)
+      {
+         return "string";
+      }
+      private static function string Elige(Animal a)
+      {
+         return "animal";
+      }
+      private static function string ConVacio(string[] s, string valor)
+      {
+         return "uno";
+      }
+      private static function string ConVacio(string s, string[] resto)
+      {
+         return "dos";
+      }
+      private static function int Cuenta(Object[] xs)
+      {
+         return len(xs);
+      }
+      private static function int Tres(int a, int b, int c)
+      {
+         return a * 100 + b * 10 + c;
+      }
+      public static function int Main()
+      {
+         if (Llamadas.Pinta(1, null, new Integer(5)) != "Verde:null:5")
+         {
+            return 1;
+         }
+         if (Llamadas.Pinta(((int) Color.Rojo), null, new Integer(5)) != "Rojo:null:5")
+         {
+            return 2;
+         }
+         if (Llamadas.Pinta(1, "x", new Integer(5)) != "Verde:x:5")
+         {
+            return 3;
+         }
+         if (Llamadas.Pinta(1, null, null) != "Verde:null:null")
+         {
+            return 4;
+         }
+         if (Llamadas.Junta(1, []) != 1 || Llamadas.Junta(2, []) != 2 || Llamadas.Junta(2, [3, 4]) != 9)
+         {
+            return 5;
+         }
+         if (!Llamadas.EsMedia(Talla.Media) || Llamadas.EsMedia(Talla.Grande))
+         {
+            return 15;
+         }
+         if (new Hija().Tono != ((int) Color.Azul) || new Nieta().Tono != ((int) Color.Azul) || new Base(((int) Color.Rojo)).Tono != ((int) Color.Rojo))
+         {
+            return 6;
+         }
+         if (Llamadas.ConVacio(null, CsNull_string()) != "uno")
+         {
+            return 7;
+         }
+         if (Llamadas.Elige(CsNull_string()) != "string" || Llamadas.Elige(CsNull_Animal()) != "animal")
+         {
+            return 8;
+         }
+         Animal[] zoo = CsArray_Animal_3(new Perro(), new Gato(), new Animal());
+         if (len(zoo) != 3 || zoo[0].Nombre() != "perro" || zoo[1].Nombre() != "gato" || zoo[2].Nombre() != "animal")
+         {
+            return 9;
+         }
+         if (Llamadas.Cuenta(CsArray_Object_3(new Integer(8), "a", new Double(2.5))) != 3 || Llamadas.Cuenta([]) != 0)
+         {
+            return 10;
+         }
+         string[] nulos = CsArray_string_2(null, null);
+         if (len(nulos) != 2 || nulos[1] != null)
+         {
+            return 11;
+         }
+         Llamadas.traza = "";
+         int valor_s1 = Llamadas.Anota(1);
+         int valor_s2 = Llamadas.Anota(2);
+         int valor_s3 = Llamadas.Anota(3);
+         if (Llamadas.Tres(valor_s2, valor_s3, valor_s1) != 231 || Llamadas.traza != "123")
+         {
+            return 12;
+         }
+         Llamadas.traza = "";
+         int valor_s4 = Llamadas.Anota(4);
+         int valor_s5 = Llamadas.Anota(5);
+         int r = Llamadas.Tres(valor_s5, valor_s4, 7);
+         if (r != 547 || Llamadas.traza != "45")
+         {
+            return 13;
+         }
+         int vueltas = 0;
+         Llamadas.traza = "";
+         while (true)
+         {
+            int valor_s6 = Llamadas.Anota(vueltas);
+            int valor_s7 = Llamadas.Anota(9);
+            if (!(Llamadas.Tres(0, valor_s7, valor_s6) < 93))
+            {
+               break;
+            }
+            vueltas++;
+         }
+         if (vueltas != 3 || Llamadas.traza != "09192939")
+         {
+            return 14;
+         }
+         println("ok");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Llamadas.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+
+   public function string Cs_Nombre_Color(int v)
+   {
+      if (v == 0) return "Rojo";
+      if (v == 1) return "Verde";
+      if (v == 2) return "Azul";
+      return "" + v;
+   }
+
+   public function Animal CsNull_Animal()
+   {
+      return null;
+   }
+
+   public function string CsNull_string()
+   {
+      return null;
+   }
+
+   public function Animal[] CsArray_Animal_3(Animal v0, Animal v1, Animal v2)
+   {
+      Animal[] r = new Animal[3];
+      r[0] = v0;
+      r[1] = v1;
+      r[2] = v2;
+      return r;
+   }
+
+   public function Object[] CsArray_Object_3(Object v0, Object v1, Object v2)
+   {
+      Object[] r = new Object[3];
+      r[0] = v0;
+      r[1] = v1;
+      r[2] = v2;
+      return r;
+   }
+
+   public function string[] CsArray_string_2(string v0, string v1)
+   {
+      string[] r = new string[2];
+      r[0] = v0;
+      r[1] = v1;
+      return r;
+   }
+}

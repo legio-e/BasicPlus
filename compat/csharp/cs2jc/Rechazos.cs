@@ -92,9 +92,6 @@ namespace Cs2Jc
         public const string ConstanteEstrecha = "una constante que cabe, en un argumento o un return estrecho (como en una asignación)";
         public const string Guiones = "los _ de un número, como en C# (varios seguidos, o en el exponente)";
         public const string EnumNegativo = "un enum con valores negativos (o que no caben en un int)";
-        public const string EnumPorDefecto = "un enum como valor por defecto de un parámetro (JC sólo admite un literal)";
-        public const string NullPorDefecto = "null como valor por defecto de un parámetro (JC sólo admite un literal)";
-        public const string NullConTipo = "un null con su tipo, (X) null, para elegir una sobrecarga";
         public const string IgualdadRefs = "== y != entre referencias de dos tipos distintos (una clase y su hija, Object)";
         public const string ArrayDeVarios = "un array de valores de otro tipo que el suyo (una clase hija, o mezclados)";
         public const string ArrayConTamano = "crear con su tamaño un array de arrays o de structs (new A[n]: sus casillas nacen a null)";
