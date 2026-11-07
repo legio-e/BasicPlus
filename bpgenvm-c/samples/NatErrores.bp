@@ -4,6 +4,8 @@
 // los helpers de la VM (un long por cero, un índice fuera, un array o una cadena null, charAt) lleva su clase al límite.
 // `make test-aoterrores` corre este .mod con el AOT y sin él, exige la misma salida, completa y sin FALLO, y cuenta las
 // natives traducidas (una que se cayera correría interpretada). Y en el corpus de paridad: interpretado, miVM == VM-C.
+// Y (#806) el throw de una excepción null en una native: el NullReferenceError del throw del intérprete, que atrapa el
+// que llama o un try de la propia native.
 module NatErrores
   import Core
 
@@ -60,11 +62,31 @@ module NatErrores
     endtry
   end divideConTry
 
+  // #806: el throw de una excepción null, en una native
+  native function lanzaNula(e: Exception, x: integer): integer
+    if x > 0 then
+      throw e
+    endif
+    return x
+  end lanzaNula
+
+  // y lo mismo, atrapado por un try de la propia native
+  native function lanzaNulaConTry(e: Exception): integer
+    try
+      throw e
+    catch x1: IndexError
+      return -2
+    catch x2: NullReferenceError
+      return -1
+    endtry
+  end lanzaNulaConTry
+
   // la clase con que se atrapa lo que lanza cada native: la primera de la lista que le toca
   function clase(caso: integer): string
     var cero: integer := 0
     var nulo: integer[] := null
     var s: string := null
+    var nulaE: Exception := null
     try
       if caso == 1 then
         print divide(10, cero)
@@ -82,9 +104,11 @@ module NatErrores
         print largo(s)
       elseif caso == 8 then
         print letra("abc", 7)
-      else
+      elseif caso == 9 then
         var c: Caja := Caja(1)
         print c.delOtro(null)
+      else
+        print lanzaNula(nulaE, 1)
       endif
       return "nada"
     catch e: CastError
@@ -128,5 +152,8 @@ module NatErrores
     r := clase(9)
     mira(r == "NullReferenceError: referencia nula: llamada a un método de un objeto null", "un método privado de null: " + r)
     mira(divideConTry(1, 0) == -1, "un try en la native: lo atrapa ArithmeticError, no IndexError")
+    r := clase(10)
+    mira(r == "NullReferenceError: referencia nula: throw de un objeto null", "un throw de un null: " + r)
+    mira(lanzaNulaConTry(null) == -1, "un throw de un null con un try en la native: lo atrapa NullReferenceError")
   end Main
 end NatErrores

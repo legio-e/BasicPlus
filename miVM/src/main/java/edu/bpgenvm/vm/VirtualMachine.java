@@ -4813,6 +4813,11 @@ public class VirtualMachine {
                 }
                 case 0x5D: { // THROW
                     sp -= 8; long vFull = readI64(mem, sp); int v = (int) vFull;   // V4 #7: handle 64b COMPLETO (preserva gen); v = palabra baja (idx|TAG) para clase/mensaje
+                    // V8 #806 (Eduardo, 7-nov: «throw no llega, se empieza a ejecutar pero no acaba […] al ser un valor null lo
+                    // que se produce una excepción por null reference», y salta «precisamente dentro de la rutina que ejecuta el
+                    // opCode throw») — un null no se lanza: el THROW falla aquí, como un campo de un objeto null. Antes no lo
+                    // atrapaba nadie (ni el `finally` corría), y en una native salía un RuntimeError vacío.
+                    requireReceptor(tc, sp, vFull, "referencia nula: throw de un objeto null");
                     // Sync: classPtrOfRefOr0 puede leer this.memory; nuestro mem es el mismo.
                     int thrownClass = classPtrOfRefOr0(v);
                     boolean handled = false;

@@ -7385,12 +7385,26 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#806` — `throw` de una excepción null no se atrapa, ni con un `catch` sin tipo (abierta el 7-nov; salió en H7.5)
+#### ✅ `#806` — `throw` de una excepción null no se atrapa, ni con un `catch` sin tipo (abierta el 7-nov; salió en H7.5 · **CERRADA el 7-nov**, el commit de `#806`)
 
 - **Lo que pasa:** con `var e: Exception := null`, `throw e` para el programa en las dos VMs, «throw de un objeto que no es una excepción», sin pasar por ningún `catch`. Igual en las dos.
 - **En Java y en C#**, `throw null` lanza un `NullPointerException` / `NullReferenceException`, que se atrapa. Con H7.5 lo natural sería un `NullReferenceError` («referencia nula: throw de un null»).
 - **En el traductor**, `throw null` se rechaza con su motivo.
-- **Sin arreglar: por decidir (Eduardo).**
+- **Medido el 7-nov:** ni el `catch` ni el `finally`: el programa se paraba. Y en una `native`, otra cosa: un
+  `RuntimeError` con el mensaje vacío, que sí se atrapaba. `docs/OPCODES.md` ya decía un RuntimeError «throw null», que
+  no se cumplía. (`throw null` escrito es un error de compilación, «solo se puede lanzar una instancia de Exception»
+  (`#248`), y se queda: el traductor lo sigue rechazando.)
+- **La decisión (Eduardo, 7-nov):** *«"que el throw de una referencia null lance un NullReferenceError" es correcto. ¿Por que? por que throw no llega se empieza a ejecutar pero no acaba, si acabase produciría el error, pero al ser un valor null lo que se produce una excepción por null reference. Aquí te está diciendo además donde debe saltar la excepción null reference y es precisamente dentro de la rutina que ejecuta el opCode throw»*.
+- **Lo hecho:** el `THROW` de las dos VMs (el 0x5D de miVM, con `requireReceptor`; el `OP_THROW` de la VM-C, con
+  `BPVM_RT_THROW_TEXTO_DE`) y el `throw` de una `native` (`h_throw_ref`, por `bpvm_aot_throw_tipo`) lanzan un
+  `NullReferenceError` «referencia nula: throw de un objeto null», como un campo de un objeto null. Se atrapa con la
+  suya, con `RuntimeError`, con `Exception`, sin tipo y sin nombre, y el `finally` corre; un hilo que no la atrapa lo
+  dice («excepcion no atrapada en un hilo…»), igual en las dos VMs. Los `.mdn` de los packs no cambian: el helper es de
+  la VM.
+- **Lo prueban:** cinco casos en `ErroresConTipo` (27 bien, las dos VMs iguales) y dos en `NatErrores`
+  (`test-aoterrores`: 12/12, el AOT igual que interpretado, 11 natives); el del hilo, a mano en las dos VMs (en el
+  corpus, un hilo sin atrapar deja el programa en error). `OPCODES.md`, el manual en las dos lenguas y `PENDIENTES`, al
+  día. La red: VERDE —la paridad, 205; MOD8, 197 y los 8 SKIP de siempre; dos workers, 205; la cápsula, 59; las pruebas de C, 112/112; norma 9/9, sim 14/14, sombra 15/15; el estrés, packs-abi y la stdlib embebida, bien— y `check-jc`, 203 y los 2 SKIP de siempre.
 
 #### 🔵 `#805` — las dos VMs difieren en tres caminos de error (abierta el 7-nov; salió en el inventario de H7.5)
 

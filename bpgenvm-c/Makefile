@@ -1354,26 +1354,27 @@ test-aotprivado: $(LIBOBJ)
 # V8/H7.5 (7-nov) — los errores de la VM con su tipo, dentro de una native: lo que lanza el C del AOT (una división de 32
 # bits por cero, una conversión estrecha, el `this` null de un método privado) va por el builtin 308 con su tipo, por
 # call_builtin (sin tocar la ABI: Eduardo, «1) a»); lo que lanzan los helpers de la VM lleva su clase al límite; y un
-# try dentro de la native mira la clase. Con el AOT y sin él: la misma clase y el mismo texto.
+# try dentro de la native mira la clase. Con el AOT y sin él: la misma clase y el mismo texto. Y (#806) el throw de una
+# excepción null, un NullReferenceError, fuera y en un try de la native.
 test-aoterrores: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,NatErrores)
 	$(call stdlibdep,Core)
 	$(call aotmain,NatErrores,build/aoterrores)
 	@n=$$(grep -c "bpvm_aot_register_by_name" build/aoterrores/aot_NatErrores.c); \
-	 if [ "$$n" -ne 9 ]; then cat build/aoterrores/aot.log; echo "  ROJO: el AOT tradujo $$n de las 9 natives de NatErrores"; exit 1; fi
+	 if [ "$$n" -ne 11 ]; then cat build/aoterrores/aot.log; echo "  ROJO: el AOT tradujo $$n de las 11 natives de NatErrores"; exit 1; fi
 	@n=$$(grep -c "aot_NatErrores_lanza(vm, " build/aoterrores/aot_NatErrores.c); \
 	 if [ "$$n" -lt 4 ]; then echo "  ROJO: el C del AOT lanza con su tipo en $$n sitios (al menos 4: las dos divisiones, la estrecha y el receptor)"; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aoterrores.c build/aoterrores/aot_NatErrores.c $(LIBOBJ) \
 	  -o build/test_aoterrores.exe $(LDFLAGS)
-	@echo "--- H7.5 los errores con su tipo en una native (esperado: AOT == interpretado, 10/10, sin FALLO) ---"
+	@echo "--- H7.5 los errores con su tipo en una native (esperado: AOT == interpretado, 12/12, sin FALLO) ---"
 	@./build/test_aoterrores.exe samples/NatErrores.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.aot; \
 	 ./build/test_aoterrores.exe samples/NatErrores.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.int; \
 	 n=$$(grep -c '^ok ' build/aoterrores.aot); \
 	 if grep -q '^FALLO' build/aoterrores.aot build/aoterrores.int; then grep -h '^FALLO' build/aoterrores.aot build/aoterrores.int; echo "  ROJO: FALLO"; exit 1; fi; \
 	 if ! cmp -s build/aoterrores.int build/aoterrores.aot; then diff build/aoterrores.int build/aoterrores.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
-	 if [ "$$n" -ne 10 ]; then cat build/aoterrores.aot; echo "  ROJO: $$n de 10 comprobaciones"; exit 1; fi; \
-	 echo "[status=OK] 10/10 con el AOT, igual que interpretado"
+	 if [ "$$n" -ne 12 ]; then cat build/aoterrores.aot; echo "  ROJO: $$n de 12 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 12/12 con el AOT, igual que interpretado"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

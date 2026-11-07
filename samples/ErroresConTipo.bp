@@ -1,7 +1,8 @@
 // ErroresConTipo.bp — V8/H7.5 (7-nov): los errores de la VM con su tipo, como en Java (Eduardo: «los runtime error se
 // puede poner una excepción dentro como excepción específica»). Cada uno se provoca y se mira con qué clase se atrapa:
 // la suya, aunque antes vaya otra que no le toca; RuntimeError, su padre, también; y el mensaje, el de siempre. Se
-// comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh. Las dos VMs, la misma salida.
+// comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh. Las dos VMs, la misma salida. Y (#806) el
+// throw de una excepción null: un NullReferenceError del propio throw, que se atrapa como los demás.
 module ErroresConTipo
 
   import Core
@@ -201,6 +202,52 @@ module ErroresConTipo
     endtry
   end codificacion
 
+  // #806 (Eduardo: el throw «se empieza a ejecutar pero no acaba») — el throw de una excepción null es un
+  // NullReferenceError del propio throw: con la suya, aunque antes vaya otra que no le toca; con RuntimeError, con
+  // Exception, sin tipo y sin nombre; y el finally corre
+  function lanzaNula(caso: integer): string
+    var e: Exception := null
+    try
+      if caso == 1 then
+        throw e
+      elseif caso == 2 then
+        try
+          throw e
+        catch a: RuntimeError
+          return "RuntimeError: " + a.msg
+        endtry
+      elseif caso == 3 then
+        try
+          throw e
+        catch b: Exception
+          return "Exception: " + b.msg
+        endtry
+      elseif caso == 4 then
+        try
+          throw e
+        catch c
+          return "sin tipo: " + c.msg
+        endtry
+      else
+        var pasos: string := ""
+        try
+          try
+            throw e
+          finally
+            pasos := "finally"
+          endtry
+        catch
+          return pasos + ", y atrapada sin nombre"
+        endtry
+      endif
+      return "nada"
+    catch x1: IndexError
+      return "IndexError: " + x1.msg
+    catch x2: NullReferenceError
+      return "NullReferenceError: " + x2.msg
+    endtry
+  end lanzaNula
+
   function Main()
     var r: string := aritmetica(1)
     mira(r == "ArithmeticError: División por cero", "división por cero: " + r)
@@ -251,6 +298,17 @@ module ErroresConTipo
     mira(r == "RuntimeError: División por cero", "RuntimeError las atrapa: " + r)
     r := codificacion()
     mira(r == "EncodingError: fromBytes: UTF-8 mal formado en el byte 0 (0xFF)", "EncodingError, la suya: " + r)
+
+    r := lanzaNula(1)
+    mira(r == "NullReferenceError: referencia nula: throw de un objeto null", "un throw de un null: " + r)
+    r := lanzaNula(2)
+    mira(r == "RuntimeError: referencia nula: throw de un objeto null", "un throw de un null, con RuntimeError: " + r)
+    r := lanzaNula(3)
+    mira(r == "Exception: referencia nula: throw de un objeto null", "un throw de un null, con Exception: " + r)
+    r := lanzaNula(4)
+    mira(r == "sin tipo: referencia nula: throw de un objeto null", "un throw de un null, sin tipo: " + r)
+    r := lanzaNula(5)
+    mira(r == "finally, y atrapada sin nombre", "un throw de un null, con su finally: " + r)
 
     print "fallos: " + fallos
   end Main

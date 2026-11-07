@@ -196,6 +196,7 @@
 
     <li class="group"><a href="#funciones">8. Funciones</a></li>
     <li class="sub"><a href="#defaults">8.1 Parámetros con valor por defecto</a></li>
+    <li class="sub"><a href="#var">8.1b Parámetros var</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuplas (retorno múltiple)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 Funciones native (AOT)</a></li>
     <li class="sub"><a href="#inline">8.3b Funciones intrínsecas: <code>inline</code></a></li>
@@ -436,7 +437,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   —un fichero, una línea, un paquete de la red, un <code>byte[]</code>— se <em>descodifica</em> al convertirlo en
   texto: <code>fromBytes(b)</code>, <code>readFile(ruta)</code>, <code>TextFile.readLine()</code> y
   <code>readStr(n)</code>, <code>Net.Tcp.recvStr(…)</code>. Si los bytes no son UTF-8 válido (un fichero en Latin-1,
-  por ejemplo), lanzan <code>EncodingError</code>, hija de <code>RuntimeError</code>, con el sitio. Con un último
+  por ejemplo), lanzan <code>EncodingError</code>, hija de <code>IOError</code> (y así de <code>RuntimeError</code>),
+  con el sitio. Con un último
   argumento <code>true</code> (<code>ignorarError</code>), en vez de la excepción, cada trozo malo pasa a «�»
   (U+FFFD), como dice el estándar de Unicode:
 </p>
@@ -930,7 +932,10 @@ gpio.pin[<span class="num">3</span>] := <span class="kw">true</span>        <spa
       alfabético por punto de código (el de los bytes de UTF-8: <code>"Z" &lt; "a"</code>, <code>"ab" &lt; "abc"</code>,
       <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Con una variable <code>string</code> a <code>null</code>,
       <code>==</code> sólo es igual a otra <code>null</code>, y el orden lanza «referencia nula»
-      (<a href="#string-null">§ la variable null</a>)</td></tr>
+      (<a href="#string-null">§ la variable null</a>). Entre dos objetos, <code>==</code> y <code>!=</code> dicen si
+      son <strong>el mismo objeto</strong>; valen con dos del mismo tipo, con una interfaz, con <code>null</code> y con una
+      clase y una antecesora suya (<code>Object</code> incluido), como en Java. Dos clases sin parentesco, no: nunca
+      serían el mismo objeto</td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -= *= /= mod= &amp;= |= xor= shl= shr=</code> (los compuestos, abajo)</td></tr>
   <tr><td>Ternario</td><td><code>iif(condición, a, b)</code>: el valor de <code>a</code> si la condición se cumple, y si
@@ -1216,6 +1221,36 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       coste en la VM) y viaja en la interfaz: funciona igual al
       llamar funciones de otra librería.</li>
 </ul>
+
+<h3 id="var">8.1b Parámetros <code>var</code></h3>
+<pre><code><span class="kw">function</span> <span class="fn">suma</span>(<span class="kw">var</span> n: <span class="type">integer</span>, m: <span class="type">integer</span>)
+  n += m                          <span class="comment">// lee y escribe la property que le pasaron</span>
+<span class="kw">end</span> suma
+
+<span class="kw">var</span> c: Contador := Contador()
+suma(c::valor, <span class="num">5</span>)              <span class="comment">// c.valor sube 5</span></code></pre>
+<p>
+  Un parámetro <code>var</code> no recibe un valor, sino una <strong>property de un objeto</strong>, que se pasa
+  con <code>objeto::property</code>: leer el parámetro es leer la property (su getter), y asignarle es escribirla
+  (su setter). Es el <code>ref</code> de C#, pero sólo con properties: no hay referencias a variables, que en
+  esta VM no existen. En JC: <code>void suma(var int n, int m)</code> y la misma llamada.
+</p>
+<ul>
+  <li>Se le pasa <code>objeto::property</code>, u otro parámetro <code>var</code> por su nombre, que se pasa tal
+      cual. Una variable, un campo, una casilla o <code>objeto.property</code> (su valor) dan error al compilar.</li>
+  <li>La property, del <strong>mismo tipo</strong> que el parámetro, cualquiera, y que quien llama pueda leer y
+      escribir. Con una cadena o un objeto, cambia a cuál apunta la property, no el texto ni el objeto.</li>
+  <li>El objeto se calcula una vez, al llamar. Dentro, cada lectura llama al getter y cada asignación al setter;
+      <code>n += m</code>, uno de cada.</li>
+  <li>Sin valor por defecto, y sin sobrecargas que difieran sólo en <code>var</code>. No en un constructor, un
+      evento ni una <code>native</code>.</li>
+  <li>De momento no: las properties de un módulo y las estáticas (no tienen objeto), un objeto declarado como
+      interfaz, una property <code>owner</code> y MOD8.</li>
+</ul>
+<p>
+  Por dentro viajan dos valores: el objeto y un <code>long</code> con las ranuras del getter y del setter, como
+  guarda un evento su receptor y su método. Sin objetos nuevos ni cambios en la VM.
+</p>
 
 <h3 id="tuplas">8.2 Tuplas (retorno múltiple)</h3>
 <pre><code><span class="comment">// Una función puede devolver VARIOS valores: tipo tupla (T1, T2, ...)</span>
@@ -1636,9 +1671,12 @@ end Perro</code></pre>
 </p>
 <ul>
   <li><strong>Nada</strong> — <code>super()</code> implícito (modelo Java): si la clase tiene base,
-      el compilador <em>inyecta</em> la llamada al constructor sin argumentos del padre. Si el
-      constructor del padre <em>exige</em> argumentos, la llamada explícita es obligatoria (error
-      de compilación si falta). Si el padre no tiene constructor, no hay nada que llamar.</li>
+      el compilador <em>inyecta</em> la llamada al constructor sin parámetros del padre. Si el
+      constructor del padre <em>tiene</em> parámetros, aunque tengan valor por defecto, la llamada
+      explícita es obligatoria (error de compilación si falta): el constructor que una clase define es
+      su constructor oficial, y la hija que define el suyo llama al del padre con sus parámetros. Una
+      hija <em>sin</em> constructor se construye con los del padre (ver «Inicializadores»). Si el padre
+      no tiene constructor, no hay nada que llamar.</li>
   <li><strong><code>super(args)</code></strong> — el padre por ese constructor; debe ser la
       primera sentencia. Hacia un padre sin constructor —<code>Object</code>, el de toda clase sin
       padre escrito, o una clase que no lo declara—, <code>super()</code> vale y no hace nada, como
@@ -2413,14 +2451,34 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
       <code>Exception</code> (hereda <code>msg</code>; añade los campos que
       quieras). <code>throw</code> y el <code>catch</code> tipado exigen clases
       que desciendan de <code>Exception</code>.</li>
-  <li>Los errores nativos de la VM (división por cero, referencia nula,
-      índice fuera de rango, fallos en funciones <code>native</code>...) se
-      lanzan como <code>RuntimeError</code> y se cazan igual, da igual el módulo
-      donde ocurran.</li>
+  <li><strong>Los errores de la VM llevan su tipo</strong> (V8, como en Java). Todos son hijos de
+      <code>RuntimeError</code>: <code>catch e: RuntimeError</code> los sigue atrapando todos, da igual el módulo
+      donde ocurran, y el mensaje es el de siempre. Con un <code>catch</code> de su clase delante, se tratan aparte:
+      <ul>
+        <li><code>ArithmeticError</code>: una división o un módulo enteros por cero, una potencia entera con
+            exponente negativo, un número que no cabe en su tipo (<code>byte(300)</code>,
+            <code>factorial(13)</code>).</li>
+        <li><code>NullReferenceError</code>: usar <code>null</code> —un campo o un método de un objeto
+            <code>null</code>, una cadena <code>null</code> donde se pide una, un elemento de un array
+            <code>null</code>, un <code>throw</code> de una excepción <code>null</code>— y usar un objeto que
+            ya se ha eliminado. El <code>throw</code> de un <code>null</code> empieza y no acaba: el error lo
+            lanza el propio <code>throw</code>, y se atrapa como cualquier otro.</li>
+        <li><code>IndexError</code>: un índice fuera de un array, de una cadena (<code>charAt</code>…) o de una
+            <code>List</code>.</li>
+        <li><code>CastError</code>: <code>Caja(x)</code> cuando <code>x</code> no es una <code>Caja</code>.</li>
+        <li><code>IOError</code>: los ficheros (abrir, leer, escribir, borrar, renombrar…).</li>
+      </ul>
+      Lo demás —los pines y los buses, la red, el heap lleno, la pila desbordada— sigue siendo
+      <code>RuntimeError</code>. Lo mismo dentro de una función <code>native</code>.
+<pre><code><span class="kw">try</span>
+  media := total / n
+<span class="kw">catch</span> e: ArithmeticError
+  <span class="kw">print</span> <span class="str">"sin datos: "</span> + e.msg     <span class="comment">// sin datos: División por cero</span>
+<span class="kw">endtry</span></code></pre></li>
   <li>El texto de fuera que no es UTF-8 válido (<code>fromBytes</code>, <code>readFile</code>,
-      <code>readLine</code>…) lanza <code>EncodingError</code>, hija de <code>RuntimeError</code> (V8,
-      <a href="#utf8">§4.1</a>): quien ya atrapa <code>RuntimeError</code> la atrapa también, y
-      <code>catch e: EncodingError</code> delante la trata aparte.</li>
+      <code>readLine</code>…) lanza <code>EncodingError</code>, hija de <code>IOError</code> (V8,
+      <a href="#utf8">§4.1</a>), como en Java: quien atrapa <code>IOError</code> o <code>RuntimeError</code> la
+      atrapa también, y <code>catch e: EncodingError</code> delante la trata aparte.</li>
   <li><strong>Quedarse sin memoria también se atrapa.</strong> Si una
       reserva no cabe en el heap, la VM lanza un <code>RuntimeError</code>
       con el mensaje <code>No space in heap</code> en vez de morir: un
@@ -2439,7 +2497,7 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
       el IDE lo recoge en su consola (<code>help error</code> lista los códigos); pero las dos
       VMs no lo dan igual. La VM-C —la de las placas— nombra la clase de la excepción y su
       mensaje, la lance el programa o la propia VM
-      (<code>excepcion no atrapada: Core.RuntimeError: División por cero</code>,
+      (<code>excepcion no atrapada: Core.ArithmeticError: División por cero</code>,
       <code>… MiMod.MiError: …</code>). La VM Java, con un <code>throw</code> del programa, también
       nombra la clase (<code>Excepción no atrapada: MiMod.MiError: …</code>) y añade un stack
       trace con el nombre simbólico y la línea de cada frame; pero con un error de la propia VM

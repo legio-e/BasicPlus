@@ -360,8 +360,8 @@ y que vayan apareciendo los problemas»*):
 hijas de `RuntimeError` (manual §11). Siguen siendo un `RuntimeError` a secas, a propósito: los pines y los buses, la
 red, el heap lleno y la pila desbordada (en Java, `Error`, que no conviene atrapar), `parseInt` de algo que no es un
 número, un array de tamaño negativo, y un `path demasiado largo` de `pathAbsolute` (no toca ficheros). Con un `Core`
-de antes (una placa sin la imagen de V8/H7.5), todo sale como `RuntimeError`, con el mismo mensaje. Y `throw` de una
-excepción `null` no se atrapa, ni con un `catch` sin tipo (`#806`, por decidir).
+de antes (una placa sin la imagen de V8/H7.5), todo sale como `RuntimeError`, con el mismo mensaje. (El `throw` de una
+excepción `null`, que no se atrapaba, es desde el 7-nov un `NullReferenceError` del propio `throw`: `#806`.)
 
 ## ⏭️ Para V8 — lo que conviene saber al programar hoy
 

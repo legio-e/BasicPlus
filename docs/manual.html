@@ -2460,7 +2460,9 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
             <code>factorial(13)</code>).</li>
         <li><code>NullReferenceError</code>: usar <code>null</code> —un campo o un método de un objeto
             <code>null</code>, una cadena <code>null</code> donde se pide una, un elemento de un array
-            <code>null</code>— y usar un objeto que ya se ha eliminado.</li>
+            <code>null</code>, un <code>throw</code> de una excepción <code>null</code>— y usar un objeto que
+            ya se ha eliminado. El <code>throw</code> de un <code>null</code> empieza y no acaba: el error lo
+            lanza el propio <code>throw</code>, y se atrapa como cualquier otro.</li>
         <li><code>IndexError</code>: un índice fuera de un array, de una cadena (<code>charAt</code>…) o de una
             <code>List</code>.</li>
         <li><code>CastError</code>: <code>Caja(x)</code> cuando <code>x</code> no es una <code>Caja</code>.</li>

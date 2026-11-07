@@ -291,7 +291,9 @@ static void h_throw_str(bpvm_t* vm, uint32_t msg_ref) {
  * Mismo viaje que h_throw_runtime pero sin mensaje: el boundary lee
  * pending_ref y lo propaga por el eh_stack. NO retorna. */
 static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
-    (void) vm;
+    /* V8 #806 — el `throw` de una native con un null: lo mismo que el THROW del intérprete, un NullReferenceError aquí
+     * dentro (bpvm_aot_throw_tipo: el `try` de la native, si lo hay, o el límite). Antes, un RuntimeError vacío. */
+    if (exc_ref == 0) bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: throw de un objeto null");
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     if (f->armed) {
         aterriza_en_la_native(vm, f, exc_ref);   /* V7 #578: el `try` de la native, si lo hay (no vuelve) */

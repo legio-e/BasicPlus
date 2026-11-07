@@ -2009,8 +2009,10 @@ in <code>samples/overlay</code>.</p>
             exponent, a number that does not fit in its type (<code>byte(300)</code>,
             <code>factorial(13)</code>).</li>
         <li><code>NullReferenceError</code>: using <code>null</code> —a field or a method of a <code>null</code>
-            object, a <code>null</code> string where one is needed, an element of a <code>null</code> array— and
-            using an object that has already been deleted.</li>
+            object, a <code>null</code> string where one is needed, an element of a <code>null</code> array, a
+            <code>throw</code> of a <code>null</code> exception— and using an object that has already been
+            deleted. A <code>throw</code> of <code>null</code> starts and doesn't finish: the error comes from the
+            <code>throw</code> itself, and it is caught like any other.</li>
         <li><code>IndexError</code>: an index outside an array, a string (<code>charAt</code>…) or a
             <code>List</code>.</li>
         <li><code>CastError</code>: <code>Caja(x)</code> when <code>x</code> is not a <code>Caja</code>.</li>

@@ -2485,6 +2485,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_THROW: {
             sp -= 8; bpref_t ref; ref.v = (uint64_t) bpvm_read_i64_be(mem + sp);   /* V4: excepción ref = handle 64b completo (gen) */
+            /* V8 #806 (Eduardo, 7-nov: el throw «se empieza a ejecutar pero no acaba», y la excepción por la referencia
+             * nula salta «dentro de la rutina que ejecuta el opCode throw») — un null no se lanza: el THROW falla aquí, como
+             * un campo de un objeto null. El espejo, el 0x5D de miVM; y en una native, h_throw_ref. */
+            if (bpref_is_null(ref)) BPVM_RT_THROW_TEXTO_DE(BPVM_CLASE_NULA, "referencia nula: throw de un objeto null");
             tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;
             int caught = bpvm_eh_unwind(vm, tc, ref);
             if (!caught) {
