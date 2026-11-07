@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **303** (0–302). Cada builtin tiene:
+id—. Hoy son **309** (0–308). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -342,7 +342,7 @@ handler, el thread termina con el error.
 Uso interno: el `compareTo` por defecto de `Object` lo llama para señalar
 "compareTo() no implementado" sin que cada módulo dependa del descriptor local
 de RuntimeError (que #248 retira en favor de la clase única `Core.RuntimeError`).
-Cualquier código BP puede llamarlo también.
+Cualquier código BP puede llamarlo también. El de un error con su tipo, el 308.
 
 - VM-Java: `case THROW_RTE` → `throwBpRuntimeError(tc, msg)`.
 - VM-C: `case BUILTIN_THROW_RTE` → `builtin_throw(vm, tc, msg)`.
@@ -681,6 +681,25 @@ de paridad: el stdout, byte a byte).
 La WiFi, para el módulo `Air` (V8/H3, 6-nov). Lo común está en la HAL BP (`bpvm_wifi.c` y `bpvm_red.c`), con la radio como tabla `'WIFI'`; esperar a tener IP lo hace el módulo, en BP y con `sleep`, para no parar
 los demás hilos. En el PC, `wifi_host.c` y, en la VM-Java, un solo estado: encenderla es conectarse. Sin WiFi o sin fichero, `turnOn` lanza el motivo de la placa. El fin de RUN la deja como diga la configuración, si el programa la ha tocado.
 La prueba: `bpgenvm-c/samples/AirWifi.bp`.
+
+## 308 — `__throwError(tipo: integer, msg: string)` → no retorna  *(V8, H7.5, 7-nov)*
+
+Lo mismo que el 128, con su **tipo**: el número de la tabla de los errores de la VM, la misma en las dos VMs
+(`claseDeError` en miVM, `bpvm_clase_de_error` en la VM-C):
+
+| tipo | clase de Core |
+|---|---|
+| 0 | `RuntimeError` (y cualquier número que no esté) |
+| 1 | `ArithmeticError` |
+| 2 | `NullReferenceError` |
+| 3 | `IndexError` |
+| 4 | `CastError` |
+| 5 | `IOError` |
+
+Todas hijas de `RuntimeError`; con un `Core` de antes, sin ellas, `RuntimeError`. Lo usan el compilador (el `this` null
+de un método privado, `#752`) y la stdlib (`List`, con su `IndexError`); y una `native`, desde el C que escribe el AOT
+(una división de 32 bits por cero, una conversión estrecha, el `this` null), por `call_builtin`: sin tocar la ABI del
+`.mdn`. Con una VM anterior, «builtin 308 no soportado», un `RuntimeError`, y sólo en el camino del error.
 
 Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
 condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.

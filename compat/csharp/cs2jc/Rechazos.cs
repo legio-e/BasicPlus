@@ -58,9 +58,8 @@ namespace Cs2Jc
             if (Empieza("Microsoft.CSharp.RuntimeBinder", "System.Dynamic")) return Fuera(Dynamic);
             if (Empieza("System.Linq")) return Fuera(Linq);
             if (Empieza("System.Collections.IEnumerable", "System.Collections.IEnumerator")) return H7(ForeachPropio);
-            if (Empieza("System.NullReferenceException", "System.IndexOutOfRangeException", "System.DivideByZeroException",
-                        "System.InvalidCastException", "System.OverflowException", "System.ArithmeticException",
-                        "System.StackOverflowException", "System.OutOfMemoryException", "System.ArrayTypeMismatchException"))
+            // las demás que lanza la VM tienen su clase desde H7.5 (ExcepcionJc); éstas, en BP, son un RuntimeError
+            if (Empieza("System.StackOverflowException", "System.OutOfMemoryException", "System.ArrayTypeMismatchException"))
                 return H7(ErroresVm);
             return Biblioteca(nombre);
         }

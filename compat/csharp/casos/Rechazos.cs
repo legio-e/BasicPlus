@@ -38,7 +38,7 @@ class Programa
         {
             s = null;                                 // ya se traduce (#774): un string puede valer null
         }
-        catch (NullReferenceException)                // le falta a JC: errores de la VM con su tipo
+        catch (NullReferenceException)                // ya se traduce (H7.5): NullReferenceError
         {
         }
         goto fin;                                     // ya se traduce (H8): caso Saltos

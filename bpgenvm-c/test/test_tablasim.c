@@ -9,8 +9,11 @@
  *
  * Aquí, Json.mod (con Collections, Str y Core: unos 7,5 KB de nombres) con un `malloc` de mentira para link.c:
  *   1. sin límites: la línea base —los símbolos, los bytes de nombres, los trozos y lo que pide link.c al cargar—;
- *   2. TROCEADA: ningún bloque de más de 3 000 B, menos que los nombres juntos (bpvm_alloc_prueba_tope): carga y enlaza
- *      IGUAL —lo que en la C6 no cabía—;
+ *   2. TROCEADA: ningún bloque de más de la mitad de los nombres, y nunca menos de 3 000 B (bpvm_alloc_prueba_tope):
+ *      carga y enlaza IGUAL —lo que en la C6 no cabía—. V8/H7.5 (7-nov): eran 3 000 B fijos; el registro de las clases
+ *      del enlace tardío, que pide un bloque, son unos 88 B por clase en el PC (64 en una placa), y con las cinco clases
+ *      de los errores de la VM, 36 clases en estos cuatro módulos, pasó de 3 000. El tope tiene que seguir por debajo de
+ *      los nombres juntos (sin los trozos, la 2 falla) y por encima de eso, que también crece con la stdlib;
  *   3. sin un solo hueco de 2 KB (tope 1 500): no cabe ningún trozo; la carga sigue, y el enlace, que los necesita, falla
  *      y dice la causa —«la tabla de simbolos se quedo sin memoria: N sin registrar»—, no «version vieja?»;
  *   4. se ACABA al cargar: lo que la línea base pidió al cargar, menos lo justo para que algo no entre
@@ -20,7 +23,7 @@
  *      array de registros, crece menos (×1,5, ×1,25, lo justo) y caben todos —con el Json.mod de #725, de 256 a 384
  *      en vez de 512—.
  * Los límites salen de la línea base, no de números escritos aquí: la stdlib crece. Sin los trozos, la 2 falla (pide
- * un bloque de más de 3 000 B); sin la causa, la 3; si la carga fallara (como en fd03af31), la 3 y la 4.
+ * un bloque con todos los nombres); sin la causa, la 3; si la carga fallara (como en fd03af31), la 3 y la 4.
  *
  *   make test-tablasim
  */
@@ -87,11 +90,12 @@ int main(int argc, char** argv) {
           && b.trozos >= justos && b.trozos <= justos + 1, m);
     if (b.carga != BPVM_OK || b.corre != BPVM_OK) { printf("[status=FAIL: %d]\n", g_fail); return 1; }   /* sin base */
 
-    resultado_t r = prueba(mod, 3000, -1);
-    snprintf(m, sizeof m, "2, troceada (ningun bloque de mas de 3000 B; los nombres son %u): carga y enlaza (%s / %s), "
+    size_t troceada = (b.nombres / 2u > 3000u) ? b.nombres / 2u : 3000u;   /* H7.5: de la línea base */
+    resultado_t r = prueba(mod, troceada, -1);
+    snprintf(m, sizeof m, "2, troceada (ningun bloque de mas de %u B; los nombres son %u): carga y enlaza (%s / %s), "
              "%d simbolos y %u B de nombres, %d sin registrar (esperado: los de la linea base, 0)%s%s",
-             b.nombres, bpvm_status_str(r.carga), bpvm_status_str(r.corre), r.simbolos, r.nombres, r.perdidos,
-             r.error[0] ? "; dice: " : "", r.error);
+             (unsigned) troceada, b.nombres, bpvm_status_str(r.carga), bpvm_status_str(r.corre), r.simbolos, r.nombres,
+             r.perdidos, r.error[0] ? "; dice: " : "", r.error);
     CHECK(r.carga == BPVM_OK && r.corre == BPVM_OK && r.simbolos == b.simbolos && r.nombres == b.nombres
           && r.perdidos == 0, m);
 

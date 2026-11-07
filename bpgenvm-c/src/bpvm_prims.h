@@ -32,7 +32,8 @@ int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32
  * charAt (V8 #717; antes, 0 en silencio). */
 int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i);
 
-/* `charAt(s, i)`: una cadena con el codepoint i ("" si s es null); fuera de rango, un error (BUG-7b). */
+/* `charAt(s, i)`: una cadena con el codepoint i ("" si s es null); fuera de rango, un error (BUG-7b): -1; sin memoria,
+ * -2 (H7.5: el primero es un IndexError, el segundo un RuntimeError). */
 int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i,
                       bpref_t* out, char* err, size_t n);
 

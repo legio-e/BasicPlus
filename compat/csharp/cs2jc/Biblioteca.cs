@@ -35,16 +35,30 @@ namespace Cs2Jc
             ["System.FormatException"] = 1,
         };
 
+        /// V8/H7.5 (7-nov) — las que lanza la VM, con su clase de Core (los errores de la VM con su tipo), y el mensaje
+        /// que les pone .NET si se crean sin él. DivideByZeroException y OverflowException, ArithmeticError, como su padre
+        /// en .NET: en BP una sola clase lleva las dos cosas.
+        static readonly Dictionary<string, (string Clase, string Mensaje)> ExcepcionesDeLaVm = new Dictionary<string, (string, string)>
+        {
+            ["System.NullReferenceException"] = ("NullReferenceError", "Object reference not set to an instance of an object."),
+            ["System.IndexOutOfRangeException"] = ("IndexError", "Index was outside the bounds of the array."),
+            ["System.ArithmeticException"] = ("ArithmeticError", "Overflow or underflow in the arithmetic operation."),
+            ["System.DivideByZeroException"] = ("ArithmeticError", "Attempted to divide by zero."),
+            ["System.OverflowException"] = ("ArithmeticError", "Arithmetic operation resulted in an overflow."),
+            ["System.InvalidCastException"] = ("CastError", "Specified cast is not valid."),
+        };
+
         /// El nombre en JC de una excepción de .NET que se sabe pasar, o null: `System.Exception`, la `Exception` de
         /// Core; `System.SystemException`, `RuntimeError` —lo que lanza la VM: un `catch (SystemException)` atrapa
         /// también un `null` o un índice fuera, como en .NET—; las de la librería, `CsSystem.X`, con su import. Las que
-        /// lanza la VM (NullReferenceException…) no: un catch suyo no atraparía el RuntimeError de la VM.
+        /// lanza la VM, desde H7.5 su clase de Core: NullReferenceException, NullReferenceError…
         string ExcepcionJc(ITypeSymbol t)
         {
             if (t == null) return null;
             string n = NombreCompleto(t);
             if (n == "System.Exception") return "Exception";
             if (n == "System.SystemException") return "RuntimeError";
+            if (ExcepcionesDeLaVm.TryGetValue(n, out var deLaVm)) return deLaVm.Clase;
             if (!ExcepcionesDeCsSystem.ContainsKey(n)) return null;
             imports.Add("CsSystem");
             return "CsSystem." + t.Name;
@@ -60,7 +74,7 @@ namespace Cs2Jc
                 case "System.Exception": return MensajePorDefecto(clase);
                 case "System.SystemException": return "System error.";
             }
-            return null;
+            return ExcepcionesDeLaVm.TryGetValue(NombreCompleto(padre), out var deLaVm) ? deLaVm.Mensaje : null;   // H7.5
         }
 
         /// ¿Tiene la librería el constructor de su excepción al que llama C#? Los suyos sólo llevan cadenas; con la causa

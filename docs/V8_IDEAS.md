@@ -6181,9 +6181,40 @@ Con el lote de ese día (Mono, 805): casi todo lo que falta en los tres pide alg
 | 7, herencia y virtuales | 48 | 38 | 2 | 8 | 6 (reflexión, `dynamic`, interop, el entero a enum de `#522`) |
 | 8, interfaces simples | 78 | 60 | 1 | 17 | 12 (reflexión, sobre todo) |
 
-- **El 6:** lo único de fondo, que un error de la VM tenga su tipo (`catch (NullReferenceException)`): lo piden 14 en todo el lote. Eduardo: *«los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen así»*: es **H7.5** (FICHAS). Con él y el filtro `when` en el traductor, entrarían dos del tema.
+- **El 6:** lo único de fondo, que un error de la VM tenga su tipo (`catch (NullReferenceException)`): lo piden 14 en todo el lote. Eduardo: *«los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen así»*: es **H7.5** (FICHAS). Con él y el filtro `when` en el traductor, entrarían dos del tema. **Hecho el 7-nov** (abajo, «H7.5»).
 - **El 7:** `test-29` es una regla distinta a propósito (C# prefiere el método de la hija aunque convierta peor; JC, el más exacto, como Java). Los métodos no virtuales (`new` en C#; los piden 9, 4 sólo eso) irían contra el modelo de Java: no.
 - **El 8, hecho** (Eduardo: *«OK 1) y 2)»*): **`==` y `!=` entre una clase y una antecesora suya** (`Object` incluido), la identidad, como en Java, en JC y en BP (`comparableForEquality`; `samples/IgualdadRefs.bp`, en la red; `IgualdadRefsTest`, que dos clases sin parentesco sigan sin compararse; con el compilador de antes y el nuevo, los mismos `.mod` en los 694 que ya compilaban); en el traductor, también un `T` de un genérico con una referencia, que en JC es un `Object`. Una cadena con un `Object` sigue fuera (`test-111`). Y **`ICloneable`** en `CsSystem`. **Mono: 810** (+5: `gtest-294`, `gtest-455`, `gtest-466`, `test-316` y `test-585`); fallan las mismas 6. Lo de implementar con un tipo concreto lo que la interfaz declara con `T` (25 lo piden, 12 sólo eso), con los genéricos.
+
+### H7.5, los errores de la VM con su tipo (7-nov; hecho)
+
+Eduardo: *«A ver los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen
+así. Habría que añadir algunas excepciones y modificar la VM. No se, podemos analizar que no sea costoso para las VMs»*.
+Decidido en tres pasos: las clases (*«OK, 1) 2) y 3)»*), el algoritmo (*«OK, adelante»*) y, con el inventario de los
+sitios de las dos VMs, lo que quedaba (*«1) a, 2) ok, 3) ok»*).
+
+- **Las clases**, en `Core`, hijas de `RuntimeError` (`catch e: RuntimeError` las sigue atrapando todas; el mensaje, el
+  de siempre): `ArithmeticError` (división o módulo enteros por cero, exponente negativo, un número que no cabe:
+  `byte(300)`, `factorial(13)`, y `remap` con el rango vacío), `NullReferenceError` (usar null, también un elemento de
+  un array null, y un objeto eliminado), `IndexError` (un índice o un rango fuera: arrays, `charAt`, `List`, `move`),
+  `CastError` e `IOError` (los ficheros). `EncodingError`, hija de `IOError`, como en Java (3). Lo demás —pines, buses,
+  red, heap lleno, pila— sigue siendo `RuntimeError`. Lo dudoso, como en Java (2).
+- **Las VMs:** la misma tabla (`claseDeError`, `bpvm_clase_de_error`) y cada sitio con su clase: 71 en miVM, y en la
+  VM-C, las macros del intérprete con su clase (`BPVM_RT_THROW_DE`) y cuatro ayudantes en los builtins. Ningún opcode
+  nuevo, ni nada en el camino normal: la clase se busca por su nombre al lanzar. Con un `Core` de antes, `RuntimeError`.
+- **El builtin 308, `__throwError(tipo, msg)`:** lo usan el compilador (el `this` null de un método privado, `#752`) y
+  `Core` (`List`). **En una `native`** (1, la a): el C del AOT lo llama por `call_builtin`, que ya estaba (la división
+  de 32 bits, la conversión estrecha y el `this` null); lo que lanzan los helpers de la VM lleva su clase al límite
+  (`bpvm_aot_throw_tipo`). Sin tocar la ABI del `.mdn`.
+- **Lo probado:** `samples/ErroresConTipo.bp` (23 comprobaciones: la suya, aunque antes vaya otra; `RuntimeError`;
+  `EncodingError` por `IOError`) y `bpgenvm-c/samples/NatErrores.bp` en la red de paridad; `make test-aoterrores`, las
+  natives con el AOT y sin él, la misma clase y el mismo texto (10/10); `test-aotprivado` mira ya la llamada nueva.
+- **El traductor:** `NullReferenceException`, `IndexOutOfRangeException`, `DivideByZeroException`,
+  `ArithmeticException`, `OverflowException` e `InvalidCastException` son sus clases de Core, con el mensaje de .NET si
+  se crean sin él; y `catch … when (c)`, el catch con `if (!(c)) throw e;` delante, si ningún catch de detrás la
+  atraparía (en C#, la que el filtro deja pasar la mira ése). `throw null` se rechaza (`#806`). **Mono, 844**; el
+  tema 6, 43 de 69.
+- **Lo que salió:** `#805` (tres caminos de error en los que las dos VMs ya diferían: el texto de un fallo de `mkdir` y
+  compañía, escribir una cadena eliminada, un `Mutex` con un id que no vale) y `#806` (`throw` de una excepción null).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

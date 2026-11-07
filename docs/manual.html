@@ -437,7 +437,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   —un fichero, una línea, un paquete de la red, un <code>byte[]</code>— se <em>descodifica</em> al convertirlo en
   texto: <code>fromBytes(b)</code>, <code>readFile(ruta)</code>, <code>TextFile.readLine()</code> y
   <code>readStr(n)</code>, <code>Net.Tcp.recvStr(…)</code>. Si los bytes no son UTF-8 válido (un fichero en Latin-1,
-  por ejemplo), lanzan <code>EncodingError</code>, hija de <code>RuntimeError</code>, con el sitio. Con un último
+  por ejemplo), lanzan <code>EncodingError</code>, hija de <code>IOError</code> (y así de <code>RuntimeError</code>),
+  con el sitio. Con un último
   argumento <code>true</code> (<code>ignorarError</code>), en vez de la excepción, cada trozo malo pasa a «�»
   (U+FFFD), como dice el estándar de Unicode:
 </p>
@@ -2447,14 +2448,32 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
       <code>Exception</code> (hereda <code>msg</code>; añade los campos que
       quieras). <code>throw</code> y el <code>catch</code> tipado exigen clases
       que desciendan de <code>Exception</code>.</li>
-  <li>Los errores nativos de la VM (división por cero, referencia nula,
-      índice fuera de rango, fallos en funciones <code>native</code>...) se
-      lanzan como <code>RuntimeError</code> y se cazan igual, da igual el módulo
-      donde ocurran.</li>
+  <li><strong>Los errores de la VM llevan su tipo</strong> (V8, como en Java). Todos son hijos de
+      <code>RuntimeError</code>: <code>catch e: RuntimeError</code> los sigue atrapando todos, da igual el módulo
+      donde ocurran, y el mensaje es el de siempre. Con un <code>catch</code> de su clase delante, se tratan aparte:
+      <ul>
+        <li><code>ArithmeticError</code>: una división o un módulo enteros por cero, una potencia entera con
+            exponente negativo, un número que no cabe en su tipo (<code>byte(300)</code>,
+            <code>factorial(13)</code>).</li>
+        <li><code>NullReferenceError</code>: usar <code>null</code> —un campo o un método de un objeto
+            <code>null</code>, una cadena <code>null</code> donde se pide una, un elemento de un array
+            <code>null</code>— y usar un objeto que ya se ha eliminado.</li>
+        <li><code>IndexError</code>: un índice fuera de un array, de una cadena (<code>charAt</code>…) o de una
+            <code>List</code>.</li>
+        <li><code>CastError</code>: <code>Caja(x)</code> cuando <code>x</code> no es una <code>Caja</code>.</li>
+        <li><code>IOError</code>: los ficheros (abrir, leer, escribir, borrar, renombrar…).</li>
+      </ul>
+      Lo demás —los pines y los buses, la red, el heap lleno, la pila desbordada— sigue siendo
+      <code>RuntimeError</code>. Lo mismo dentro de una función <code>native</code>.
+<pre><code><span class="kw">try</span>
+  media := total / n
+<span class="kw">catch</span> e: ArithmeticError
+  <span class="kw">print</span> <span class="str">"sin datos: "</span> + e.msg     <span class="comment">// sin datos: División por cero</span>
+<span class="kw">endtry</span></code></pre></li>
   <li>El texto de fuera que no es UTF-8 válido (<code>fromBytes</code>, <code>readFile</code>,
-      <code>readLine</code>…) lanza <code>EncodingError</code>, hija de <code>RuntimeError</code> (V8,
-      <a href="#utf8">§4.1</a>): quien ya atrapa <code>RuntimeError</code> la atrapa también, y
-      <code>catch e: EncodingError</code> delante la trata aparte.</li>
+      <code>readLine</code>…) lanza <code>EncodingError</code>, hija de <code>IOError</code> (V8,
+      <a href="#utf8">§4.1</a>), como en Java: quien atrapa <code>IOError</code> o <code>RuntimeError</code> la
+      atrapa también, y <code>catch e: EncodingError</code> delante la trata aparte.</li>
   <li><strong>Quedarse sin memoria también se atrapa.</strong> Si una
       reserva no cabe en el heap, la VM lanza un <code>RuntimeError</code>
       con el mensaje <code>No space in heap</code> en vez de morir: un
@@ -2473,7 +2492,7 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
       el IDE lo recoge en su consola (<code>help error</code> lista los códigos); pero las dos
       VMs no lo dan igual. La VM-C —la de las placas— nombra la clase de la excepción y su
       mensaje, la lance el programa o la propia VM
-      (<code>excepcion no atrapada: Core.RuntimeError: División por cero</code>,
+      (<code>excepcion no atrapada: Core.ArithmeticError: División por cero</code>,
       <code>… MiMod.MiError: …</code>). La VM Java, con un <code>throw</code> del programa, también
       nombra la clase (<code>Excepción no atrapada: MiMod.MiError: …</code>) y añade un stack
       trace con el nombre simbólico y la línea de cada frame; pero con un error de la propia VM

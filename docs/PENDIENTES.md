@@ -333,6 +333,15 @@ un objeto declarado como interfaz (en la llamada no se sabe su ranura), las `own
 constructor, un evento ni una `native`. Y el depurador no enseña el valor de un parámetro `var`: son dos valores
 ocultos, y verlo pediría llamar al getter.
 
+### Los errores de la VM con su tipo: lo que no lo lleva (V8/H7.5, 7-nov)
+
+`ArithmeticError`, `NullReferenceError`, `IndexError`, `CastError` e `IOError` (con su hija `EncodingError`), todas
+hijas de `RuntimeError` (manual §11). Siguen siendo un `RuntimeError` a secas, a propósito: los pines y los buses, la
+red, el heap lleno y la pila desbordada (en Java, `Error`, que no conviene atrapar), `parseInt` de algo que no es un
+número, un array de tamaño negativo, y un `path demasiado largo` de `pathAbsolute` (no toca ficheros). Con un `Core`
+de antes (una placa sin la imagen de V8/H7.5), todo sale como `RuntimeError`, con el mismo mensaje. Y `throw` de una
+excepción `null` no se atrapa, ni con un `catch` sin tipo (`#806`, por decidir).
+
 ## ⏭️ Para V8 — lo que conviene saber al programar hoy
 
 Lo que V7 deja para V8: el tema de V8 —la WiFi, el Bluetooth y el bajo consumo— y lo que

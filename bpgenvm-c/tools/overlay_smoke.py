@@ -1025,7 +1025,7 @@ def main():
 
         def errores(l):
             d = {x.split(":")[0][2:]: x for x in l}
-            return (len(l) == 9 and "División por cero" in d.get("cero", "") and "[Core.RuntimeError] OvFalla+" in d["cero"]
+            return (len(l) == 9 and "División por cero" in d.get("cero", "") and "[Core.ArithmeticError] OvFalla+" in d["cero"]
                     and "referencia nula" in d.get("nulo", "") and "lanzado por B [Core.RuntimeError]" in d.get("throw", "")
                     and "una clase de B [OvFalla.MiError]" in d.get("propia", "") and "desbordamiento de pila" in d.get("pila", "")
                     and "No space in heap" in d.get("memoria", "") and "» A sigue" in l)

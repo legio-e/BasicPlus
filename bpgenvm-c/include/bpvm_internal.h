@@ -1670,6 +1670,18 @@ bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
 /* V8/H5 (#711): lo mismo con otra clase de Core sin campos propios («Core.EncodingError»); RuntimeError si no está. */
 bpref_t bpvm_throw_error_clase(bpvm_t* vm, bpvm_thread_t* tc,
                                const char* clase, const char* msg);
+/* V8/H7.5 (7-nov) — LOS ERRORES DE LA VM CON SU TIPO, como en Java: clases de Core, todas hijas de RuntimeError (un
+ * `catch e: RuntimeError` las sigue atrapando todas). La misma tabla que la VM-Java (CLASE_*, claseDeError); su número,
+ * el de `__throwError` (el builtin 308, BUILTINS.md). Con un Core de antes, sin ellas, bpvm_throw_error_clase lanza
+ * RuntimeError. Lo demás (los pines, los buses, la red, el heap lleno, la pila desbordada…) sigue siendo RuntimeError. */
+#define BPVM_CLASE_RUNTIME     "Core.RuntimeError"         /* 0 */
+#define BPVM_CLASE_ARITMETICA  "Core.ArithmeticError"      /* 1: división o módulo por cero, exponente negativo, un número que no cabe */
+#define BPVM_CLASE_NULA        "Core.NullReferenceError"   /* 2: null (un campo, un método, una cadena, un array), un objeto eliminado */
+#define BPVM_CLASE_INDICE      "Core.IndexError"           /* 3: un índice fuera de un array, de una cadena o de una List */
+#define BPVM_CLASE_CONVERSION  "Core.CastError"            /* 4: (Caja) x cuando x no es una Caja */
+#define BPVM_CLASE_ES          "Core.IOError"              /* 5: los ficheros (y su hija, EncodingError) */
+/* La clase de un tipo de la tabla (el número de __throwError); uno que no está, RuntimeError. */
+const char* bpvm_clase_de_error(int32_t tipo);
 
 /* Realiza el unwind del stack para encontrar un handler que matchee.
  * Si encuentra: ajusta tc->pc/sp/bp/cs y deja `ref` en el top. Si no,
@@ -1706,6 +1718,9 @@ typedef struct {
      * una clase de usuario creada via factory __cls_new_* por el puente). El
      * boundary la propaga tal cual en vez de construir un RuntimeError. */
     volatile uint32_t pending_ref;
+    /* V8/H7.5 — la clase del error que dejó throw_runtime, con su texto en `msg` (una de BPVM_CLASE_*, cadenas fijas); NULL,
+     * RuntimeError. Cada invocación empieza con NULL, como pending_ref. */
+    const char*  clase;
     /* V7 #578 — el ATERRIZAJE más interno de un `try` dentro de una native (el `void* t[7]` de su marco:
      * BPVM_ATERRIZAJE_* en bpvm_aot_helpers.h), o NULL. Una excepción dentro de la native salta ahí antes que al
      * límite (con ella en `pending_ref`, que el `catch` recoge con EH_EXC). Cada aot_call_guarded lo guarda, lo vacía
@@ -1715,6 +1730,10 @@ typedef struct {
 
 /* Devuelve el slot de fault del worker actual (TLS en host). */
 bpvm_aot_fault_t* bpvm_aot_fault_slot(void);
+
+/* V8/H7.5 — el throw_runtime de una native, con la clase del error (BPVM_CLASE_*): lo que lanzan los helpers de la VM
+ * (una división por cero, un índice fuera, una cadena null…). No retorna. bpvm_aot_helpers.c. */
+void bpvm_aot_throw_tipo(bpvm_t* vm, const char* clase, const char* msg);
 
 /* ---- P-aot-call-bp: contexto del puente native→BP ----
  * Cuando el intérprete divierte a un thunk AOT (OP_CALL/OP_CALL_EXT hijack),

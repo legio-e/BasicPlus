@@ -1,0 +1,258 @@
+// ErroresConTipo.bp — V8/H7.5 (7-nov): los errores de la VM con su tipo, como en Java (Eduardo: «los runtime error se
+// puede poner una excepción dentro como excepción específica»). Cada uno se provoca y se mira con qué clase se atrapa:
+// la suya, aunque antes vaya otra que no le toca; RuntimeError, su padre, también; y el mensaje, el de siempre. Se
+// comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh. Las dos VMs, la misma salida.
+module ErroresConTipo
+
+  import Core
+  import Math
+  import Collections
+
+  var fallos: integer
+
+  class Animal
+    public property nombre: string
+    var edad: integer           // un campo: leerlo es GET_FIELD (una property sería su getter, un método)
+    public function Animal(n: string)
+      this.nombre := n
+    end Animal
+    public function edadDe(otro: Animal): integer
+      return otro.edad
+    end edadDe
+    // un método privado: sobre null, el `this` null de #752
+    private function secreto(): string
+      return this.nombre
+    end secreto
+    public function delOtro(otro: Animal): string
+      return otro.secreto()
+    end delOtro
+  end Animal
+
+  class Perro extends Animal
+    public function Perro(n: string)
+      super(n)
+    end Perro
+  end Perro
+
+  class Caja
+    public property owner contenido: Animal
+    public function Caja(a: Animal)
+      this.contenido := a
+    end Caja
+    public function cambia(nuevo: Animal)
+      this.contenido := nuevo   // suelta el de antes
+    end cambia
+  end Caja
+
+  function mira(cond: boolean, que: string)
+    if cond then
+      print "ok   " + que
+    else
+      print "FALLO " + que
+      fallos := fallos + 1
+    endif
+  end mira
+
+  // la clase con que se atrapa: por orden, una que no le toca, la suya y RuntimeError
+  function aritmetica(caso: integer): string
+    var cero: integer := 0
+    var ceroL: long := 0L
+    try
+      if caso == 1 then
+        print 10 / cero
+      elseif caso == 2 then
+        print 10 mod cero
+      elseif caso == 3 then
+        print 10L / ceroL
+      elseif caso == 4 then
+        print 2 ^ (cero - 1)
+      elseif caso == 5 then
+        print byte(300 + cero)
+      else
+        print Math.factorial(13 + cero)
+      endif
+      return "nada"
+    catch e: IndexError
+      return "IndexError: " + e.msg
+    catch e2: ArithmeticError
+      return "ArithmeticError: " + e2.msg
+    catch e3: RuntimeError
+      return "RuntimeError: " + e3.msg
+    endtry
+  end aritmetica
+
+  function nula(caso: integer): string
+    var a: Animal := null
+    var s: string := null
+    var v: integer[] := null
+    try
+      if caso == 1 then
+        var c1: Animal := Animal("c1")
+        print c1.edadDe(a)
+      elseif caso == 2 then
+        print a.delOtro(a)
+      elseif caso == 3 then
+        var b: Animal := Animal("b")
+        print b.delOtro(a)
+      elseif caso == 4 then
+        print strlen(s)
+      elseif caso == 5 then
+        print v[0]
+      elseif caso == 6 then
+        var owner c: Caja := Caja(Animal("Rex"))
+        var rex: Animal := c.contenido
+        c.cambia(Animal("Toby"))
+        print rex.nombre
+      else
+        var m: Collections.Map := Collections.Map()
+        m.put(null, "x")
+      endif
+      return "nada"
+    catch e: ArithmeticError
+      return "ArithmeticError: " + e.msg
+    catch e2: NullReferenceError
+      return "NullReferenceError: " + e2.msg
+    catch e3: RuntimeError
+      return "RuntimeError: " + e3.msg
+    endtry
+  end nula
+
+  function indice(caso: integer): string
+    var v: integer[] := [1, 2]
+    var b: byte[] := newByteArray(2)
+    var l: List := List()
+    l.add(7)
+    try
+      if caso == 1 then
+        print v[5]
+      elseif caso == 2 then
+        print b[3]
+      elseif caso == 3 then
+        print charAt("abc", 7)
+      else
+        print l.get(3)
+      endif
+      return "nada"
+    catch e: NullReferenceError
+      return "NullReferenceError: " + e.msg
+    catch e2: IndexError
+      return "IndexError: " + e2.msg
+    catch e3: RuntimeError
+      return "RuntimeError: " + e3.msg
+    endtry
+  end indice
+
+  function conversion(): string
+    var o: Object := Animal("gato")
+    try
+      var p: Perro := Perro(o)
+      print p.nombre
+      return "nada"
+    catch e: IOError
+      return "IOError: " + e.msg
+    catch e2: CastError
+      return "CastError: " + e2.msg
+    catch e3: RuntimeError
+      return "RuntimeError: " + e3.msg
+    endtry
+  end conversion
+
+  function fichero(caso: integer): string
+    try
+      if caso == 1 then
+        print readFile("no_existe_h75.txt")
+      else
+        var malo: byte[] := newByteArray(2)
+        malo[0] := 0x41
+        malo[1] := 0xFF
+        print fromBytes(malo)
+      endif
+      return "nada"
+    catch e: CastError
+      return "CastError: " + e.msg
+    catch e2: IOError
+      return "IOError: " + e2.msg
+    catch e3: RuntimeError
+      return "RuntimeError: " + e3.msg
+    endtry
+  end fichero
+
+  // la de antes: RuntimeError las sigue atrapando todas, y EncodingError es la suya
+  function soloRuntime(): string
+    var cero: integer := 0
+    try
+      print 1 / cero
+      return "nada"
+    catch e: RuntimeError
+      return "RuntimeError: " + e.msg
+    endtry
+  end soloRuntime
+
+  function codificacion(): string
+    var malo: byte[] := newByteArray(1)
+    malo[0] := 0xFF
+    try
+      print fromBytes(malo)
+      return "nada"
+    catch e: EncodingError
+      return "EncodingError: " + e.msg
+    catch e2: IOError
+      return "IOError: " + e2.msg
+    endtry
+  end codificacion
+
+  function Main()
+    var r: string := aritmetica(1)
+    mira(r == "ArithmeticError: División por cero", "división por cero: " + r)
+    r := aritmetica(2)
+    mira(r == "ArithmeticError: Módulo por cero", "módulo por cero: " + r)
+    r := aritmetica(3)
+    mira(r == "ArithmeticError: División por cero", "un long por cero: " + r)
+    r := aritmetica(4)
+    mira(r == "ArithmeticError: exponente negativo en potencia entera", "exponente negativo: " + r)
+    r := aritmetica(5)
+    mira(r == "ArithmeticError: I32_TO_U8: valor fuera de rango 300", "byte(300): " + r)
+    r := aritmetica(6)
+    mira(r == "ArithmeticError: factorial: 13 desborda integer (máx 12)", "factorial(13): " + r)
+
+    r := nula(1)
+    mira(r == "NullReferenceError: referencia nula: acceso a un campo de un objeto null", "un campo de null: " + r)
+    r := nula(2)
+    mira(r == "NullReferenceError: referencia nula: llamada a un método de un objeto null", "un método de null: " + r)
+    r := nula(3)
+    mira(r == "NullReferenceError: referencia nula: llamada a un método de un objeto null", "un método privado de null: " + r)
+    r := nula(4)
+    mira(r == "NullReferenceError: referencia nula: strlen de un string null", "una cadena null: " + r)
+    r := nula(5)
+    mira(r == "NullReferenceError: referencia nula: acceso a un elemento de un array null", "un array null: " + r)
+    r := nula(6)
+    mira(r == "NullReferenceError: referencia a objeto eliminado (use-after-free)", "un objeto eliminado: " + r)
+    r := nula(7)
+    mira(r == "NullReferenceError: referencia nula: Map.put con una clave null", "una clave null: " + r)
+
+    r := indice(1)
+    mira(r == "IndexError: ALOAD: índice fuera de rango 5 (length=2)", "un array: " + r)
+    r := indice(2)
+    mira(r == "IndexError: ALOAD_U8: idx fuera de rango 3 (len=2)", "un byte[]: " + r)
+    r := indice(3)
+    mira(r == "IndexError: charAt: idx fuera de rango 7 (len=3)", "charAt: " + r)
+    r := indice(4)
+    mira(r == "IndexError: List: índice fuera de rango 3 (length=1)", "una List: " + r)
+
+    r := conversion()
+    mira(r == "CastError: conversion invalida: el valor no es un 'Perro'", "una conversión: " + r)
+
+    r := fichero(1)
+    mira(r == "IOError: readFile('no_existe_h75.txt'): no se pudo abrir", "un fichero que no está: " + r)
+    r := fichero(2)
+    mira(r == "IOError: fromBytes: UTF-8 mal formado en el byte 1 (0xFF)", "UTF-8 malo, por IOError: " + r)
+
+    r := soloRuntime()
+    mira(r == "RuntimeError: División por cero", "RuntimeError las atrapa: " + r)
+    r := codificacion()
+    mira(r == "EncodingError: fromBytes: UTF-8 mal formado en el byte 0 (0xFF)", "EncodingError, la suya: " + r)
+
+    print "fallos: " + fallos
+  end Main
+
+end ErroresConTipo

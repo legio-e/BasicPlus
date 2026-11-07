@@ -609,12 +609,28 @@ static const char* recurso_no_esta(const char* path) {
 static bpvm_status_t builtin_throw_clase(bpvm_t* vm, bpvm_thread_t* tc, const char* clase, const char* msg);
 
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
-    return builtin_throw_clase(vm, tc, "Core.RuntimeError", msg);
+    return builtin_throw_clase(vm, tc, BPVM_CLASE_RUNTIME, msg);
 }
 
 /* V8/H5 (#711): un EncodingError (lo de fuera que no es UTF-8 válido, un appendChar que no es un carácter). */
 static bpvm_status_t builtin_throw_codif(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
     return builtin_throw_clase(vm, tc, "Core.EncodingError", msg);
+}
+
+/* V8/H7.5 (7-nov) — los errores con su tipo (las clases de Core, la tabla de bpvm_internal.h), los mismos que miVM:
+ * los ficheros, IOError; usar null, NullReferenceError; un índice o un rango fuera, IndexError; una cuenta que no se
+ * puede hacer, ArithmeticError. Lo demás, builtin_throw: RuntimeError. */
+static bpvm_status_t builtin_throw_es(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, BPVM_CLASE_ES, msg);
+}
+static bpvm_status_t builtin_throw_nula(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, BPVM_CLASE_NULA, msg);
+}
+static bpvm_status_t builtin_throw_indice(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, BPVM_CLASE_INDICE, msg);
+}
+static bpvm_status_t builtin_throw_aritmetica(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, BPVM_CLASE_ARITMETICA, msg);
 }
 
 /* V8/H5 (#711): el texto del error de descodificar, el mismo que miVM (Utf8.mensaje): «<que>: UTF-8 mal formado en el
@@ -1191,7 +1207,7 @@ int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s
         enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
     }
     *out = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
-    if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
+    if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -2; }   /* #355, #430; H7.5: -2, para no tomarlo por el índice */
     o = bpref_deref(vm, *out);
     for (k = 0; k < enc_len; k++) vm->memory[o + BPVM_ARR_DATA_OFF + k] = enc[k];
     bpvm_str_nace(vm, o);   /* V8/H5: el bit, por el carácter que lleva */
@@ -1364,7 +1380,7 @@ int bpvm_builtin_de_la_gui(int id) {
 static bpvm_status_t __attribute__((noinline, cold)) cadena_nula(bpvm_t* vm, bpvm_thread_t* tc, const char* nombre) {
     char em[96];
     snprintf(em, sizeof em, "referencia nula: %s de un string null", nombre);
-    return builtin_throw(vm, tc, em);
+    return builtin_throw_nula(vm, tc, em);   /* V8/H7.5 */
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2101,7 +2117,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         push_i32(vm, tc, bpvm_gui_shot(path));
         return BPVM_OK;
     }
@@ -2291,7 +2307,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         /* H19-F1 — resuelve relativo al base-dir del proyecto (si lo hay), luego
          * cwd/literal, luego /app (modo plano). Los absolutos no se tocan. */
         char eff[600];
@@ -2300,14 +2316,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (abrir_breves(vm, &ab, rpath, BPVM_FS_O_READ, NULL, NULL, 0) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "%s('%s'): ya está abierto", que, path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         uint32_t size = 0;
         if (bpvm_fs_stat(rpath, &size) != 0) {
             char em[576];
             cerrar_breves(vm, &ab, NULL);
             snprintf(em, sizeof(em), "%s('%s'): no se pudo abrir", que, path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         bpref_t refh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, size, size); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) { cerrar_breves(vm, &ab, NULL); return builtin_throw(vm, tc, "readFile: sin memoria"); }
@@ -2317,7 +2333,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 char em[576];
                 cerrar_breves(vm, &ab, NULL);
                 snprintf(em, sizeof(em), "%s('%s'): error de lectura", que, path);
-                return builtin_throw(vm, tc, em);
+                return builtin_throw_es(vm, tc, em);
             }
         }
         cerrar_breves(vm, &ab, NULL);
@@ -2340,7 +2356,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);   /* path */
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         uint32_t cad = (cref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(cref));   /* V4: handle→addr */
         uint32_t clen = (cad == 0) ? 0 : bpvm_read_u32_be(vm->memory + cad);
         const uint8_t* cdata = (cad == 0) ? NULL : (vm->memory + cad + 4);
@@ -2348,14 +2364,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (abrir_breves(vm, &ab, path, append ? BPVM_FS_O_APPEND : BPVM_FS_O_WRITE, NULL, NULL, 0) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "%s('%s'): ya está abierto", que, path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         int fallo = (bpvm_fs_write(path, cdata, clen, append) != 0);
         cerrar_breves(vm, &ab, NULL);
         if (fallo) {
             char em[576];
             snprintf(em, sizeof(em), "%s('%s'): error de escritura", que, path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);   /* void → dummy */
         return BPVM_OK;
@@ -2369,7 +2385,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_LIST_DIR: {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
-        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw_es(vm, tc, "path demasiado largo");
         /* Un directorio que existe tal cual (mkdir lo crea sin resolver) va tal cual:
          * `bpvm_fs_resolve` pregunta con `stat`, y un directorio no es un fichero. */
         char eff[BPVM_FS_PATH_MAX];
@@ -2384,7 +2400,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpvm_scratch_give("LISTDIR");
             if (rl != 0) snprintf(em, sizeof(em), "listDir('%s'): no se pudo abrir", path);
             else snprintf(em, sizeof(em), "listDir('%s'): demasiadas entradas (más de %u bytes de nombres)", path, (unsigned) acc.cap);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         bpref_t arrh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_REF, acc.n, acc.n * BPVM_REF_SIZE); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (arrh.v == 0u) { bpvm_scratch_give("LISTDIR"); return builtin_throw(vm, tc, "listDir: sin memoria"); }
@@ -2422,7 +2438,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_FSTATE_SIZE: {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
-        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw_es(vm, tc, "path demasiado largo");
         /* La lectura RESUELVE la ruta (basedir → tal cual → /app → packs), como readFile; la
          * escritura la toma tal cual, como writeFile. El bloque tiene que valer para las dos. */
         char eff[BPVM_FS_PATH_MAX];
@@ -2436,12 +2452,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         uint32_t sref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
-        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw(vm, tc, "path demasiado largo");
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0) return builtin_throw_es(vm, tc, "path demasiado largo");
         if (mode < BPVM_FS_O_READ || mode > BPVM_FS_O_RW) return builtin_throw(vm, tc, "File: modo no válido");
         uint32_t cap = 0;
         uint8_t* blk = fblk_de(vm, sref, &cap);
         if (!blk) return builtin_throw(vm, tc, "File: sin bloque de estado");
-        if (bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File: el objeto ya tiene un fichero abierto");
+        if (bpvm_fs_fisopen(blk)) return builtin_throw_es(vm, tc, "File: el objeto ya tiene un fichero abierto");
         char eff[BPVM_FS_PATH_MAX];
         const char* rpath = (mode == BPVM_FS_O_READ) ? bpvm_fs_resolve(path, eff, sizeof(eff)) : path;   /* como readFile / writeFile */
         char em[BPVM_FS_PATH_MAX + 64];
@@ -2460,11 +2476,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         ficheros_abrir(vm);
         if (ya) {
             snprintf(em, sizeof(em), "File('%s', \"%s\"): ya está abierto", path, fmodo_txt(mode));
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         if (!abierto) {
             snprintf(em, sizeof(em), "File('%s', \"%s\"): no se pudo abrir", path, fmodo_txt(mode));
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);   /* void → dummy */
         return BPVM_OK;
@@ -2485,7 +2501,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             err = (bpvm_fs_fclose(blk) != 0);
         }
         ficheros_abrir(vm);
-        if (err) return builtin_throw(vm, tc, "File.close(): error al cerrar");
+        if (err) return builtin_throw_es(vm, tc, "File.close(): error al cerrar");
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2501,14 +2517,18 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint8_t* d = fblk_de(vm, dref, &dcap);
         /* V7/H12, 2b: lo de siempre, en el mismo orden (los mensajes, los de miVM), bajo el cerrojo de los File */
         const char* fallo = NULL;
+        const char* clase = BPVM_CLASE_ES;   /* V8/H7.5: un buffer null, NullReferenceError; fuera de él, IndexError */
         long r = 0;
         ficheros_cerrar(vm);
         if (!blk || !bpvm_fs_fisopen(blk))
             fallo = es_lectura ? "File.read(): fichero cerrado" : "File.write(): fichero cerrado";
-        else if (!d)
+        else if (!d) {
             fallo = es_lectura ? "File.read(): buffer nulo" : "File.write(): buffer nulo";
-        else if (off < 0 || n < 0 || (uint32_t) off > dcap || (uint32_t) n > dcap - (uint32_t) off)
+            clase = BPVM_CLASE_NULA;
+        } else if (off < 0 || n < 0 || (uint32_t) off > dcap || (uint32_t) n > dcap - (uint32_t) off) {
             fallo = es_lectura ? "File.read(): fuera del buffer" : "File.write(): fuera del buffer";
+            clase = BPVM_CLASE_INDICE;
+        }
         else if (es_lectura) {
             r = bpvm_fs_fread(blk, d + off, (uint32_t) n);
             if (r < 0) fallo = "File.read(): error de lectura";
@@ -2519,7 +2539,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (bpvm_fs_fwrite(blk, d + off, (uint32_t) n) < 0) fallo = "File.write(): error de escritura";
         }
         ficheros_abrir(vm);
-        if (fallo) return builtin_throw(vm, tc, fallo);
+        if (fallo) return builtin_throw_clase(vm, tc, clase, fallo);
         push_i32(vm, tc, es_lectura ? (int32_t) r : 0);
         return BPVM_OK;
     }
@@ -2537,7 +2557,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             fallo = em;
         }
         ficheros_abrir(vm);
-        if (fallo) return builtin_throw(vm, tc, fallo);
+        if (fallo) return builtin_throw_es(vm, tc, fallo);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2550,7 +2570,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int cerrado = (!blk || !bpvm_fs_fisopen(blk));
         if (!cerrado) v = (id == BUILTIN_FTELL) ? bpvm_fs_ftell(blk) : bpvm_fs_fsize(blk);
         ficheros_abrir(vm);
-        if (cerrado) return builtin_throw(vm, tc, (id == BUILTIN_FTELL) ? "File.tell(): fichero cerrado" : "File.size(): fichero cerrado");
+        if (cerrado) return builtin_throw_es(vm, tc, (id == BUILTIN_FTELL) ? "File.tell(): fichero cerrado" : "File.size(): fichero cerrado");
         push_i32(vm, tc, (int32_t) v);
         return BPVM_OK;
     }
@@ -2586,7 +2606,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
         }
         ficheros_abrir(vm);
-        if (fallo) return builtin_throw(vm, tc, fallo);
+        if (fallo) return builtin_throw_es(vm, tc, fallo);
         uint32_t len = (n > 0 && ult == '\r') ? n - 1 : n;
         bpref_t refh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) return builtin_throw(vm, tc, "File.readLine(): sin memoria");
@@ -2606,7 +2626,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 fallo = "File.readLine(): error de lectura";
         }
         ficheros_abrir(vm);
-        if (fallo) return builtin_throw(vm, tc, fallo);
+        if (fallo) return builtin_throw_es(vm, tc, fallo);
         /* V8/H5: el bit de la línea, por sus bytes. #711: DESCODIFICADA (EncodingError, o «�» con el indicador); si
          * lanza, la línea queda leída, como en miVM (un bucle con try sigue con la siguiente). */
         return nacer_de_fuera(vm, tc, refh, ignorar, "File.readLine()");
@@ -2619,7 +2639,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (!blk || !bpvm_fs_fisopen(blk)) fallo = "File.flush(): fichero cerrado";
         else if (bpvm_fs_fflush(blk) != 0) fallo = "File.flush(): error de escritura";
         ficheros_abrir(vm);
-        if (fallo) return builtin_throw(vm, tc, fallo);
+        if (fallo) return builtin_throw_es(vm, tc, fallo);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2633,7 +2653,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * ruta (255) + 25 + det (127) + 67 + el NUL = 487. */
         char path[BPVM_FS_PATH_MAX], det[128], em[BPVM_FS_PATH_MAX + 240];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
+        const char* clase = BPVM_CLASE_RUNTIME;   /* V8/H7.5: el fichero que no se abre, IOError */
         switch (bpvm_sonido_tocar(bpvm_fs_resolve(path, em, sizeof(em)), det, sizeof(det))) {
         case BPVM_SONIDO_OK:
             push_i32(vm, tc, 0);   /* void: el valor que el compilador descarta tras la llamada */
@@ -2643,6 +2664,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             break;
         case BPVM_SONIDO_NO_ABRE:
             snprintf(em, sizeof em, "Sound.play('%s'): no se pudo abrir", path);
+            clase = BPVM_CLASE_ES;
             break;
         case BPVM_SONIDO_NO_ES_WAV:
             snprintf(em, sizeof em, "Sound.play('%s'): no es un WAV", path);
@@ -2655,7 +2677,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             snprintf(em, sizeof em, "Sound.play: no se pudo crear la tarea del sonido");
             break;
         }
-        return builtin_throw(vm, tc, em);
+        return builtin_throw_clase(vm, tc, clase, em);
     }
     case BUILTIN_SOUND_STOP:
         bpvm_sonido_parar();
@@ -2721,7 +2743,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         /* [V7/H2, #493] Se RESUELVE como readFile (basedir → tal cual → /app →
          * la zona de packs): «if fileExists(x) then readFile(x)» tiene que ver
          * lo mismo que readFile. Antes pasaba por el disfraz de la zona; la
@@ -2738,19 +2760,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         bpvm_abierto_breve_t ab;   /* V7 #657: borrar es escribir: un open para escribir, mientras dura */
         if (abrir_breves(vm, &ab, path, BPVM_FS_O_WRITE, NULL, NULL, 0) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "removeFile('%s'): ya está abierto", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         int fallo = (bpvm_fs_remove(path) != 0);
         cerrar_breves(vm, &ab, NULL);
         if (fallo) {
             char em[576];
             snprintf(em, sizeof(em), "removeFile('%s'): error al borrar", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2761,20 +2783,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char from[BPVM_FS_PATH_MAX], to[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
             read_bp_path(vm, tref, to,   sizeof(to))   != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         bpvm_abierto_breve_t a1, a2;   /* V7 #657: los dos se escriben: dos opens para escribir, mientras dura */
         int choca = abrir_breves(vm, &a1, from, BPVM_FS_O_WRITE, &a2, to, BPVM_FS_O_WRITE);
         if (choca != 0) {
             char em[1100];
             snprintf(em, sizeof(em), "rename('%s' -> '%s'): '%s' ya está abierto", from, to, choca == 1 ? from : to);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         int fallo = (bpvm_fs_rename(from, to) != 0);
         cerrar_breves(vm, &a1, &a2);
         if (fallo) {
             char em[1100];
             snprintf(em, sizeof(em), "rename('%s' -> '%s'): error al renombrar", from, to);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2783,18 +2805,18 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         uint32_t sz = 0;
         char eff[BPVM_FS_PATH_MAX];   /* V7/H2 (#493): resuelto como readFile */
         if (bpvm_fs_stat(bpvm_fs_resolve(path, eff, sizeof(eff)), &sz) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "fileSize('%s'): no se pudo leer el tamaño", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         if (sz > 0x7FFFFFFFu) {
             char em[576];
             snprintf(em, sizeof(em), "fileSize('%s'): tamaño > 2GB no representable en integer", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, (int32_t) sz);
         return BPVM_OK;
@@ -2806,11 +2828,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         if (bpvm_fs_mkdir(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "mkdir('%s'): no se pudo crear", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2819,11 +2841,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         if (bpvm_fs_rmdir(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "rmdir('%s'): no se pudo borrar (¿no vacío?)", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2834,20 +2856,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char from[BPVM_FS_PATH_MAX], to[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
             read_bp_path(vm, tref, to,   sizeof(to))   != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         bpvm_abierto_breve_t a1, a2;   /* V7 #657: el origen se lee y el destino se escribe, mientras dura */
         int choca = abrir_breves(vm, &a1, from, BPVM_FS_O_READ, &a2, to, BPVM_FS_O_WRITE);
         if (choca != 0) {
             char em[1100];
             snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): '%s' ya está abierto", from, to, choca == 1 ? from : to);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         int fallo = (bpvm_fs_copy(from, to) != 0);
         cerrar_breves(vm, &a1, &a2);
         if (fallo) {
             char em[1100];
             snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): error al copiar", from, to);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -2856,7 +2878,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         push_i32(vm, tc, bpvm_fs_isdir(path) ? 1 : 0);   /* sin throw, como Java */
         return BPVM_OK;
     }
@@ -2864,7 +2886,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
-            return builtin_throw(vm, tc, "path demasiado largo");
+            return builtin_throw_es(vm, tc, "path demasiado largo");
         long long ms = bpvm_fs_mtime_ms(path);
         if (ms == -2) {
             /* H13 hallazgo 13(a) — la capacidad NO ESTA en esta plataforma, que no
@@ -2874,26 +2896,30 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             char em[576];
             snprintf(em, sizeof(em),
                      "lastModified('%s'): no implementado en esta plataforma", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         if (ms < 0) {
             char em[576];
             snprintf(em, sizeof(em), "lastModified('%s'): no se pudo leer", path);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_es(vm, tc, em);
         }
         push_i32(vm, tc, (int32_t) (ms & 0x7FFFFFFFLL));   /* truncado como Java */
         return BPVM_OK;
     }
 
-    case BUILTIN_THROW_RTE: {
+    case BUILTIN_THROW_RTE:
+    case BUILTIN_THROW_ERROR: {
         /* #248 — lanza el RuntimeError NATIVO de la VM con el mensaje dado
          * (mismo path que div0/null deref → atrapable con try/catch BP).
          * Lo usa el compareTo por defecto de Object para no depender del
-         * descriptor local de RuntimeError. No retorna valor. */
+         * descriptor local de RuntimeError. No retorna valor.
+         * V8/H7.5 — el 308, lo mismo con su tipo, el número de la tabla (bpvm_clase_de_error): lo usan el compilador (el
+         * `this` null de #752, y una native) y Core (List). En el mismo case: un búfer, no dos (#534). */
         uint32_t mref = pop_ref(vm, tc);
+        int32_t tipo = (id == BUILTIN_THROW_ERROR) ? pop_i32(vm, tc) : 0;
         char msg[256];
         read_bp_string(vm, mref, msg, sizeof(msg));
-        return builtin_throw(vm, tc, msg);
+        return builtin_throw_clase(vm, tc, bpvm_clase_de_error(tipo), msg);
     }
 
     case BUILTIN_CHAR_CODE_AT: {
@@ -2905,7 +2931,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             char em[96];
             snprintf(em, sizeof em, "charCodeAt: idx fuera de rango %" PRId32 " (len=%d)", i,
                      (int) bpvm_prim_str_len(vm, &tc->strcur, s.v, sa));
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_indice(vm, tc, em);
         }
         push_i32(vm, tc, c);
         return BPVM_OK;
@@ -2920,8 +2946,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
         {   /* P2b: la primitiva compartida (con el helper string_char_at del AOT) */
             bpref_t h; char em[96];
-            if (bpvm_prim_char_at(vm, &tc->strcur, s.v, bpref_deref(vm, s), i, &h, em, sizeof em) != 0)
-                return builtin_throw(vm, tc, em);
+            int rc = bpvm_prim_char_at(vm, &tc->strcur, s.v, bpref_deref(vm, s), i, &h, em, sizeof em);
+            if (rc != 0) return (rc == -1) ? builtin_throw_indice(vm, tc, em) : builtin_throw(vm, tc, em);   /* H7.5: -1, el índice */
             bpref_push(vm, tc, h);
             return BPVM_OK;
         }
@@ -3441,7 +3467,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         double x     = (double) bits_to_f32(pop_i32(vm, tc));
         double d = inHi - inLo;
         if (d == 0) {
-            return builtin_throw(vm, tc,
+            return builtin_throw_aritmetica(vm, tc,
                 "remap: el rango de entrada es vacio (inHi == inLo)");
         }
         push_i32(vm, tc, f32_to_bits(
@@ -3457,7 +3483,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         if (n > 12) {   /* 13! desborda i32 con signo */
             snprintf(msg, sizeof msg, "factorial: %d desborda integer (máx 12)", (int) n);
-            return builtin_throw(vm, tc, msg);
+            return builtin_throw_aritmetica(vm, tc, msg);
         }
         int32_t r = 1;
         for (int32_t i = 2; i <= n; i++) r *= i;
@@ -4199,8 +4225,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t dstRef  = pop_ref(vm, tc);
         uint32_t srcRef  = pop_ref(vm, tc);
         char em[96];
-        if (srcRef == 0) return builtin_throw(vm, tc, "move: src es null");
-        if (dstRef == 0) return builtin_throw(vm, tc, "move: dst es null");
+        if (srcRef == 0) return builtin_throw_nula(vm, tc, "move: src es null");
+        if (dstRef == 0) return builtin_throw_nula(vm, tc, "move: dst es null");
         uint32_t sd = ref_addr(vm, srcRef);   /* V4: handle → dirección física del dato */
         uint32_t dd = ref_addr(vm, dstRef);
         uint32_t sh = sd - 4u, dh = dd - 4u;  /* la cabecera del bloque (un handle muerto da 0 - 4) */
@@ -4208,8 +4234,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (dh < vm->heap_start || dh >= vm->heap_next) return builtin_throw(vm, tc, "move: dst no es ref a heap");
         uint32_t stag = bpvm_read_u32_be(vm->memory + sh);
         uint32_t dtag = bpvm_read_u32_be(vm->memory + dh);
-        if (stag & BPVM_TAG_FREE_BIT) return builtin_throw(vm, tc, "move: src apunta a bloque libre");
-        if (dtag & BPVM_TAG_FREE_BIT) return builtin_throw(vm, tc, "move: dst apunta a bloque libre");
+        if (stag & BPVM_TAG_FREE_BIT) return builtin_throw_nula(vm, tc, "move: src apunta a bloque libre");
+        if (dtag & BPVM_TAG_FREE_BIT) return builtin_throw_nula(vm, tc, "move: dst apunta a bloque libre");
         int st = (int) ((stag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
         int dt = (int) ((dtag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
         uint32_t esz = move_elem(st);
@@ -4232,22 +4258,22 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int32_t dstLen = bpvm_read_i32_be(vm->memory + dd);
         if (count < 0) {
             snprintf(em, sizeof em, "move: count negativo (%" PRId32 ")", count);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_indice(vm, tc, em);
         }
         if (srcStart < 0 || dstStart < 0) {
             snprintf(em, sizeof em, "move: offset negativo (srcStart=%" PRId32 " dstStart=%" PRId32 ")",
                      srcStart, dstStart);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_indice(vm, tc, em);
         }
         if ((int64_t) srcStart + count > (int64_t) srcLen) {
             snprintf(em, sizeof em, "move: rango fuera de src (srcStart=%" PRId32 " count=%" PRId32
                      " srcLen=%" PRId32 ")", srcStart, count, srcLen);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_indice(vm, tc, em);
         }
         if ((int64_t) dstStart + count > (int64_t) dstLen) {
             snprintf(em, sizeof em, "move: rango fuera de dst (dstStart=%" PRId32 " count=%" PRId32
                      " dstLen=%" PRId32 ")", dstStart, count, dstLen);
-            return builtin_throw(vm, tc, em);
+            return builtin_throw_indice(vm, tc, em);
         }
         memmove(vm->memory + dd + 4u + (uint32_t) dstStart * esz,
                 vm->memory + sd + 4u + (uint32_t) srcStart * esz,

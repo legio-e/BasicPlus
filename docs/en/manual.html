@@ -1997,10 +1997,30 @@ in <code>samples/overlay</code>.</p>
       inherits <code>msg</code>; add whatever fields you want).
       <code>throw</code> and the typed <code>catch</code> require classes that
       descend from <code>Exception</code>.</li>
-  <li>The VM's native errors (division by zero, null reference, index out of
-      range, failures in <code>native</code> functions...) are thrown as
-      <code>RuntimeError</code> and caught the same way, regardless of the
-      module where they occur.</li>
+  <li><strong>The VM's errors carry their type</strong> (V8, as in Java). They are all children of
+      <code>RuntimeError</code>: <code>catch e: RuntimeError</code> still catches them all, regardless of the
+      module where they occur, and the message is the usual one. With a <code>catch</code> of their class first,
+      they are handled apart:
+      <ul>
+        <li><code>ArithmeticError</code>: an integer division or modulo by zero, an integer power with a negative
+            exponent, a number that does not fit in its type (<code>byte(300)</code>,
+            <code>factorial(13)</code>).</li>
+        <li><code>NullReferenceError</code>: using <code>null</code> —a field or a method of a <code>null</code>
+            object, a <code>null</code> string where one is needed, an element of a <code>null</code> array— and
+            using an object that has already been deleted.</li>
+        <li><code>IndexError</code>: an index outside an array, a string (<code>charAt</code>…) or a
+            <code>List</code>.</li>
+        <li><code>CastError</code>: <code>Caja(x)</code> when <code>x</code> is not a <code>Caja</code>.</li>
+        <li><code>IOError</code>: files (opening, reading, writing, removing, renaming…). Its child,
+            <code>EncodingError</code>: text from outside that is not valid UTF-8.</li>
+      </ul>
+      The rest —pins and buses, the network, a full heap, a stack overflow— is still a
+      <code>RuntimeError</code>. The same inside a <code>native</code> function.
+<pre><code><span class="kw">try</span>
+  media := total / n
+<span class="kw">catch</span> e: ArithmeticError
+  <span class="kw">print</span> <span class="str">"no data: "</span> + e.msg     <span class="comment">// no data: División por cero</span>
+<span class="kw">endtry</span></code></pre></li>
   <li><strong>Running out of memory is caught too.</strong> If an allocation
       does not fit in the heap, the VM raises a <code>RuntimeError</code> with
       the message <code>No space in heap</code> instead of dying: a program
@@ -2018,7 +2038,7 @@ in <code>samples/overlay</code>.</p>
       and the IDE picks it up in its console (<code>help error</code> lists the codes); but the
       two VMs do not give it the same way. The C VM —the boards' one— names the exception's
       class and its message, whether the program or the VM itself threw it
-      (<code>excepcion no atrapada: Core.RuntimeError: División por cero</code>,
+      (<code>excepcion no atrapada: Core.ArithmeticError: División por cero</code>,
       <code>… MiMod.MiError: …</code>). The Java VM, with a <code>throw</code> of the
       program, names the class too (<code>Excepción no atrapada: MiMod.MiError: …</code>) and adds
       a stack trace with the symbolic name and the line of each frame; but with an error of the VM

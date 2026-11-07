@@ -208,13 +208,59 @@ module Core
     end RuntimeError
   end RuntimeError
 
+  // V8/H7.5 (7-nov) — LOS ERRORES DE LA VM CON SU TIPO, como en Java (Eduardo: «los runtime error se puede poner una
+  // excepción dentro como excepción específica. En Java ya lo hacen así»). Todas hijas de RuntimeError: quien atrapa
+  // RuntimeError las atrapa todas, y el mensaje es el de siempre. Sin campos propios (msg en el slot 0): las dos VMs las
+  // fabrican como a RuntimeError, buscándolas por su nombre (con un Core de antes, sin ellas, lanzan RuntimeError). Lo
+  // demás que lanza la VM (los pines, los buses, la red, el heap lleno, la pila desbordada…) sigue siendo RuntimeError.
+  // Su número en la tabla de las dos VMs, el de __throwError: 1 ArithmeticError, 2 NullReferenceError, 3 IndexError,
+  // 4 CastError y 5 IOError (0, RuntimeError).
+
+  // Una división o un módulo enteros por cero, una potencia entera con exponente negativo, un número que no cabe en
+  // su tipo (`byte(300)`, `factorial(13)`), remap con el rango de entrada vacío.
+  public class ArithmeticError extends RuntimeError
+    public function ArithmeticError(m: string)
+      super(m)
+    end ArithmeticError
+  end ArithmeticError
+
+  // Usar null: un campo o un método de un objeto null, una cadena null donde se pide una (#774), un elemento de un
+  // array null; y un objeto eliminado (el handle caducado de V4), o un receptor que no es un objeto.
+  public class NullReferenceError extends RuntimeError
+    public function NullReferenceError(m: string)
+      super(m)
+    end NullReferenceError
+  end NullReferenceError
+
+  // Un índice fuera de un array, de una cadena (charAt, charCodeAt) o de una List; un rango fuera de un array (move).
+  public class IndexError extends RuntimeError
+    public function IndexError(m: string)
+      super(m)
+    end IndexError
+  end IndexError
+
+  // `(Caja) x` cuando x no es una Caja.
+  public class CastError extends RuntimeError
+    public function CastError(m: string)
+      super(m)
+    end CastError
+  end CastError
+
+  // Los ficheros: abrir, leer, escribir, borrar, renombrar…, un path demasiado largo. Su hija, EncodingError.
+  public class IOError extends RuntimeError
+    public function IOError(m: string)
+      super(m)
+    end IOError
+  end IOError
+
   // V8/H5 (23-oct, #711) — el texto de fuera que no es UTF-8 válido, al descodificarlo (fromBytes, readFile,
   // TextFile.readLine…: «fromBytes: UTF-8 mal formado en el byte 5 (0xF1)»), y un appendChar con algo que no es un
   // carácter. Eduardo: «debería producirse una excepción de codificación pero si ignoramos el error lo que hay que hacer
-  // es utilizar un caracter especial» (las sobrecargas con `ignorarError`). Hija de RuntimeError: quien ya atrapa
-  // RuntimeError la atrapa también. Sin campos propios (msg en el slot 0): las dos VMs la fabrican como a RuntimeError,
-  // buscándola por su nombre (con un Core de antes, sin ella, lanzan RuntimeError).
-  public class EncodingError extends RuntimeError
+  // es utilizar un caracter especial» (las sobrecargas con `ignorarError`). Hija de IOError (H7.5, 7-nov; Eduardo: «3)
+  // ok»), como en Java la CharacterCodingException es una IOException: un `catch e: IOError` alrededor de readFile
+  // atrapa también un fichero que no es UTF-8. Sin campos propios (msg en el slot 0): las dos VMs la fabrican como a
+  // RuntimeError, buscándola por su nombre (con un Core de antes, sin ella, lanzan RuntimeError).
+  public class EncodingError extends IOError
     public function EncodingError(m: string)
       super(m)
     end EncodingError
@@ -643,7 +689,7 @@ module Core
     // #795 — por el tamaño, no por la capacidad del array de dentro: en una lista de 2, `get(3)` daba null, y `set(3, x)`
     // escribía en una casilla que nadie veía.
     private function fuera(idx: integer)
-      __throwRte("List: índice fuera de rango " + idx + " (length=" + this.size + ")")
+      __throwError(3, "List: índice fuera de rango " + idx + " (length=" + this.size + ")")   // 3: IndexError (H7.5)
     end fuera
 
     public function get(idx: integer): Object
@@ -1803,6 +1849,12 @@ module Core
   function __wifiIsAvailable(): boolean  // ¿tiene WiFi esta placa? Lo contesta la HAL BP, sin tocar nada
     inline CALL_BUILTIN 307
   end __wifiIsAvailable
+  // V8/H7.5 — lanza un error de la VM con su tipo, el número de la tabla de las dos VMs (1 ArithmeticError,
+  // 2 NullReferenceError, 3 IndexError, 4 CastError, 5 IOError; otro, RuntimeError). Lo usan el compilador (el `this`
+  // null de #752, y lo que lanza una native) y la stdlib (List, Map). No retorna.
+  public function __throwError(tipo: integer, msg: string)
+    inline CALL_BUILTIN 308
+  end __throwError
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

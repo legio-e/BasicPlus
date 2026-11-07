@@ -317,7 +317,8 @@ public enum Builtin {
     WIFI_TURN_OFF("__wifiTurnOff"),   // [304] __wifiTurnOff()
     WIFI_GET_STATE("__wifiGetState"),   // [305] __wifiGetState(): integer
     WIFI_HAS_IP("__wifiHasIp"),   // [306] __wifiHasIp(): boolean
-    WIFI_IS_AVAILABLE("__wifiIsAvailable");   // [307] __wifiIsAvailable(): boolean
+    WIFI_IS_AVAILABLE("__wifiIsAvailable"),   // [307] __wifiIsAvailable(): boolean
+    THROW_ERROR("__throwError", 8);   // [308] __throwError(tipo: integer, msg: string)
 
     public final String bpName;
     public final int id;

@@ -133,7 +133,7 @@ static void h_write_i64_be(uint8_t* p, int64_t v) {
  * #791 — `LONG_MIN / -1` da la vuelta, como en Java; en C no está definido. */
 static int64_t h_idiv64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "División por cero");   /* no retorna */
+        bpvm_aot_throw_tipo(vm, BPVM_CLASE_ARITMETICA, "División por cero");   /* no retorna; H7.5: con su tipo */
         return 0;
     }
     return b == -1 ? (int64_t) (0u - (uint64_t) a) : a / b;
@@ -202,7 +202,7 @@ static BPVM_AOT_FP_ABI int64_t h_f2l (float   f) { return (int64_t) f; }
 
 static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
-        bpvm_aot_helpers_v2.throw_runtime(vm, "Módulo por cero");     /* no retorna */
+        bpvm_aot_throw_tipo(vm, BPVM_CLASE_ARITMETICA, "Módulo por cero");     /* no retorna; H7.5: con su tipo */
         return 0;
     }
     return b == -1 ? 0 : a % b;
@@ -235,8 +235,9 @@ static void aterriza_en_la_native(bpvm_t* vm, bpvm_aot_fault_t* f, uint32_t exc)
     salta(t);   /* __builtin_longjmp(t, 1): no vuelve */
 }
 
-static void h_throw_runtime(bpvm_t* vm, const char* msg) {
-    (void) vm;
+/* V8/H7.5 — throw_runtime con la clase del error (BPVM_CLASE_*): el de los helpers de la VM, que saben qué ha pasado
+ * (una división por cero, un índice fuera…). La clase va con el texto al límite, que construye la excepción. */
+void bpvm_aot_throw_tipo(bpvm_t* vm, const char* clase, const char* msg) {
     /* #186: si el call-site AOT del intérprete armó un boundary en este
      * worker, copiamos el mensaje y hacemos longjmp de vuelta. El interp
      * construye el RuntimeError y lo propaga al try/catch BP (o termina
@@ -249,7 +250,7 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
         if (f->nativo != NULL && !bpvm_kill_pedido(vm)) {
             bpvm_thread_t* tc = bpvm_aot_callctx()->tc;
             if (tc != NULL) {
-                bpref_t r = bpvm_throw_runtime_error(vm, tc, msg ? msg : "");
+                bpref_t r = bpvm_throw_error_clase(vm, tc, clase, msg ? msg : "");
                 if (!bpref_is_null(r)) aterriza_en_la_native(vm, f, (uint32_t) r.v);
             }
         }
@@ -257,11 +258,16 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
         if (n > sizeof(f->msg) - 1) n = sizeof(f->msg) - 1;
         if (msg && n) memcpy(f->msg, msg, n);
         f->msg[n] = '\0';
+        f->clase = clase;     /* H7.5: una cadena fija (BPVM_CLASE_*) */
         longjmp(*f->buf, 1);  /* no retorna (#571: el límite más interno) */
     }
     /* Sin boundary armado: no debería ocurrir (los native sólo corren
      * vía el hijack AOT del intérprete). Reportamos al menos. */
     if (msg) bpvm_diag_urgente("[aot] throw_runtime sin boundary: %s", msg);
+}
+
+static void h_throw_runtime(bpvm_t* vm, const char* msg) {
+    bpvm_aot_throw_tipo(vm, BPVM_CLASE_RUNTIME, msg);
 }
 
 /* #175 — throw con mensaje COMPUTADO: el AOT pasa un string-handle BP (objeto
@@ -601,18 +607,20 @@ static BPVM_AOT_FP_ABI void h_write_f64_be(uint8_t* p, double v) {
  * ejecuta el intérprete para ese mismo acceso— con el MISMO texto (bpvm_prim_texto_indice). Un array null tiene
  * longitud 0, como allí. Antes cada helper lanzaba el suyo («array_load_i32: index out of bounds», «long[]: indice
  * fuera de rango o array nulo»…) y una native no daba el error de la misma función interpretada. */
-static void __attribute__((noinline, cold)) indice_fuera(bpvm_t* vm, int op, int32_t idx, uint32_t length) {
+static void __attribute__((noinline, cold)) indice_fuera(bpvm_t* vm, uint32_t ref, int op, int32_t idx, uint32_t length) {
     /* El búfer del texto, AQUÍ y no en elem_de: es el camino más caliente de una native (cada `a[i]`), y un búfer
      * suyo bajaba 112 B de pila en CADA acceso y le impedía inlinearse (medido con -fstack-usage, la Pico). Y elem_de,
      * always_inline: a -Os gcc la dejaba fuera de línea —quince usos— y cada acceso hacía una llamada más que antes. */
     char em[80];
+    /* V8/H7.5: un array null, NullReferenceError, como en el intérprete (BPVM_RT_INDICE); si no, IndexError */
+    if (ref == 0u) bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: acceso a un elemento de un array null");
     bpvm_prim_texto_indice(em, sizeof em, op, idx, length);
-    h_throw_runtime(vm, em);   /* no retorna */
+    bpvm_aot_throw_tipo(vm, BPVM_CLASE_INDICE, em);   /* no retorna */
 }
 static inline __attribute__((always_inline)) uint8_t* elem_de(bpvm_t* vm, uint32_t ref, int32_t idx, uint32_t ancho, int op) {
     uint32_t addr = ref ? A(vm, ref) : 0u;
     uint32_t length = addr ? bpvm_read_u32_be(vm->memory + addr) : 0u;
-    if (idx < 0 || (uint32_t) idx >= length) { indice_fuera(vm, op, idx, length); return NULL; }
+    if (idx < 0 || (uint32_t) idx >= length) { indice_fuera(vm, ref, op, idx, length); return NULL; }
     return vm->memory + addr + BPVM_ARR_DATA_OFF + (uint32_t) idx * ancho;
 }
 static int32_t h_array_load_i32(bpvm_t* vm, uint32_t ref, int32_t idx) {
@@ -818,18 +826,18 @@ static bpvm_strcur_t* h_cursores(void) {
 /* V8 #774 — un string null, «referencia nula», como el builtin al que sustituye cada uno: estos cuatro no pasan por
  * bpvm_call_builtin, que lo mira para los demás (builtin_cadenas.h). El mismo texto: el nombre del builtin. */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
-    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: strlen de un string null"); return 0; }
+    if (ref == 0u) { bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: strlen de un string null"); return 0; }
     return bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, A(vm, ref));
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: charCodeAt de un string null"); return 0; }
+    if (ref == 0u) { bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: charCodeAt de un string null"); return 0; }
     uint32_t sa = A(vm, ref);
     int32_t c = bpvm_prim_char_code_at(vm, h_cursores(), bpref_regen(vm, ref).v, sa, idx);
     if (c < 0) {   /* V8 #717: fuera de rango, el mismo error que BUILTIN_CHAR_CODE_AT (y que charAt); antes, 0 en silencio */
         char em[96];
         snprintf(em, sizeof em, "charCodeAt: idx fuera de rango %" PRId32 " (len=%d)", idx,
                  (int) bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, sa));
-        h_throw_runtime(vm, em); return 0;
+        bpvm_aot_throw_tipo(vm, BPVM_CLASE_INDICE, em); return 0;
     }
     return c;
 }
@@ -839,11 +847,12 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
  * `charAt("abc", 7)` daba "" con el AOT y el error interpretado. Lo cazó el análisis de P2b, que quiere
  * justo eso: que el AOT llame al MISMO código que el intérprete en vez de a una copia. */
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: charAt de un string null"); return 0; }   /* #774 */
+    if (ref == 0u) { bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: charAt de un string null"); return 0; }   /* #774 */
     {   /* P2b: la primitiva compartida */
         bpref_t h; char em[96];
-        if (bpvm_prim_char_at(vm, h_cursores(), bpref_regen(vm, ref).v, A(vm, ref), idx, &h, em, sizeof em) != 0) {
-            h_throw_runtime(vm, em); return 0;
+        int rc = bpvm_prim_char_at(vm, h_cursores(), bpref_regen(vm, ref).v, A(vm, ref), idx, &h, em, sizeof em);
+        if (rc != 0) {   /* H7.5: -1, el índice; -2, sin memoria */
+            bpvm_aot_throw_tipo(vm, rc == -1 ? BPVM_CLASE_INDICE : BPVM_CLASE_RUNTIME, em); return 0;
         }
         return (uint32_t) h.v;
     }
@@ -868,7 +877,7 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     return (uint32_t) h.v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
-    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: substring de un string null"); return 0; }   /* #774 */
+    if (ref == 0u) { bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia nula: substring de un string null"); return 0; }   /* #774 */
     {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */
         bpref_t h; char em[64];
         if (bpvm_prim_substring(vm, h_cursores(), bpref_regen(vm, ref), from, to, &h, em,

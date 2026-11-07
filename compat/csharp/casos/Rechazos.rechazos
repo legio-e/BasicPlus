@@ -8,5 +8,4 @@
 34: le falta a JC: ++, -- y = dentro de una expresión — i++
 35: le falta a JC: arrays de varias dimensiones — int[,]
 36: la biblioteca: System.String.Join — string.Join(",", "a", "b")
-41: le falta a JC: errores de la VM con su tipo — NullReferenceException
 54: le falta a JC: constructor estático — static ConLlamada() { Console.WriteLine("hola"); }

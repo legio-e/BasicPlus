@@ -339,6 +339,7 @@ int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     if (setjmp(mi_buf) == 0) {
         f->armed = 1;
         f->pending_ref = 0;   /* #213: estado fresco por invocación */
+        f->clase = NULL;      /* H7.5: también la clase */
         aot(vm, sp, bp);
         /* #578 — una native vuelve con todos sus `try` cerrados; si no, el AOT se equivocó (el registro estaba en su
          * marco, ya muerto). Se dice y se sigue: el de fuera se repone igual. */
@@ -365,7 +366,8 @@ int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
         obj = bpref_regen(vm, f->pending_ref);
         f->pending_ref = 0;
     } else {
-        obj = bpvm_throw_runtime_error(vm, tc, f->msg);
+        obj = bpvm_throw_error_clase(vm, tc, f->clase ? f->clase : BPVM_CLASE_RUNTIME, f->msg);   /* H7.5: con su tipo */
+        f->clase = NULL;
     }
     return bpvm_eh_unwind(vm, tc, obj) ? 1 : 2;
 }
@@ -609,7 +611,7 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
         return 0;
     }
     if (this_ref == 0) {
-        vm->aot_helpers->throw_runtime(vm, "call_method: receptor null");
+        bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "call_method: receptor null");   /* H7.5 */
         return 0;
     }
     uint8_t* mem = vm->memory;
@@ -651,7 +653,7 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
  * los chequeos de bounds de arrays y de rango de casts narrow. */
 static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
                            uint32_t* sp, uint32_t* bp, uint32_t* pc, uint32_t* cs,
-                           uint8_t** mem, const char* msg) {
+                           uint8_t** mem, const char* clase, const char* msg) {
     /* #355 — LA MISMA TRAZA QUE builtin_throw, y hacia falta: el log de la Pico
      * mostro la reserva de emergencia soltandose SIN ninguna linea "throw:".
      * Solo podia significar una cosa — el throw no venia de un builtin sino de
@@ -663,7 +665,7 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
     if (hablar) bpvm_diag("[bpvm] throw (interp): \"%s\"", msg ? msg : "");
 
     tc->sp = *sp; tc->bp = *bp; tc->pc = *pc; tc->cs = *cs;
-    bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    bpref_t ref = bpvm_throw_error_clase(vm, tc, clase, msg);   /* V8/H7.5: con su tipo */
     if (bpref_is_null(ref)) {
         if (hablar) bpvm_diag("[bpvm] throw (interp): NO SE PUDO CONSTRUIR la excepcion "
                               "-> el programa NO se entera");
@@ -682,20 +684,26 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
 /* Azúcar para los call-sites: formatea el mensaje EXACTO (paridad con VM-Java),
  * lanza, y si se atrapa `break` (sigue el switch en el catch); si no, termina.
  * Es un bloque-llave (no do/while) para que `break` rompa el switch del intérprete. */
-#define BPVM_RT_THROW(...) \
+#define BPVM_RT_THROW_DE(clase, ...) \
     { char _em[128]; snprintf(_em, sizeof _em, __VA_ARGS__); \
-      if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, _em)) break; \
+      if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, (clase), _em)) break; \
       exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done; }
+/* V8/H7.5 — un RuntimeError; los que tienen su tipo, BPVM_RT_THROW_DE con su clase (BPVM_CLASE_*). */
+#define BPVM_RT_THROW(...) BPVM_RT_THROW_DE(BPVM_CLASE_RUNTIME, __VA_ARGS__)
 /* V7/H5 P2b — lo mismo con un texto YA HECHO (el de una primitiva compartida, bpvm_prims.h). No
  * BPVM_RT_THROW("%s", em): su _em[128] y el búfer del case estarían vivos a la vez, y el marco de TODO el
  * intérprete lo fija el case más gordo — +88 B en la Pico, medido con -fstack-usage (248 → 336). */
-#define BPVM_RT_THROW_TEXTO(texto) \
-    { if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, (texto))) break; \
+#define BPVM_RT_THROW_TEXTO_DE(clase, texto) \
+    { if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, (clase), (texto))) break; \
       exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done; }
+#define BPVM_RT_THROW_TEXTO(texto) BPVM_RT_THROW_TEXTO_DE(BPVM_CLASE_RUNTIME, texto)
 /* #573 — un índice fuera de rango al leer o escribir un elemento: el texto, de la primitiva que comparten el opcode
  * y el helper del AOT (bpvm_prims.h). Su búfer vive solo en su case, sin otro a la vez: no crece el marco. */
-#define BPVM_RT_INDICE(op, idx, len) \
-    { char _ei[80]; bpvm_prim_texto_indice(_ei, sizeof _ei, (op), (idx), (len)); BPVM_RT_THROW_TEXTO(_ei); }
+/* V8/H7.5: un IndexError; y si el array es null (su longitud es 0), un NullReferenceError, como en Java: sólo en el
+ * camino del error, sin otro búfer. El espejo, indiceFuera (miVM). */
+#define BPVM_RT_INDICE(arr, op, idx, len) \
+    { if (bpref_is_null(arr)) BPVM_RT_THROW_TEXTO_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un elemento de un array null"); \
+      char _ei[80]; bpvm_prim_texto_indice(_ei, sizeof _ei, (op), (idx), (len)); BPVM_RT_THROW_TEXTO_DE(BPVM_CLASE_INDICE, _ei); }
 
 /* GAP-4 — formateo canónico de double/float para print. Punto fijo estilo
  * Str.doubleToString (entero-based: escala por 1e6 a un int64, redondea, separa
@@ -970,7 +978,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             char em[64];
             snprintf(em, sizeof em, "desbordamiento de pila (el hilo tiene %u B)",
                      (unsigned) (tc->stack_top - tc->stack_base));
-            if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, em)) continue;   /* atrapada: sigue en su catch */
+            if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, BPVM_CLASE_RUNTIME, em)) continue;   /* atrapada: sigue en su catch; la pila, RuntimeError */
             exit_status = BPVM_ERR_RUNTIME;
             if (yielded) *yielded = 1;
             goto done;
@@ -1063,7 +1071,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        if (b == 0) {
                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                           bpref_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                           bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "División por cero");
                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                mem = vm->memory;
@@ -1080,7 +1088,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        if (b == 0) {
                            tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                           bpref_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                           bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "Módulo por cero");
                            if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                mem = vm->memory;
@@ -1537,24 +1545,24 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 en F1; F5 lo añade) ---- */
         case OP_I32_TO_I8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < -128 || v > 127) BPVM_RT_THROW("I32_TO_I8: valor fuera de rango %" PRId32, v);
+            if (v < -128 || v > 127) BPVM_RT_THROW_DE(BPVM_CLASE_ARITMETICA, "I32_TO_I8: valor fuera de rango %" PRId32, v);
             int32_t r = (int32_t)(int8_t)(v & 0xFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U8: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < 0 || v > 255) BPVM_RT_THROW("I32_TO_U8: valor fuera de rango %" PRId32 "", v);
+            if (v < 0 || v > 255) BPVM_RT_THROW_DE(BPVM_CLASE_ARITMETICA, "I32_TO_U8: valor fuera de rango %" PRId32 "", v);
             bpvm_write_i32_be(mem + sp, v & 0xFF); sp += 4; break;
         }
         case OP_I32_TO_I16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < -32768 || v > 32767) BPVM_RT_THROW("I32_TO_I16: valor fuera de rango %" PRId32 "", v);
+            if (v < -32768 || v > 32767) BPVM_RT_THROW_DE(BPVM_CLASE_ARITMETICA, "I32_TO_I16: valor fuera de rango %" PRId32 "", v);
             int32_t r = (int32_t)(int16_t)(v & 0xFFFF);
             bpvm_write_i32_be(mem + sp, r); sp += 4; break;
         }
         case OP_I32_TO_U16: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            if (v < 0 || v > 65535) BPVM_RT_THROW("I32_TO_U16: valor fuera de rango %" PRId32 "", v);
+            if (v < 0 || v > 65535) BPVM_RT_THROW_DE(BPVM_CLASE_ARITMETICA, "I32_TO_U16: valor fuera de rango %" PRId32 "", v);
             bpvm_write_i32_be(mem + sp, v & 0xFFFF); sp += 4; break;
         }
 
@@ -1576,7 +1584,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         if (b == 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "División por cero");
+                            bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "División por cero");
                             if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                 pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                 mem = vm->memory; break;
@@ -1591,7 +1599,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         if (b == 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "Módulo por cero");
+                            bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "Módulo por cero");
                             if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                                 pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                                 mem = vm->memory; break;
@@ -1685,9 +1693,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I64: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ALOAD_I64, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ALOAD_I64, idx, length);
             int64_t v = bpvm_read_i64_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 8));
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
@@ -1696,9 +1704,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ASTORE_I64, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ASTORE_I64, idx, length);
             bpvm_write_i64_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 8), v);
             break;
         }
@@ -1721,7 +1729,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 4; int32_t base = bpvm_read_i32_be(mem+sp);
                         if (e < 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "exponente negativo en potencia entera");
                             if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
                             exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
                         }
@@ -1732,7 +1740,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                         sp -= 8; int64_t base = bpvm_read_i64_be(mem+sp);
                         if (e < 0) {
                             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                            bpref_t ref = bpvm_throw_runtime_error(vm, tc, "exponente negativo en potencia entera");
+                            bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_ARITMETICA, "exponente negativo en potencia entera");
                             if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) { pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs; mem = vm->memory; break; }
                             exit_status = BPVM_ERR_RUNTIME; if (yielded) *yielded = 1; goto done;
                         }
@@ -1826,10 +1834,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length)
-                BPVM_RT_INDICE(OP_ALOAD, idx, length);
+                BPVM_RT_INDICE(arr, OP_ALOAD, idx, length);
             int32_t v = bpvm_read_i32_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 4));
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
@@ -1838,16 +1846,16 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             if (idx < 0 || (uint32_t) idx >= length)
-                BPVM_RT_INDICE(OP_ASTORE, idx, length);
+                BPVM_RT_INDICE(arr, OP_ASTORE, idx, length);
             bpvm_write_i32_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 4), v);
             break;
         }
         case OP_ALEN: {
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
             bpvm_write_i32_be(mem + sp, (int32_t) length); sp += 4;
             break;
@@ -1855,9 +1863,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ALOAD_I8, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ALOAD_I8, idx, length);
             int8_t v = (int8_t) *bpref_arr_elem(vm, arr, (uint32_t) idx, 1);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1865,9 +1873,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_U8: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ALOAD_U8, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ALOAD_U8, idx, length);
             uint8_t v = *bpref_arr_elem(vm, arr, (uint32_t) idx, 1);
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1875,9 +1883,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_I16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ALOAD_I16, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ALOAD_I16, idx, length);
             int16_t v = bpvm_read_i16_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 2));
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1885,9 +1893,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_ALOAD_U16: {
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ALOAD_U16, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ALOAD_U16, idx, length);
             uint16_t v = bpvm_read_u16_be(bpref_arr_elem(vm, arr, (uint32_t) idx, 2));
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4;
             break;
@@ -1896,9 +1904,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ASTORE_I8, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ASTORE_I8, idx, length);
             *bpref_arr_elem(vm, arr, (uint32_t) idx, 1) = (uint8_t)(v & 0xFF);
             break;
         }
@@ -1906,9 +1914,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= 4; int32_t idx = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t arr = bpref_load(vm, sp);
-            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpvm_ref_dead(vm, arr)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t length = bpref_arr_len(vm, arr);
-            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(OP_ASTORE_I16, idx, length);
+            if (idx < 0 || (uint32_t) idx >= length) BPVM_RT_INDICE(arr, OP_ASTORE_I16, idx, length);
             int16_t v16 = (int16_t)(v & 0xFFFF);
             uint8_t* e = bpref_arr_elem(vm, arr, (uint32_t) idx, 2);
             /* [24-ago-2026] AQUI HABIA UN `bpvm_write_u32_be(e, 0)` con el
@@ -1933,7 +1941,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             /* V7/H12 (#660) — el contrato B también aquí: era el único opcode que recorre un objeto sin mirarlo antes, y
              * una cadena soltada (o una referencia a medio escribir por otro run) se resolvía a la dirección 0, cuya
              * «longitud» son los bytes del principio de la memoria: cientos de millones que recorrer. */
-            if (bpvm_ref_dead(vm, s)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            if (bpvm_ref_dead(vm, s)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
             const char* txt = NULL;
             uint32_t nbytes = 0;
             if (!bpref_is_null(s)) {
@@ -2021,8 +2029,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_GET_FIELD: case OP_GET_FIELD_REF: {
             uint32_t slot; if (op == OP_GET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int32_t v = bpvm_read_i32_be(bpref_field(vm, obj, slot));
             bpvm_write_i32_be(mem + sp, v); sp += 4;
             break;
@@ -2030,8 +2038,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_LEA_FIELD: case OP_LEA_FIELD_REF: {   /* V7/H1 #19: direccion del campo (array fijo en el objeto) = ref sin TAG */
             uint32_t slot; if (op == OP_LEA_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
             bpvm_write_i64_be(mem + sp, (int64_t) (uint32_t) (bpref_field(vm, obj, slot) - vm->memory));   /* offset en memory[], no puntero */
             sp += BPVM_REF_SIZE;
             break;
@@ -2040,8 +2048,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 4; int32_t v   = bpvm_read_i32_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i32_be(bpref_field(vm, obj, slot), v);
             break;
         }
@@ -2050,8 +2058,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_GET_FIELD_LONG: case OP_GET_FIELD_LONG_REF: {
             uint32_t slot; if (op == OP_GET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             int64_t v = bpvm_read_i64_be(bpref_field(vm, obj, slot));
             bpvm_write_i64_be(mem + sp, v); sp += 8;
             break;
@@ -2060,8 +2068,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD_LONG) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= 8; int64_t v   = bpvm_read_i64_be(mem + sp);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             bpvm_write_i64_be(bpref_field(vm, obj, slot), v);
             break;
         }
@@ -2072,14 +2080,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             else { BPVM_REF_LEE(vt_slot); num_args = mem[pc++]; }
             uint32_t this_addr = sp - BPVM_REF_SIZE - (uint32_t) num_args * 4;   /* receptor ref */
             bpref_t this_obj = bpref_load(vm, this_addr);
-            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B: método sobre objeto liberado */
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: llamada a un método de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B: método sobre objeto liberado */
             /* #389 — el "hermano" del cast: despachar un método sobre un Object
              * que lleva una CADENA leía su longitud como class_ptr y el error
              * salía después, disfrazado (el 504). El helper valida el tipo de
              * bloque; si no es un objeto, se dice AQUÍ y atrapable. */
             uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
-            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
+            if (class_ptr == 0) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
 
             /* L2 v3: fall-back al parent si vt[slot] == -1 o slot >= num_methods
              * (bpvm_vt_resolver, la regla de las dos VMs). */
@@ -2117,10 +2125,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp -= 4;
             int32_t vt_slot = bpvm_read_i32_be(mem + sp);
             bpref_t this_obj = bpref_load(vm, sp - BPVM_REF_SIZE - (uint32_t) num_args * 4);
-            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");
-            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: llamada a un método de un objeto null");
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
             uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
-            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
+            if (class_ptr == 0) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
             int32_t method_off = -1;
             uint32_t target_cs = 0;
             if (vt_slot < 0 || bpvm_vt_resolver(vm, class_ptr, (uint32_t) vt_slot, &method_off, &target_cs) != 0)
@@ -2144,10 +2152,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             BPVM_REF_LEE(pos);
             uint8_t num_args = mem[pc++];
             bpref_t this_obj = bpref_load(vm, sp - BPVM_REF_SIZE - (uint32_t) num_args * 4);
-            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");
-            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: llamada a un método de un objeto null");
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
             uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
-            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
+            if (class_ptr == 0) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
             uint32_t tabla = bpvm_ifaz_tabla(vm, bpvm_ifaz_lista(vm, class_ptr), ifaz);
             if (tabla == 0) BPVM_RT_THROW("INVOKE_IFAZ: la clase del objeto no implementa la interfaz");   /* sólo un valor que no pasó por el compilador */
             uint32_t vt_slot = bpvm_read_u16_be(mem + tabla + 2u * pos);
@@ -2194,7 +2202,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (nlen > 40u) nlen = 40u;
                 snprintf(msg, sizeof msg, "conversion invalida: el valor no es un '%.*s'", (int) nlen, (const char*) (mem + naddr + 4));
                 tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_CONVERSION, msg);   /* V8/H7.5 */
                 if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                     pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                     mem = vm->memory; break;
@@ -2263,7 +2271,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                          "conversion invalida: el valor no es un '%.*s'",
                          (int) nlen, (const char*) (mem + naddr + 4));
                 tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
-                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_CONVERSION, msg);   /* V8/H7.5 */
                 if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                     pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                     mem = vm->memory; break;
@@ -2333,7 +2341,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                          (int) nlen, (const char*) (mem + naddr + 4));
                 tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
 
-                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                bpref_t ref = bpvm_throw_error_clase(vm, tc, BPVM_CLASE_CONVERSION, msg);   /* V8/H7.5 */
                 if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
                     pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
                     mem = vm->memory; break;
@@ -2357,8 +2365,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint32_t slot; if (op == OP_SET_FIELD_OWNER) slot = mem[pc++]; else BPVM_REF_LEE(slot);
             sp -= BPVM_REF_SIZE; bpref_t val = bpref_load(vm, sp);   /* V4: valor = ref nueva (8B; era 4B → drift + high-word) */
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
-            if (bpref_is_null(obj)) BPVM_RT_THROW("referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
-            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");   /* contrato B */
+            if (bpref_is_null(obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia nula: acceso a un campo de un objeto null");   /* #525: atrapable, mismo texto que miVM */
+            if (bpvm_ref_dead(vm, obj)) BPVM_RT_THROW_DE(BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");   /* contrato B */
             uint32_t field_addr = bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + (uint32_t) slot * 4u;
             bpref_t old = bpref_load(vm, field_addr);               /* V4: ref vieja (8B flat; era readi32=high-word=0 → leak) */
             bpvm_free_owned(vm, old);   /* V4/H-006: cascada recursiva; era root-only + solo objetos */

@@ -1022,7 +1022,31 @@ public class VirtualMachine {
     }
 
     public void throwBpRuntimeError(ThreadContext tc, String message) {
-        throwBpError(tc, "Core.RuntimeError", message);
+        throwBpError(tc, CLASE_RUNTIME, message);
+    }
+
+    /** V8/H7.5 (7-nov) — los errores de la VM con su tipo, como en Java (Eduardo: «los runtime error se puede poner una
+     *  excepción dentro como excepción específica»): clases de Core, todas hijas de RuntimeError, así que un
+     *  `catch e: RuntimeError` las sigue atrapando todas. La misma tabla en la VM-C (BPVM_CLASE_*, bpvm_internal.h); su
+     *  número es el de `__throwError` (el builtin 308, BUILTINS.md). Con un Core de antes, sin ellas, RuntimeError. */
+    static final String CLASE_RUNTIME = "Core.RuntimeError";        // 0: lo demás (pines, buses, red, heap, pila…)
+    static final String CLASE_ARITMETICA = "Core.ArithmeticError";  // 1: división o módulo por cero, exponente negativo, un número que no cabe
+    static final String CLASE_NULA = "Core.NullReferenceError";     // 2: null (un campo, un método, una cadena, un array), un objeto eliminado
+    static final String CLASE_INDICE = "Core.IndexError";           // 3: un índice fuera de un array, de una cadena o de una List
+    static final String CLASE_CONVERSION = "Core.CastError";        // 4: (Caja) x cuando x no es una Caja
+    static final String CLASE_ES = "Core.IOError";                  // 5: los ficheros (y su hija, EncodingError)
+    private static final String[] CLASES_DE_ERROR = { CLASE_RUNTIME, CLASE_ARITMETICA, CLASE_NULA, CLASE_INDICE, CLASE_CONVERSION, CLASE_ES };
+
+    /** La clase de un tipo de error de la tabla (el número de `__throwError`); uno que no está, RuntimeError. */
+    static String claseDeError(int tipo) {
+        return tipo >= 0 && tipo < CLASES_DE_ERROR.length ? CLASES_DE_ERROR[tipo] : CLASE_RUNTIME;
+    }
+
+    /** V8/H7.5 — un índice fuera de un array: IndexError; si el array es null (su longitud es 0, #512),
+     *  NullReferenceError, como en Java. Sólo en el camino del error: el normal no cambia. El espejo, BPVM_RT_INDICE. */
+    private void indiceFuera(ThreadContext tc, long arr, String texto) {
+        if (arr == 0) throwBpError(tc, CLASE_NULA, "referencia nula: acceso a un elemento de un array null");
+        throwBpError(tc, CLASE_INDICE, texto);
     }
 
     /** V8/H5 (#711) — lanza una excepción de Core de la clase `clase` («Core.EncodingError»), fabricada como
@@ -1037,7 +1061,7 @@ public class VirtualMachine {
         // -> RuntimeError). Fallback: la copia per-módulo legado (mods viejos),
         // resuelta contra el cs del thread.
         Integer classPtrBox = mm.resolveGlobal(clase);
-        if (classPtrBox == null && !"Core.RuntimeError".equals(clase)) classPtrBox = mm.resolveGlobal("Core.RuntimeError");
+        if (classPtrBox == null && !CLASE_RUNTIME.equals(clase)) classPtrBox = mm.resolveGlobal(CLASE_RUNTIME);
         if (classPtrBox == null) classPtrBox = mm.resolveExportInModule(tc.cs, "RuntimeError");
         if (classPtrBox == null) {
             // El módulo del thread actual no exportó RuntimeError (es un
@@ -1175,7 +1199,7 @@ public class VirtualMachine {
     private CursorBP cursorDe(ThreadContext tc, long sref, String op) {
         CursorBP c;
         synchronized (ficherosAbiertos) { c = (sref == 0) ? null : ficherosAbiertos.get(sref); }   // V7 #657: bajo su cerrojo
-        if (c == null) throwBpRuntimeError(tc, op + ": fichero cerrado");
+        if (c == null) throwBpError(tc, CLASE_ES, op + ": fichero cerrado");
         return c;
     }
 
@@ -1206,7 +1230,7 @@ public class VirtualMachine {
             ya = ficheroYaAbierto(clave, mode);
             if (!ya) abiertosBreves.add(b);
         }
-        if (ya) throwBpRuntimeError(tc, que + "('" + path + "'): ya está abierto");
+        if (ya) throwBpError(tc, CLASE_ES, que + "('" + path + "'): ya está abierto");
         return b;
     }
     /** Dos rutas (rename, copyFile): las dos o ninguna; la misma dos veces, una, para escribir. */
@@ -1220,7 +1244,7 @@ public class VirtualMachine {
             else if (b2 != null && ficheroYaAbierto(c2, m2)) choca = p2;
             else { abiertosBreves.add(b1); if (b2 != null) abiertosBreves.add(b2); }
         }
-        if (choca != null) throwBpRuntimeError(tc, que + "('" + p1 + "' -> '" + p2 + "'): '" + choca + "' ya está abierto");
+        if (choca != null) throwBpError(tc, CLASE_ES, que + "('" + p1 + "' -> '" + p2 + "'): '" + choca + "' ya está abierto");
         return new Breve[] { b1, b2 };
     }
     private void cierraBreve(Breve... bs) {
@@ -1512,16 +1536,16 @@ public class VirtualMachine {
 
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
-            throwBpRuntimeError(tc, "path demasiado largo");
+            throwBpError(tc, CLASE_ES, "path demasiado largo");
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
             try {
                 return mm.resolveInWorkdir(userPath);
             } catch (SecurityException se) {
-                throwBpRuntimeError(tc, "sandbox: " + se.getMessage());
+                throwBpError(tc, CLASE_ES, "sandbox: " + se.getMessage());
                 return null;   // unreachable: throwBpRuntimeError siempre throws
             } catch (RuntimeException re) {
-                throwBpRuntimeError(tc, "sandbox: " + re.getMessage());
+                throwBpError(tc, CLASE_ES, "sandbox: " + re.getMessage());
                 return null;
             }
         }
@@ -3115,7 +3139,7 @@ public class VirtualMachine {
      *  Antes miVM leía y escribía `memory[4 + slot*4]` (el primer módulo) en silencio, y la
      *  VM-C paraba el RUN con NULL_RECEIVER: ni atrapable ni el mismo comportamiento. */
     private void requireReceptor(ThreadContext tc, int sp, long ref, String texto) {
-        if (ref == 0) { tc.sp = sp; throwBpRuntimeError(tc, texto); }
+        if (ref == 0) { tc.sp = sp; throwBpError(tc, CLASE_NULA, texto); }
     }
     private void requireAlive(ThreadContext tc, int sp, long ref) {
         if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
@@ -3130,7 +3154,7 @@ public class VirtualMachine {
                         ref, idx, handleGen[idx], handleGenOf(ref), handleAddr[idx]);
             }
             tc.sp = sp;
-            throwBpRuntimeError(tc, "referencia a objeto eliminado (use-after-free)");
+            throwBpError(tc, CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
         }
     }
 
@@ -3889,14 +3913,14 @@ public class VirtualMachine {
                 case 0x12: { // DIV
                     sp -= 4; int b = readI32(mem, sp);
                     sp -= 4; int a = readI32(mem, sp);
-                    if (b == 0) { tc.sp=sp; throwBpRuntimeError(tc, "División por cero"); }
+                    if (b == 0) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "División por cero"); }
                     writeI32(mem, sp, a / b); sp += 4;
                     break;
                 }
                 case 0x13: { // MOD
                     sp -= 4; int b = readI32(mem, sp);
                     sp -= 4; int a = readI32(mem, sp);
-                    if (b == 0) { tc.sp=sp; throwBpRuntimeError(tc, "Módulo por cero"); }
+                    if (b == 0) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "Módulo por cero"); }
                     writeI32(mem, sp, a % b); sp += 4;
                     break;
                 }
@@ -4009,7 +4033,7 @@ public class VirtualMachine {
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "ALOAD: índice fuera de rango "
+                        indiceFuera(tc, arr, "ALOAD: índice fuera de rango "
                                 + idx + " (length=" + length + ")");
                     }
                     writeI32(mem, sp, readI32(mem, arrElem(arr, idx, 4))); sp += 4;
@@ -4022,7 +4046,7 @@ public class VirtualMachine {
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "ASTORE: índice fuera de rango "
+                        indiceFuera(tc, arr, "ASTORE: índice fuera de rango "
                                 + idx + " (length=" + length + ")");
                     }
                     writeI32(mem, arrElem(arr, idx, 4), val);
@@ -4172,7 +4196,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ALOAD_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, (int) mem[arrElem(arr, idx, 1)]); sp += 4;
                     break;
                 }
@@ -4180,7 +4204,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ALOAD_U8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     writeI32(mem, sp, mem[arrElem(arr, idx, 1)] & 0xFF); sp += 4;
                     break;
                 }
@@ -4188,7 +4212,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ALOAD_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, (short) raw); sp += 4;
@@ -4198,7 +4222,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ALOAD_U16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
                     int raw = ((mem[addr] & 0xFF) << 8) | (mem[addr + 1] & 0xFF);
                     writeI32(mem, sp, raw); sp += 4;
@@ -4210,7 +4234,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ASTORE_I8: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     mem[arrElem(arr, idx, 1)] = (byte) val;
                     break;
                 }
@@ -4219,7 +4243,7 @@ public class VirtualMachine {
                     sp -= 4; int idx = readI32(mem, sp);
                     sp -= REF_SIZE; long arr = refLoad(mem, sp); requireAlive(tc, sp, arr);   // contrato B
                     int length = arrLen(mem, arr);
-                    if (idx < 0 || idx >= length) { tc.sp=sp; throwBpRuntimeError(tc, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
+                    if (idx < 0 || idx >= length) { tc.sp=sp; indiceFuera(tc, arr, "ASTORE_I16: idx fuera de rango " + idx + " (len=" + length + ")"); }
                     int addr = arrElem(arr, idx, 2);
                     mem[addr]     = (byte) ((val >> 8) & 0xFF);
                     mem[addr + 1] = (byte) ( val       & 0xFF);
@@ -4302,25 +4326,25 @@ public class VirtualMachine {
 
                 case 0x4D: { // I32_TO_I8
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < -128 || v > 127) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_I8: valor fuera de rango " + v); }
+                    if (v < -128 || v > 127) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "I32_TO_I8: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x4E: { // I32_TO_U8
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < 0 || v > 255) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_U8: valor fuera de rango " + v); }
+                    if (v < 0 || v > 255) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "I32_TO_U8: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x4F: { // I32_TO_I16
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < Short.MIN_VALUE || v > Short.MAX_VALUE) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_I16: valor fuera de rango " + v); }
+                    if (v < Short.MIN_VALUE || v > Short.MAX_VALUE) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "I32_TO_I16: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
                 case 0x50: { // I32_TO_U16
                     sp -= 4; int v = readI32(mem, sp);
-                    if (v < 0 || v > 0xFFFF) { tc.sp=sp; throwBpRuntimeError(tc, "I32_TO_U16: valor fuera de rango " + v); }
+                    if (v < 0 || v > 0xFFFF) { tc.sp=sp; throwBpError(tc, CLASE_ARITMETICA, "I32_TO_U16: valor fuera de rango " + v); }
                     writeI32(mem, sp, v); sp += 4;
                     break;
                 }
@@ -4447,13 +4471,13 @@ public class VirtualMachine {
                 case 0x75: { // LDIV
                     sp -= 8; long b = readI64(mem, sp);
                     sp -= 8; long a = readI64(mem, sp);
-                    if (b == 0) { tc.sp = sp; throwBpRuntimeError(tc, "División por cero"); }
+                    if (b == 0) { tc.sp = sp; throwBpError(tc, CLASE_ARITMETICA, "División por cero"); }
                     writeI64(mem, sp, a / b); sp += 8; break;
                 }
                 case 0x76: { // LMOD
                     sp -= 8; long b = readI64(mem, sp);
                     sp -= 8; long a = readI64(mem, sp);
-                    if (b == 0) { tc.sp = sp; throwBpRuntimeError(tc, "Módulo por cero"); }
+                    if (b == 0) { tc.sp = sp; throwBpError(tc, CLASE_ARITMETICA, "Módulo por cero"); }
                     writeI64(mem, sp, a % b); sp += 8; break;
                 }
                 case 0x77: { // LNEG
@@ -4580,7 +4604,7 @@ public class VirtualMachine {
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "ALOAD_I64: índice fuera de rango " + idx + " (length=" + length + ")");
+                        indiceFuera(tc, arr, "ALOAD_I64: índice fuera de rango " + idx + " (length=" + length + ")");
                     }
                     writeI64(mem, sp, readI64(mem, arrElem(arr, idx, 8))); sp += 8;
                     break;
@@ -4592,7 +4616,7 @@ public class VirtualMachine {
                     int length = arrLen(mem, arr);
                     if (idx < 0 || idx >= length) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "ASTORE_I64: índice fuera de rango " + idx + " (length=" + length + ")");
+                        indiceFuera(tc, arr, "ASTORE_I64: índice fuera de rango " + idx + " (length=" + length + ")");
                     }
                     writeI64(mem, arrElem(arr, idx, 8), val);
                     break;
@@ -4621,7 +4645,7 @@ public class VirtualMachine {
                 case 0xAC: { // IPOW — i32 base ^ i32 exp (exp. por cuadrados; exp<0 -> error)
                     sp -= 4; int e = readI32(mem, sp);
                     sp -= 4; int base = readI32(mem, sp);
-                    if (e < 0) { tc.sp = sp; throwBpRuntimeError(tc, "exponente negativo en potencia entera"); }
+                    if (e < 0) { tc.sp = sp; throwBpError(tc, CLASE_ARITMETICA, "exponente negativo en potencia entera"); }
                     int r = 1, bb = base;
                     while (e > 0) { if ((e & 1) != 0) r *= bb; bb *= bb; e >>= 1; }
                     writeI32(mem, sp, r); sp += 4; break;
@@ -4629,7 +4653,7 @@ public class VirtualMachine {
                 case 0xAD: { // LPOW — i64 base ^ i64 exp
                     sp -= 8; long e = readI64(mem, sp);
                     sp -= 8; long base = readI64(mem, sp);
-                    if (e < 0) { tc.sp = sp; throwBpRuntimeError(tc, "exponente negativo en potencia entera"); }
+                    if (e < 0) { tc.sp = sp; throwBpError(tc, CLASE_ARITMETICA, "exponente negativo en potencia entera"); }
                     long r = 1L, bb = base;
                     while (e > 0) { if ((e & 1L) != 0) r *= bb; bb *= bb; e >>= 1; }
                     writeI64(mem, sp, r); sp += 8; break;
@@ -4883,7 +4907,7 @@ public class VirtualMachine {
                                 java.nio.charset.StandardCharsets.UTF_8);
                         // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
                         tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
-                        throwBpRuntimeError(tc,
+                        throwBpError(tc, CLASE_CONVERSION,
                                 "conversion invalida: el valor no es un '" + nombre + "'");
                     }
                     break;
@@ -4913,7 +4937,7 @@ public class VirtualMachine {
                                 java.nio.charset.StandardCharsets.UTF_8);
                         // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
                         tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
-                        throwBpRuntimeError(tc,
+                        throwBpError(tc, CLASE_CONVERSION,
                                 "conversion invalida: el valor no es un '" + nombre + "'");
                     }
                     break;
@@ -5029,7 +5053,7 @@ public class VirtualMachine {
                         // #525 — el MISMO texto que interp.c, byte a byte (antes llevaba la ranura y el
                         // numero de args, y la VM-C ni siquiera lanzaba: paraba el RUN).
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
+                        throwBpError(tc, CLASE_NULA, "referencia nula: llamada a un método de un objeto null");
                         break;
                     }
                     requireAlive(tc, sp, thisRef);   // contrato B: método sobre objeto liberado → grita
@@ -5039,7 +5063,7 @@ public class VirtualMachine {
                     int classPtr   = classPtrOfRefOr0(thisRef);
                     if (classPtr == 0) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        throwBpError(tc, CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
                         break;
                     }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -5081,14 +5105,14 @@ public class VirtualMachine {
                     long thisRef = refLoad(mem, sp - REF_SIZE - numArgs * 4);
                     if (thisRef == 0) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
+                        throwBpError(tc, CLASE_NULA, "referencia nula: llamada a un método de un objeto null");
                         break;
                     }
                     requireAlive(tc, sp, thisRef);
                     int classPtr = classPtrOfRefOr0(thisRef);
                     if (classPtr == 0) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        throwBpError(tc, CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
                         break;
                     }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -5141,7 +5165,7 @@ public class VirtualMachine {
                         String nombre = new String(mem, naddr + 4, nlen, java.nio.charset.StandardCharsets.UTF_8);
                         // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
                         tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
-                        throwBpRuntimeError(tc, "conversion invalida: el valor no es un '" + nombre + "'");
+                        throwBpError(tc, CLASE_CONVERSION, "conversion invalida: el valor no es un '" + nombre + "'");
                     }
                     break;
                 }
@@ -5158,14 +5182,14 @@ public class VirtualMachine {
                     long thisRef = refLoad(mem, sp - REF_SIZE - numArgs * 4);
                     if (thisRef == 0) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
+                        throwBpError(tc, CLASE_NULA, "referencia nula: llamada a un método de un objeto null");
                         break;
                     }
                     requireAlive(tc, sp, thisRef);
                     int classPtr = classPtrOfRefOr0(thisRef);
                     if (classPtr == 0) {
                         tc.sp = sp;
-                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        throwBpError(tc, CLASE_NULA, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
                         break;
                     }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
@@ -5520,7 +5544,7 @@ public class VirtualMachine {
         // tratan el null como "" (concatenar, __strCopy; el aviso de un destructor) no tienen ninguno; escribir es un opcode.
         for (int off : b.cadenas)
             if (refLoad(memory, tc.sp - off) == 0)
-                throwBpRuntimeError(tc, "referencia nula: " + b.nombreDeError() + " de un string null");
+                throwBpError(tc, CLASE_NULA, "referencia nula: " + b.nombreDeError() + " de un string null");
         switch (b) {
             case STRLEN: {
                 long ref = popTcRef(tc);   // H1.2a: string ref 8 bytes
@@ -6082,7 +6106,7 @@ public class VirtualMachine {
                 if (strAscii(ref)) {   // V8/H5: el rápido: el carácter i ES el byte i (mismo texto de error que abajo)
                     int nb = strBytes(ref);
                     if (i < 0 || i >= nb) {
-                        throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + nb + ")");
+                        throwBpError(tc, CLASE_INDICE, "charAt: idx fuera de rango " + i + " (len=" + nb + ")");
                     }
                     byte[] t = { memory[refDeref(ref) + 4 + i] };
                     pushTcRef(tc, allocVmStrBytes(t, 0, 1, true));
@@ -6091,7 +6115,7 @@ public class VirtualMachine {
                 String s = readVmString(ref);
                 int n = s.codePointCount(0, s.length());   // H2: índice en codepoints
                 if (i < 0 || i >= n) {
-                    throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + n + ")");
+                    throwBpError(tc, CLASE_INDICE, "charAt: idx fuera de rango " + i + " (len=" + n + ")");
                 }
                 int cp = s.codePointAt(s.offsetByCodePoints(0, i));
                 pushTcRef(tc, allocVmString(new String(Character.toChars(cp))));
@@ -6244,7 +6268,7 @@ public class VirtualMachine {
                     // Toca el invariante: el mismo .mod debe fallar con el mismo
                     // texto. Gana el mensaje de la VM-C (builtins.c:1354), que
                     // ademas no repite la ruta que ya va delante.
-                    throwBpRuntimeError(tc, "readFile('" + path + "'): no se pudo abrir");
+                    throwBpError(tc, CLASE_ES, "readFile('" + path + "'): no se pudo abrir");
                 }
                 break;
             }
@@ -6262,7 +6286,7 @@ public class VirtualMachine {
                     cierraBreve(ab);
                 }
                 // V7 #657 — el texto, el de la VM-C: el de Java (e.getMessage()) depende del SO
-                if (fallo) throwBpRuntimeError(tc, "writeFile('" + path + "'): error de escritura");
+                if (fallo) throwBpError(tc, CLASE_ES, "writeFile('" + path + "'): error de escritura");
                 pushTc(tc, 0); // dummy
                 break;
             }
@@ -6281,7 +6305,7 @@ public class VirtualMachine {
                 } finally {
                     cierraBreve(ab);
                 }
-                if (fallo) throwBpRuntimeError(tc, "appendFile('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
+                if (fallo) throwBpError(tc, CLASE_ES, "appendFile('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0); // dummy
                 break;
             }
@@ -6297,7 +6321,7 @@ public class VirtualMachine {
                 long sref = popTcRef(tc);
                 if (mode < 0 || mode > 3) throwBpRuntimeError(tc, "File: modo no válido");
                 if (sref == 0) throwBpRuntimeError(tc, "File: sin bloque de estado");
-                if (ficherosAbiertos.containsKey(sref)) throwBpRuntimeError(tc, "File: el objeto ya tiene un fichero abierto");
+                if (ficherosAbiertos.containsKey(sref)) throwBpError(tc, CLASE_ES, "File: el objeto ya tiene un fichero abierto");
                 CursorBP c = new CursorBP();
                 c.mode = mode;
                 byte[] pk = (mode == 0) ? packResource(path) : null;   // #310 — el pack en ejecución va primero (sólo lectura)
@@ -6328,8 +6352,8 @@ public class VirtualMachine {
                         if (!fallo) ficherosAbiertos.put(sref, c);
                     }
                 }
-                if (ya) throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): ya está abierto");
-                if (fallo) throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): no se pudo abrir");
+                if (ya) throwBpError(tc, CLASE_ES, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): ya está abierto");
+                if (fallo) throwBpError(tc, CLASE_ES, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): no se pudo abrir");
                 pushTc(tc, 0);   // void → dummy
                 break;
             }
@@ -6351,9 +6375,9 @@ public class VirtualMachine {
                 String op = lectura ? "File.read()" : "File.write()";
                 CursorBP c = cursorDe(tc, sref, op);
                 int d = (dref == 0) ? 0 : refDeref(dref);
-                if (d == 0) throwBpRuntimeError(tc, op + ": buffer nulo");
+                if (d == 0) throwBpError(tc, CLASE_NULA, op + ": buffer nulo");
                 int dcap = readInt32(d);
-                if (off < 0 || n < 0 || off > dcap || n > dcap - off) throwBpRuntimeError(tc, op + ": fuera del buffer");
+                if (off < 0 || n < 0 || off > dcap || n > dcap - off) throwBpError(tc, CLASE_INDICE, op + ": fuera del buffer");
                 try {
                     if (lectura) {
                         int r = 0;
@@ -6365,7 +6389,7 @@ public class VirtualMachine {
                         }
                         pushTc(tc, r);
                     } else {
-                        if (c.mode == 0 || c.raf == null) throwBpRuntimeError(tc, "File.write(): abierto sólo para lectura");
+                        if (c.mode == 0 || c.raf == null) throwBpError(tc, CLASE_ES, "File.write(): abierto sólo para lectura");
                         if (n > 0) {
                             c.raf.seek(c.pos);
                             c.raf.write(memory, d + 4 + off, n);
@@ -6375,7 +6399,7 @@ public class VirtualMachine {
                         pushTc(tc, 0);
                     }
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, op + (lectura ? ": error de lectura" : ": error de escritura"));
+                    throwBpError(tc, CLASE_ES, op + (lectura ? ": error de lectura" : ": error de escritura"));
                 }
                 break;
             }
@@ -6383,7 +6407,7 @@ public class VirtualMachine {
                 int pos = popTc(tc);
                 long sref = popTcRef(tc);
                 CursorBP c = cursorDe(tc, sref, "File.seek()");
-                if (pos < 0 || pos > c.size) throwBpRuntimeError(tc, "File.seek(" + pos + "): fuera del fichero (tamaño " + c.size + ")");
+                if (pos < 0 || pos > c.size) throwBpError(tc, CLASE_ES, "File.seek(" + pos + "): fuera del fichero (tamaño " + c.size + ")");
                 c.pos = pos;
                 pushTc(tc, 0);
                 break;
@@ -6415,7 +6439,7 @@ public class VirtualMachine {
                         if (k < r) { nl = true; c.pos += k + 1; } else c.pos += r;
                     }
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "File.readLine(): error de lectura");
+                    throwBpError(tc, CLASE_ES, "File.readLine(): error de lectura");
                 }
                 byte[] linea = bo.toByteArray();
                 int len = linea.length;
@@ -6430,7 +6454,7 @@ public class VirtualMachine {
                 long sref = popTcRef(tc);
                 CursorBP c = cursorDe(tc, sref, "File.flush()");
                 try { if (c.raf != null && c.mode != 0) c.raf.getFD().sync(); }
-                catch (java.io.IOException e) { throwBpRuntimeError(tc, "File.flush(): error de escritura"); }
+                catch (java.io.IOException e) { throwBpError(tc, CLASE_ES, "File.flush(): error de escritura"); }
                 pushTc(tc, 0);
                 break;
             }
@@ -6447,7 +6471,7 @@ public class VirtualMachine {
                 }
                 StringBuilder det = new StringBuilder();
                 int r = (data == null) ? Sonido.NO_ABRE : Sonido.tocar(data, path, det);
-                if (r == Sonido.NO_ABRE)   throwBpRuntimeError(tc, "Sound.play('" + path + "'): no se pudo abrir");
+                if (r == Sonido.NO_ABRE)   throwBpError(tc, CLASE_ES, "Sound.play('" + path + "'): no se pudo abrir");
                 if (r == Sonido.NO_ES_WAV) throwBpRuntimeError(tc, "Sound.play('" + path + "'): no es un WAV");
                 if (r == Sonido.FORMATO)   throwBpRuntimeError(tc, "Sound.play('" + path + "'): formato no admitido (" + det
                         + "); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz");
@@ -6501,7 +6525,7 @@ public class VirtualMachine {
                 } finally {
                     cierraBreve(ab);
                 }
-                if (data == null) throwBpRuntimeError(tc, "readFileBytes('" + path + "'): no se pudo abrir");   // V7 #657: el texto de la VM-C
+                if (data == null) throwBpError(tc, CLASE_ES, "readFileBytes('" + path + "'): no se pudo abrir");   // V7 #657: el texto de la VM-C
                 long outRef = heapNuevoParaLlenar(TYPE_ARRAY_I8, data.length, data.length);   // #593; #736: la copia lo llena
                 System.arraycopy(data, 0, memory, refDeref(outRef) + 4, data.length);
                 ThreadContext me = currentTcLocal.get();
@@ -6527,7 +6551,7 @@ public class VirtualMachine {
                 } finally {
                     cierraBreve(ab);
                 }
-                if (fallo) throwBpRuntimeError(tc, "writeFileBytes('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
+                if (fallo) throwBpError(tc, CLASE_ES, "writeFileBytes('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0); // dummy (void)
                 break;
             }
@@ -6538,6 +6562,14 @@ public class VirtualMachine {
                 String msg = readVmString(popTcRef(tc));
                 throwBpRuntimeError(tc, msg);
                 break;   // unreachable: throwBpRuntimeError siempre lanza
+            }
+            case THROW_ERROR: {
+                // V8/H7.5 — lo mismo con su tipo, el número de la tabla (claseDeError): lo usan el compilador (el `this`
+                // null de #752, y una native) y Core (List). No retorna.
+                String msg = readVmString(popTcRef(tc));
+                int tipo = popTc(tc);
+                throwBpError(tc, claseDeError(tipo), msg);
+                break;   // unreachable: throwBpError siempre lanza
             }
             case GC: {
                 gc();
@@ -6551,7 +6583,7 @@ public class VirtualMachine {
                 // V7/H3 — como la VM-C (que ya lo tiene): un directorio que no se puede abrir es
                 // ERROR, no una lista vacía; y ORDENADO por bytes UTF-8, que el orden de un
                 // listado es del FS y el mismo programa tiene que imprimir lo mismo en la placa.
-                if (names == null) throwBpRuntimeError(tc, "listDir('" + path + "'): no se pudo abrir");
+                if (names == null) throwBpError(tc, CLASE_ES, "listDir('" + path + "'): no se pudo abrir");
                 java.util.Arrays.sort(names, (x, y) -> {
                     byte[] bx = x.getBytes(java.nio.charset.StandardCharsets.UTF_8), by = y.getBytes(java.nio.charset.StandardCharsets.UTF_8);
                     int m = Math.min(bx.length, by.length);
@@ -6631,13 +6663,13 @@ public class VirtualMachine {
                 long ref = popTcRef(tc);
                 if (strAscii(ref)) {   // V8/H5: el rápido: el carácter i ES el byte i (mismo texto de error que abajo)
                     int nb = strBytes(ref);
-                    if (idx < 0 || idx >= nb) throwBpRuntimeError(tc, "charCodeAt: idx fuera de rango " + idx + " (len=" + nb + ")");   // V8 #717: el texto de charAt, el mismo que la VM-C
+                    if (idx < 0 || idx >= nb) throwBpError(tc, CLASE_INDICE, "charCodeAt: idx fuera de rango " + idx + " (len=" + nb + ")");   // V8 #717: el texto de charAt, el mismo que la VM-C
                     pushTc(tc, memory[refDeref(ref) + 4 + idx] & 0xFF);
                     break;
                 }
                 String s = readVmString(ref);      // #6 (censo V4): string ref = 8B; H2 índice en codepoints
                 int n = s.codePointCount(0, s.length());
-                if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: idx fuera de rango " + idx + " (len=" + n + ")");   // V8 #717
+                if (idx < 0 || idx >= n) throwBpError(tc, CLASE_INDICE, "charCodeAt: idx fuera de rango " + idx + " (len=" + n + ")");   // V8 #717
                 pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
                 break;
             }
@@ -6865,9 +6897,9 @@ public class VirtualMachine {
                 long dstRefH = popTcRef(tc);   // #6 (censo V4): array ref = 8B (era popTc 4B + el handle se usaba como dirección física SIN refDeref)
                 long srcRefH = popTcRef(tc);
                 if (srcRefH == 0)
-                    throwBpRuntimeError(tc, "move: src es null");
+                    throwBpError(tc, CLASE_NULA, "move: src es null");
                 if (dstRefH == 0)
-                    throwBpRuntimeError(tc, "move: dst es null");
+                    throwBpError(tc, CLASE_NULA, "move: dst es null");
                 int srcRef = refDeref(srcRefH);   // V4: handle → dirección física del dato del array
                 int dstRef = refDeref(dstRefH);
                 int srcHeader = srcRef - 4;
@@ -6879,9 +6911,9 @@ public class VirtualMachine {
                 int srcTag = readInt32(srcHeader);
                 int dstTag = readInt32(dstHeader);
                 if ((srcTag & TAG_FREE_BIT) != 0)
-                    throwBpRuntimeError(tc, "move: src apunta a bloque libre");
+                    throwBpError(tc, CLASE_NULA, "move: src apunta a bloque libre");
                 if ((dstTag & TAG_FREE_BIT) != 0)
-                    throwBpRuntimeError(tc, "move: dst apunta a bloque libre");
+                    throwBpError(tc, CLASE_NULA, "move: dst apunta a bloque libre");
                 int srcType = (srcTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
                 int dstType = (dstTag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
                 if (srcType != TYPE_ARRAY_I8 && srcType != TYPE_ARRAY_I16 && srcType != TYPE_ARRAY_I32
@@ -6900,15 +6932,15 @@ public class VirtualMachine {
                 int srcLen = readInt32(srcRef);
                 int dstLen = readInt32(dstRef);
                 if (count < 0)
-                    throwBpRuntimeError(tc, "move: count negativo (" + count + ")");
+                    throwBpError(tc, CLASE_INDICE, "move: count negativo (" + count + ")");
                 if (srcStart < 0 || dstStart < 0)
-                    throwBpRuntimeError(tc, "move: offset negativo (srcStart=" + srcStart
+                    throwBpError(tc, CLASE_INDICE, "move: offset negativo (srcStart=" + srcStart
                             + " dstStart=" + dstStart + ")");
                 if ((long) srcStart + count > srcLen)
-                    throwBpRuntimeError(tc, "move: rango fuera de src (srcStart=" + srcStart
+                    throwBpError(tc, CLASE_INDICE, "move: rango fuera de src (srcStart=" + srcStart
                             + " count=" + count + " srcLen=" + srcLen + ")");
                 if ((long) dstStart + count > dstLen)
-                    throwBpRuntimeError(tc, "move: rango fuera de dst (dstStart=" + dstStart
+                    throwBpError(tc, CLASE_INDICE, "move: rango fuera de dst (dstStart=" + dstStart
                             + " count=" + count + " dstLen=" + dstLen + ")");
                 int elemSz = elemSize(srcType);
                 int srcByte = srcRef + 4 + srcStart * elemSz;
@@ -7041,7 +7073,7 @@ public class VirtualMachine {
                 double x     = Float.intBitsToFloat(popTc(tc));
                 double d = inHi - inLo;
                 if (d == 0)
-                    throwBpRuntimeError(tc, "remap: el rango de entrada es vacio (inHi == inLo)");
+                    throwBpError(tc, CLASE_ARITMETICA, "remap: el rango de entrada es vacio (inHi == inLo)");
                 pushTc(tc, Float.floatToRawIntBits(
                         (float) (outLo + (x - inLo) * (outHi - outLo) / d)));
                 break;
@@ -7052,7 +7084,7 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "factorial: argumento negativo (" + n + ")");
                 if (n > 12)
                     // 13! = 6227020800 desborda i32 con signo.
-                    throwBpRuntimeError(tc, "factorial: " + n + " desborda integer (máx 12)");
+                    throwBpError(tc, CLASE_ARITMETICA, "factorial: " + n + " desborda integer (máx 12)");
                 int r = 1;
                 for (int i = 2; i <= n; i++) r *= i;
                 pushTc(tc, r);
@@ -7130,7 +7162,7 @@ public class VirtualMachine {
                 String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.createDirectories(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "mkdir('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "mkdir('" + p + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);   // dummy void
                 break;
@@ -7139,9 +7171,9 @@ public class VirtualMachine {
                 String p = readVmString(popTcRef(tc));
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.nio.file.DirectoryNotEmptyException e) {
-                    throwBpRuntimeError(tc, "rmdir('" + p + "'): directorio no vacío");
+                    throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): directorio no vacío");
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "rmdir('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): " + e.getMessage());
                 }
                 pushTc(tc, 0);
                 break;
@@ -7153,7 +7185,7 @@ public class VirtualMachine {
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
                 catch (java.io.IOException e) { fallo = true; }
                 finally { cierraBreve(ab); }
-                if (fallo) throwBpRuntimeError(tc, "removeFile('" + p + "'): error al borrar");   // V7 #657: el texto de la VM-C
+                if (fallo) throwBpError(tc, CLASE_ES, "removeFile('" + p + "'): error al borrar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
@@ -7171,7 +7203,7 @@ public class VirtualMachine {
                 } finally {
                     cierraBreve(bs);
                 }
-                if (fallo) throwBpRuntimeError(tc, "rename('" + from + "' -> '" + to + "'): error al renombrar");   // V7 #657: el texto de la VM-C
+                if (fallo) throwBpError(tc, CLASE_ES, "rename('" + from + "' -> '" + to + "'): error al renombrar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
@@ -7189,7 +7221,7 @@ public class VirtualMachine {
                 } finally {
                     cierraBreve(bs);
                 }
-                if (fallo) throwBpRuntimeError(tc, "copyFile('" + from + "' -> '" + to + "'): error al copiar");   // V7 #657: el texto de la VM-C
+                if (fallo) throwBpError(tc, CLASE_ES, "copyFile('" + from + "' -> '" + to + "'): error al copiar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
@@ -7202,10 +7234,10 @@ public class VirtualMachine {
                     long sz = java.nio.file.Files.size(sandboxPath(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
                     if (sz > Integer.MAX_VALUE)
-                        throwBpRuntimeError(tc, "fileSize('" + p + "'): tamaño > 2GB no representable en integer");
+                        throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): tamaño > 2GB no representable en integer");
                     pushTc(tc, (int) sz);
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "fileSize('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): " + e.getMessage());
                 }
                 break;
             }
@@ -7220,7 +7252,7 @@ public class VirtualMachine {
                     long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(tc, p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "lastModified('" + p + "'): " + e.getMessage());
+                    throwBpError(tc, CLASE_ES, "lastModified('" + p + "'): " + e.getMessage());
                 }
                 break;
             }

@@ -1,0 +1,139 @@
+module CsErroresVm
+{
+   class Animal
+   {
+      public string Nombre { get; set; } = "animal";
+   }
+
+   class Perro : Animal
+   {
+   }
+
+   class ErroresVm
+   {
+      private static int cero = 0;
+      private static function string Divide()
+      {
+         try
+         {
+            int r = 10 / ErroresVm.cero;
+            return "nada " + r;
+         }
+         catch (IndexError excepcion_cs1)
+         {
+            return "índice";
+         }
+         catch (ArithmeticError excepcion_cs2)
+         {
+            return "división";
+         }
+      }
+      private static function string Nulo()
+      {
+         Animal a = null;
+         try
+         {
+            return a.Nombre;
+         }
+         catch (NullReferenceError excepcion_cs3)
+         {
+            return "null";
+         }
+      }
+      private static function string Indice()
+      {
+         int[] v = new int[2];
+         try
+         {
+            return "nada " + v[ErroresVm.cero + 5];
+         }
+         catch (IndexError excepcion_cs4)
+         {
+            return "índice";
+         }
+      }
+      private static function string Conversion()
+      {
+         Object o = new Animal();
+         try
+         {
+            Perro p = (Perro) o;
+            return "nada " + p.Nombre;
+         }
+         catch (CastError excepcion_cs5)
+         {
+            return "conversión";
+         }
+      }
+      private static function string AMano()
+      {
+         try
+         {
+            throw new NullReferenceError("Object reference not set to an instance of an object.");
+         }
+         catch (NullReferenceError e)
+         {
+            return e.msg;
+         }
+      }
+      private static function string Filtro(int x)
+      {
+         try
+         {
+            int r = 10 / ErroresVm.cero;
+            return "nada " + r;
+         }
+         catch (ArithmeticError excepcion_cs6)
+         {
+            if (!(x > 0)) throw excepcion_cs6;
+            return "positivo";
+         }
+      }
+      public static function int Main()
+      {
+         if (ErroresVm.Divide() != "división")
+         {
+            return 1;
+         }
+         if (ErroresVm.Nulo() != "null")
+         {
+            return 2;
+         }
+         if (ErroresVm.Indice() != "índice")
+         {
+            return 3;
+         }
+         if (ErroresVm.Conversion() != "conversión")
+         {
+            return 4;
+         }
+         if (ErroresVm.AMano() != "Object reference not set to an instance of an object.")
+         {
+            return 5;
+         }
+         if (ErroresVm.Filtro(1) != "positivo")
+         {
+            return 6;
+         }
+         try
+         {
+            ErroresVm.Filtro(-1);
+            return 7;
+         }
+         catch (ArithmeticError excepcion_cs7)
+         {
+         }
+         println("ok");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = ErroresVm.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

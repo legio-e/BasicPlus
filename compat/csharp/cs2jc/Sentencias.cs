@@ -10,11 +10,12 @@ namespace Cs2Jc
 {
     sealed partial class Traductor
     {
-        void Bloque(BlockSyntax b, string primera = null)
+        void Bloque(BlockSyntax b, params string[] primeras)
         {
             Linea("{");
             sangria++;
-            if (primera != null) Linea(primera);
+            foreach (var primera in primeras)
+                if (primera != null) Linea(primera);
             Sentencias(b);
             sangria--;
             Linea("}");
@@ -816,6 +817,13 @@ namespace Cs2Jc
                 Linea("throw " + catchs.Peek() + ";");
                 return;
             }
+            // `throw null`: en C# (y en Java), una NullReferenceException; en JC, un throw sin objeto, que sólo atrapa un
+            // catch sin tipo (H7.5)
+            if (th.Expression is LiteralExpressionSyntax nulo && nulo.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                Rechaza(th, Porque.Pendiente("throw null (en C#, una NullReferenceException; en JC, un throw sin objeto)"));
+                return;
+            }
             EmiteConSacar(th, false, () => Linea("throw " + Expr(th.Expression) + ";"));
         }
 
@@ -825,16 +833,23 @@ namespace Cs2Jc
             Bloque(tr.Block);
             foreach (var c in tr.Catches)
             {
-                if (c.Filter != null) Rechaza(c.Filter, Porque.H7(Porque.ThrowExpresion));
+                // V8/H7.5 — `catch (T e) when (c)`: el catch, y dentro, primero, `if (!(c)) throw e;` (Eduardo, 7-nov: «OK»).
+                // En C# una que el filtro deja pasar la mira el catch de detrás; relanzada, saltaría a otro try: así que
+                // sólo si ninguno de detrás la atraparía
+                if (c.Filter != null && OtroLaAtraparia(tr, c))
+                    Rechaza(c.Filter, Porque.Pendiente("un filtro when con otro catch detrás que también la atraparía"));
                 if (c.Declaration == null)
                 {
                     // `catch` a secas: en JC no tiene nombre; si dentro hay un `throw;`, `catch (Exception e)`, que en BP
-                    // también lo atrapa todo
-                    if (Relanza(c.Block))
+                    // también lo atrapa todo; y con un filtro, para relanzarla
+                    if (Relanza(c.Block) || c.Filter != null)
                     {
                         string n = NombreNuevo();
                         Linea("catch (Exception " + n + ")");
                         catchs.Push(n);
+                        Bloque(c.Block, Filtro(c, n));
+                        catchs.Pop();
+                        continue;
                     }
                     else
                     {
@@ -856,12 +871,15 @@ namespace Cs2Jc
                         string llegada = NombreNuevo();
                         Linea("catch (" + jt + " " + llegada + ")");
                         catchs.Push(llegada);
-                        Bloque(c.Block, jt + " " + nombre + " = " + llegada + ";");
+                        Bloque(c.Block, Filtro(c, llegada), jt + " " + nombre + " = " + llegada + ";");
                         catchs.Pop();
                         continue;
                     }
                     Linea("catch (" + jt + " " + nombre + ")");
                     catchs.Push(nombre);
+                    Bloque(c.Block, Filtro(c, nombre));
+                    catchs.Pop();
+                    continue;
                 }
                 Bloque(c.Block);
                 catchs.Pop();
@@ -873,13 +891,38 @@ namespace Cs2Jc
             }
         }
 
+        /// La primera línea de un catch con filtro (`when (c)`): si no se cumple, se relanza; null si no lo tiene.
+        string Filtro(CatchClauseSyntax c, string nombre) =>
+            c.Filter == null ? null : "if (!(" + Expr(c.Filter.FilterExpression) + ")) throw " + nombre + ";";
+
+        /// ¿La atraparía también un catch de detrás del que tiene el filtro? El de un tipo emparentado con el suyo (o sin
+        /// tipo): lo que el filtro deja pasar, en C#, lo mira ése.
+        bool OtroLaAtraparia(TryStatementSyntax tr, CatchClauseSyntax c)
+        {
+            ITypeSymbol TipoDe(CatchClauseSyntax x) => x.Declaration == null ? null : m.GetTypeInfo(x.Declaration.Type).Type;
+            bool EsBaseDe(ITypeSymbol a, ITypeSymbol b)
+            {
+                for (var t = b; t != null; t = t.BaseType)
+                    if (SymbolEqualityComparer.Default.Equals(t, a)) return true;
+                return false;
+            }
+            var suyo = TipoDe(c);
+            foreach (var otro in tr.Catches.SkipWhile(x => x != c).Skip(1))
+            {
+                var t = TipoDe(otro);
+                if (t == null || suyo == null || EsBaseDe(t, suyo) || EsBaseDe(suyo, t)) return true;
+            }
+            return false;
+        }
+
         /// ¿Hay en el bloque de un catch un `throw;` que sea suyo (no el de un catch de dentro)?
         static bool Relanza(BlockSyntax b) =>
             b.DescendantNodes().OfType<ThrowStatementSyntax>().Any(th => th.Expression == null
                 && th.Ancestors().OfType<CatchClauseSyntax>().First().Block == b);
 
         /// El tipo de un catch: Exception, SystemException (el RuntimeError de BP), una de la librería CsSystem, una
-        /// excepción del programa; las de la VM (NullReferenceException…), por su tipo, no: la VM lanza RuntimeError.
+        /// excepción del programa; las de la VM (NullReferenceException…), desde H7.5 su clase de Core (ExcepcionJc),
+        /// salvo las que en BP son RuntimeError (la pila, la memoria).
         string TipoExcepcion(ITypeSymbol t, SyntaxNode donde)
         {
             if (ExcepcionJc(t) is string ex) return ex;
@@ -889,12 +932,6 @@ namespace Cs2Jc
             }
             switch (NombreCompleto(t))
             {
-                case "System.NullReferenceException":
-                case "System.IndexOutOfRangeException":
-                case "System.DivideByZeroException":
-                case "System.InvalidCastException":
-                case "System.OverflowException":
-                case "System.ArithmeticException":
                 case "System.ArrayTypeMismatchException":
                 case "System.StackOverflowException":
                 case "System.OutOfMemoryException":

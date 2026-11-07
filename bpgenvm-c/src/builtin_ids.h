@@ -313,7 +313,8 @@ enum {
     BUILTIN_WIFI_GET_STATE               = 305,   /* __wifiGetState(): integer */
     BUILTIN_WIFI_HAS_IP                  = 306,   /* __wifiHasIp(): boolean */
     BUILTIN_WIFI_IS_AVAILABLE            = 307,   /* __wifiIsAvailable(): boolean */
-    BUILTIN__CUANTOS = 308
+    BUILTIN_THROW_ERROR                  = 308,   /* __throwError(tipo: integer, msg: string) */
+    BUILTIN__CUANTOS = 309
 };
 
 #endif

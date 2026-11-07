@@ -1,0 +1,132 @@
+// NatErrores.bp — V8/H7.5 (7-nov): los errores de la VM con su tipo, dentro de una native. Lo que lanza el C que escribe
+// el AOT (una división por cero de 32 bits, una conversión estrecha, el `this` null de un método privado) va por el
+// builtin 308 (__throwError) con su tipo, por call_builtin: sin tocar la ABI del .mdn (Eduardo: «1) a»). Lo que lanzan
+// los helpers de la VM (un long por cero, un índice fuera, un array o una cadena null, charAt) lleva su clase al límite.
+// `make test-aoterrores` corre este .mod con el AOT y sin él, exige la misma salida, completa y sin FALLO, y cuenta las
+// natives traducidas (una que se cayera correría interpretada). Y en el corpus de paridad: interpretado, miVM == VM-C.
+module NatErrores
+  import Core
+
+  public class Caja
+    public property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    // privado: sobre null, el `this` null de #752, que la native mira al entrar
+    private native function mas(k: integer): integer
+      return this.n + k
+    end mas
+    public function delOtro(otra: Caja): integer
+      return otra.mas(1)
+    end delOtro
+  end Caja
+
+  native function divide(a: integer, b: integer): integer
+    return a / b
+  end divide
+
+  native function resto(a: integer, b: integer): integer
+    return a mod b
+  end resto
+
+  native function divideLong(a: long, b: long): long
+    return a / b
+  end divideLong
+
+  native function aByte(x: integer): integer
+    return byte(x)
+  end aByte
+
+  native function elemento(v: integer[], i: integer): integer
+    return v[i]
+  end elemento
+
+  native function largo(s: string): integer
+    return strlen(s)
+  end largo
+
+  native function letra(s: string, i: integer): string
+    return charAt(s, i)
+  end letra
+
+  // un try DENTRO de la native (#578): la clase la mira su catch, en el C; uno que no le toca va delante
+  native function divideConTry(a: integer, b: integer): integer
+    try
+      return a / b
+    catch e: IndexError
+      return -2
+    catch e2: ArithmeticError
+      return -1
+    endtry
+  end divideConTry
+
+  // la clase con que se atrapa lo que lanza cada native: la primera de la lista que le toca
+  function clase(caso: integer): string
+    var cero: integer := 0
+    var nulo: integer[] := null
+    var s: string := null
+    try
+      if caso == 1 then
+        print divide(10, cero)
+      elseif caso == 2 then
+        print resto(10, cero)
+      elseif caso == 3 then
+        print divideLong(10L, 0L)
+      elseif caso == 4 then
+        print aByte(300)
+      elseif caso == 5 then
+        print elemento([1, 2], 5)
+      elseif caso == 6 then
+        print elemento(nulo, 0)
+      elseif caso == 7 then
+        print largo(s)
+      elseif caso == 8 then
+        print letra("abc", 7)
+      else
+        var c: Caja := Caja(1)
+        print c.delOtro(null)
+      endif
+      return "nada"
+    catch e: CastError
+      return "CastError: " + e.msg
+    catch e1: ArithmeticError
+      return "ArithmeticError: " + e1.msg
+    catch e2: NullReferenceError
+      return "NullReferenceError: " + e2.msg
+    catch e3: IndexError
+      return "IndexError: " + e3.msg
+    catch e4: RuntimeError
+      return "RuntimeError: " + e4.msg
+    endtry
+  end clase
+
+  function mira(cond: boolean, que: string)
+    if cond then
+      print "ok " + que
+    else
+      print "FALLO " + que
+    endif
+  end mira
+
+  function Main()
+    var r: string := clase(1)
+    mira(r == "ArithmeticError: División por cero", "divide: " + r)
+    r := clase(2)
+    mira(r == "ArithmeticError: Módulo por cero", "resto: " + r)
+    r := clase(3)
+    mira(r == "ArithmeticError: División por cero", "un long: " + r)
+    r := clase(4)
+    mira(r == "ArithmeticError: I32_TO_U8: valor fuera de rango 300", "byte(300): " + r)
+    r := clase(5)
+    mira(r == "IndexError: ALOAD: índice fuera de rango 5 (length=2)", "un índice: " + r)
+    r := clase(6)
+    mira(r == "NullReferenceError: referencia nula: acceso a un elemento de un array null", "un array null: " + r)
+    r := clase(7)
+    mira(r == "NullReferenceError: referencia nula: strlen de un string null", "una cadena null: " + r)
+    r := clase(8)
+    mira(r == "IndexError: charAt: idx fuera de rango 7 (len=3)", "charAt: " + r)
+    r := clase(9)
+    mira(r == "NullReferenceError: referencia nula: llamada a un método de un objeto null", "un método privado de null: " + r)
+    mira(divideConTry(1, 0) == -1, "un try en la native: lo atrapa ArithmeticError, no IndexError")
+  end Main
+end NatErrores

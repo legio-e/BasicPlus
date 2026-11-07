@@ -16,7 +16,7 @@ typedef struct {
     uint8_t     off[3];   /* bytes bajo sp; 0, no hay más */
 } bpvm_builtin_cadenas_t;
 
-static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[60] = {
+static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[61] = {
     { "", { 0, 0, 0 } },
     { "strlen",              {   8,   0,   0 } },   /* [0] strlen(s: string): integer */
     { "parseInt",            {   8,   0,   0 } },   /* [1] parseInt(s: string): integer */
@@ -77,6 +77,7 @@ static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[60] = {
     { "soundPlay",           {   8,   0,   0 } },   /* [287] __soundPlay(path: string) */
     { "Overlay.load",        {   8,   0,   0 } },   /* [296] __overlayLoad(ruta: string) */
     { "Overlay.tryExe",      {   8,   0,   0 } },   /* [297] __overlayExe(arg: string) */
+    { "throwError",          {   8,   0,   0 } },   /* [308] __throwError(tipo: integer, msg: string) */
 };
 
 /* La fila de arriba de cada builtin, por su id (0: ningún parámetro string que mirar). */
@@ -100,7 +101,7 @@ static const uint8_t bpvm_builtin_cadena_de[BUILTIN__CUANTOS] = {
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 54,   /* 256.. */
      0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 55,  0,  0, 56,  0, 57,   /* 272.. */
      0,  0,  0,  0,  0,  0,  0,  0, 58, 59,  0,  0,  0,  0,  0,  0,   /* 288.. */
-     0,  0,  0,  0,   /* 304.. */
+     0,  0,  0,  0, 60,   /* 304.. */
 };
 
 #endif

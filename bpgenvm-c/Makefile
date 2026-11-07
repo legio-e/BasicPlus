@@ -107,7 +107,7 @@ ifeq ($(OS),Windows_NT)
   OBJ    += $(WIN_RES)
 endif
 
-.PHONY: all clean smoke test-wifi test-cables medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-wifi test-cables medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aoterrores test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1337,7 +1337,7 @@ test-aotprivado: $(LIBOBJ)
 	$(call aotmain,NatPrivado,build/aotprivado)
 	@n=$$(grep -c "bpvm_aot_register_by_name" build/aotprivado/aot_NatPrivado.c); \
 	 if [ "$$n" -ne 2 ]; then cat build/aotprivado/aot.log; echo "  ROJO: el AOT tradujo $$n de las 2 natives de NatPrivado"; exit 1; fi
-	@n=$$(grep -c "if (bp_this == 0) vm->aot_helpers->throw_runtime" build/aotprivado/aot_NatPrivado.c); \
+	@n=$$(grep -c "if (bp_this == 0) aot_NatPrivado_lanza(vm, 2," build/aotprivado/aot_NatPrivado.c); \
 	 if [ "$$n" -ne 2 ]; then echo "  ROJO: $$n de las 2 natives miran el receptor al entrar"; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aotprivado.c build/aotprivado/aot_NatPrivado.c $(LIBOBJ) \
 	  -o build/test_aotprivado.exe $(LDFLAGS)
@@ -1350,6 +1350,30 @@ test-aotprivado: $(LIBOBJ)
 	 if [ "$$n" -ne 4 ]; then cat build/aotprivado.aot; echo "  ROJO: $$n de 4 comprobaciones"; exit 1; fi; \
 	 if [ "$$(grep -c 'de null: lanza: referencia nula: llamada a un m' build/aotprivado.aot)" -ne 2 ]; then cat build/aotprivado.aot; echo "  ROJO: los dos de null no lanzan"; exit 1; fi; \
 	 echo "[status=OK] 4/4 con el AOT, igual que interpretado; los dos de null lanzan"
+
+# V8/H7.5 (7-nov) — los errores de la VM con su tipo, dentro de una native: lo que lanza el C del AOT (una división de 32
+# bits por cero, una conversión estrecha, el `this` null de un método privado) va por el builtin 308 con su tipo, por
+# call_builtin (sin tocar la ABI: Eduardo, «1) a»); lo que lanzan los helpers de la VM lleva su clase al límite; y un
+# try dentro de la native mira la clase. Con el AOT y sin él: la misma clase y el mismo texto.
+test-aoterrores: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatErrores)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatErrores,build/aoterrores)
+	@n=$$(grep -c "bpvm_aot_register_by_name" build/aoterrores/aot_NatErrores.c); \
+	 if [ "$$n" -ne 9 ]; then cat build/aoterrores/aot.log; echo "  ROJO: el AOT tradujo $$n de las 9 natives de NatErrores"; exit 1; fi
+	@n=$$(grep -c "aot_NatErrores_lanza(vm, " build/aoterrores/aot_NatErrores.c); \
+	 if [ "$$n" -lt 4 ]; then echo "  ROJO: el C del AOT lanza con su tipo en $$n sitios (al menos 4: las dos divisiones, la estrecha y el receptor)"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aoterrores.c build/aoterrores/aot_NatErrores.c $(LIBOBJ) \
+	  -o build/test_aoterrores.exe $(LDFLAGS)
+	@echo "--- H7.5 los errores con su tipo en una native (esperado: AOT == interpretado, 10/10, sin FALLO) ---"
+	@./build/test_aoterrores.exe samples/NatErrores.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.aot; \
+	 ./build/test_aoterrores.exe samples/NatErrores.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.int; \
+	 n=$$(grep -c '^ok ' build/aoterrores.aot); \
+	 if grep -q '^FALLO' build/aoterrores.aot build/aoterrores.int; then grep -h '^FALLO' build/aoterrores.aot build/aoterrores.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aoterrores.int build/aoterrores.aot; then diff build/aoterrores.int build/aoterrores.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 10 ]; then cat build/aoterrores.aot; echo "  ROJO: $$n de 10 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 10/10 con el AOT, igual que interpretado"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

@@ -480,8 +480,10 @@ public final class AotCEmitter {
         emitExpr(b.left);
         w.print("); int32_t " + d + " = (");
         emitExpr(b.right);
-        w.print("); int32_t " + r + "; if (" + d + " == 0) { vm->aot_helpers->throw_runtime(vm, \""
-                + (resto ? "Módulo" : "División") + " por cero\"); " + r + " = 0; } else if (" + d + " == -1) " + r + " = "
+        byte[] porCero = ((resto ? "Módulo" : "División") + " por cero").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        w.print("); int32_t " + r + "; if (" + d + " == 0) { aot_" + moduleName + "_lanza(vm, " + MivmEmitter.ERROR_ARITMETICA
+                + ", vm->aot_helpers->string_from_cstr(vm, \"" + cEscapeBytes(porCero) + "\", " + porCero.length + ")); "
+                + r + " = 0; } else if (" + d + " == -1) " + r + " = "
                 + (resto ? "0" : "(int32_t) (0u - (uint32_t) " + n + ")") + "; else " + r + " = " + n + (resto ? " % " : " / ")
                 + d + "; " + r + "; })");
     }
@@ -1054,6 +1056,16 @@ public final class AotCEmitter {
          * de los packs y regrabar todas las placas). El precio: el texto está en la VM y aquí; test-aotestrecha compara
          * la native con la interpretada en los bordes de cada una. Fuera de rango arma el MISMO mensaje que el
          * intérprete (snprintf "%s%d") con los helpers que ya hay, y lo lanza como un RuntimeError atrapable. */
+        /* V8/H7.5 (7-nov) — un error de la VM CON SU TIPO desde una native: el builtin 308 (__throwError) por
+         * call_builtin, el despachador común; la opción a de Eduardo: lo que ya ofrece la VM al código nativo, sin tocar
+         * la ABI del .mdn. `tipo`, el número de la tabla (1 ArithmeticError, 2 NullReferenceError…); `texto`, un handle de
+         * cadena. Con una VM de antes, el 308 no está y sale un RuntimeError: «builtin no soportado». */
+        w.println("/* V8/H7.5 — un error de la VM con su tipo (el builtin 308, __throwError): no vuelve. */");
+        w.println("static inline void aot_" + moduleName + "_lanza(struct bpvm* vm, int32_t tipo, uint32_t texto) {");
+        w.println("    int64_t a[2]; a[0] = (int64_t) tipo; a[1] = (int64_t) texto;");
+        w.println("    (void) vm->aot_helpers->call_builtin(vm, " + edu.bpgenvm.bytecode.Builtin.THROW_ERROR.id
+                  + ", \"ir\", a, 'v');   /* longjmp: no vuelve */");
+        w.println("}");
         w.println("/* V7/H5 — las conversiones estrechas (`byte(x)`…): el rango de OP_I32_TO_U8 y compañía, con su texto. */");
         w.println("static inline int32_t aot_" + moduleName + "_estrecha(struct bpvm* vm, int32_t v, int32_t min, int32_t max,");
         w.println("                                        const char* texto, int32_t largo) {");
@@ -1061,7 +1073,8 @@ public final class AotCEmitter {
         w.println("        const struct aot_helpers_v2* H = vm->aot_helpers;");
         w.println("        uint32_t a = H->string_from_cstr(vm, texto, largo);");
         w.println("        uint32_t b = H->int_to_string(vm, v);");
-        w.println("        H->throw_str(vm, H->string_concat(vm, a, b));   /* longjmp: no vuelve */");
+        w.println("        aot_" + moduleName + "_lanza(vm, " + MivmEmitter.ERROR_ARITMETICA
+                  + ", H->string_concat(vm, a, b));   /* H7.5: ArithmeticError; longjmp, no vuelve */");
         w.println("    }");
         w.println("    return v;");
         w.println("}");
@@ -1248,11 +1261,13 @@ public final class AotCEmitter {
             w.println("    (void) " + cVar(p.name) + ";");
         }
 
-        /* #752 — un método privado sobre null: el mismo RuntimeError que da el interpretado (emitThisNoNulo). */
+        /* #752 — un método privado sobre null: el mismo error que da el interpretado (emitThisNoNulo), desde H7.5 con su
+         * tipo, NullReferenceError. */
         if (metodosSinVtable.contains(f.name.name)) {
             byte[] msg = "referencia nula: llamada a un método de un objeto null".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            w.println("    if (" + cVar("this") + " == 0) vm->aot_helpers->throw_runtime(vm, \"" + cEscapeBytes(msg)
-                      + "\");   /* #752: longjmp, no vuelve */");
+            w.println("    if (" + cVar("this") + " == 0) aot_" + moduleName + "_lanza(vm, " + MivmEmitter.ERROR_NULA
+                      + ", vm->aot_helpers->string_from_cstr(vm, \"" + cEscapeBytes(msg) + "\", " + msg.length
+                      + "));   /* #752: longjmp, no vuelve */");
         }
 
         /* #580 (1) — LA ENTRADA de una native en un ciclo cuenta como una vuelta de un bucle (ver `recursivas`). */

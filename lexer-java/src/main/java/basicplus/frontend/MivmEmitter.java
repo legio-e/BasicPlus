@@ -2396,18 +2396,24 @@ public final class MivmEmitter {
         } finally { scopeStack.pop(); }
     }
 
-    /** #752 — `this` nulo: el RuntimeError nativo de la VM (__throwRte, el builtin 128), con el texto de INVOKE_VIRTUAL. */
+    /** #752 — `this` nulo: el error nativo de la VM, con el texto de INVOKE_VIRTUAL; desde H7.5, con su tipo, el
+     *  NullReferenceError que da INVOKE_VIRTUAL (__throwError, el builtin 308, con el 2 de su tabla). */
     private void emitThisNoNulo() throws IOException {
         int bien = w.newLabel();
         w.emitGetParam("this");
         emitInt(0); w.emit(OpCode.I32_TO_I64);    // null: una ref de 8 bytes a cero
         w.emit(OpCode.LEQ);
         w.emitJumpIfFalse(bien);
+        emitInt(ERROR_NULA);
         w.emitLeaGlobal(internString("referencia nula: llamada a un método de un objeto null"));
         w.emit(OpCode.CALL_BUILTIN);
-        w.emitShort((short) Builtin.THROW_RTE.id);
+        w.emitShort((short) Builtin.THROW_ERROR.id);
         w.declareLabel(bien);
     }
+
+    /** V8/H7.5 — los números de la tabla de los errores de la VM con su tipo (__throwError; las dos VMs, claseDeError y
+     *  bpvm_clase_de_error): 1 ArithmeticError, 2 NullReferenceError, 3 IndexError, 4 CastError, 5 IOError. */
+    static final int ERROR_ARITMETICA = 1, ERROR_NULA = 2;
 
     private void emitConstructorFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {
         // `<Cls>.__init` queda como función intra-módulo (no exportada). El

@@ -18,6 +18,11 @@ static inline uint32_t aot_NatNew_busca(struct bpvm* vm, const char* nombre, con
     if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
     return f;
 }
+/* V8/H7.5 — un error de la VM con su tipo (el builtin 308, __throwError): no vuelve. */
+static inline void aot_NatNew_lanza(struct bpvm* vm, int32_t tipo, uint32_t texto) {
+    int64_t a[2]; a[0] = (int64_t) tipo; a[1] = (int64_t) texto;
+    (void) vm->aot_helpers->call_builtin(vm, 308, "ir", a, 'v');   /* longjmp: no vuelve */
+}
 /* V7/H5 — las conversiones estrechas (`byte(x)`…): el rango de OP_I32_TO_U8 y compañía, con su texto. */
 static inline int32_t aot_NatNew_estrecha(struct bpvm* vm, int32_t v, int32_t min, int32_t max,
                                         const char* texto, int32_t largo) {
@@ -25,7 +30,7 @@ static inline int32_t aot_NatNew_estrecha(struct bpvm* vm, int32_t v, int32_t mi
         const struct aot_helpers_v2* H = vm->aot_helpers;
         uint32_t a = H->string_from_cstr(vm, texto, largo);
         uint32_t b = H->int_to_string(vm, v);
-        H->throw_str(vm, H->string_concat(vm, a, b));   /* longjmp: no vuelve */
+        aot_NatNew_lanza(vm, 1, H->string_concat(vm, a, b));   /* H7.5: ArithmeticError; longjmp, no vuelve */
     }
     return v;
 }
