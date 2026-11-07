@@ -6203,6 +6203,23 @@ opciones; con ellas, todavía no), y con varios o ninguno, un `params ReadOnlySp
 y un `Object`, como se dejó en el tema 8) y `test-330` (`IFormattable foo = -1`: el `Integer` de BP tendría que
 implementar una interfaz de .NET). **El tema 9: 42 de 85; Mono, 846.**
 
+### H6, H7 y H8, cerrados (7-nov)
+
+Con el tema 11, los once temas de H8 están repasados (Eduardo, 6-nov: *«Cuando lleguemos a los grupos 10 u 11 lo
+daremos por terminado, con la pruebas que pasen como buenas»*), y con H8 se cierran H6 y H7, que existían para él.
+Eduardo: *«OK. Y con eso el lote de pruebas de C# pasan a ser pruebas de BP y JC. Nuestras pruebas son test de caja gris o blancas (pruebas que se hacen conociendo el código) mientras que las pruebas de C# son de caja negra»*.
+- **H8:** 848 de las 2322 válidas funcionan, y fallan las mismas 6. Desde hoy, **la prueba de caja negra de BP y JC**:
+  las 848 que funcionan; una que deje de funcionar es una regresión. Sigue fuera del repositorio (las pruebas son de
+  Mono), y se pasa con `cs2jc --lote`, comparado con el lote anterior (`compara_lotes.py`).
+- **H6, el traductor:** hecho, en `compat/csharp/cs2jc`, con 52 casos propios.
+- **H7, las mejoras de JC:** de la H7.1 a la H7.5. Lo que quedaba de la lista de `#745` no pasa a V9 como compromiso.
+  Eduardo: *«A V9 no nos comprometemos a hacer nada del lenguaje. Cuando estemos en V9 ya estudiaremos lo que es razonable migrar a JC. Hay muchas cosas de C# que no quiero migrar, hacen al lenguaje complicado y en mi opinión aportan poco»*. Queda como lista para estudiar entonces: los delegados, los `struct` con estado, los
+  operadores propios, los indexadores, `?.`, las tuplas, los patrones, los arrays de varias dimensiones y los de
+  arrays, el `++` dentro de una expresión.
+- **Lo que salió y sigue abierto en V8**, para los pendientes: `#804` (el `super()` implícito y los valores por
+  defecto), `#805` (tres caminos de error en los que las VMs difieren), `#806` (`throw` de una excepción null) y `#800`
+  (la prueba de `test-cola`, que se simplifica ahora).
+
 ### El tema 11, los arrays (7-nov; cerrado)
 
 Con el lote de ese día (Mono, 846): 42 válidas, 13 funcionan, una falla (`test-673`, una de las 6 de siempre: mira las

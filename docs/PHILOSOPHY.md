@@ -363,6 +363,20 @@ propósito**: el device los omite y el host (IDE) los rellena con el `.dbg` que
 Así el debugger del device se prueba en desktop (VM-C) antes de tocar la Pico,
 y en la placa sólo validamos que el **transporte serie** mueve esos mismos bytes.
 
+### Las pruebas: de caja blanca y de caja negra
+
+Eduardo (7-nov-2026, al cerrar las pruebas de C#): *«el lote de pruebas de C# pasan a ser pruebas de BP y JC. Nuestras
+pruebas son test de caja gris o blancas (pruebas que se hacen conociendo el código) mientras que las pruebas de C# son
+de caja negra»*.
+
+- **Las nuestras, de caja blanca o gris:** la red (`compat/compat.sh check`: el corpus en las dos VMs, las pruebas de C,
+  el sim, la sombra, el estrés…), las de JC y las unitarias. Se escriben sabiendo cómo está hecho lo que prueban, para
+  buscar sus bordes.
+- **Las de C#, de caja negra:** las pruebas del compilador de C# de Mono, escritas por otros y para otro compilador,
+  pasadas a JC con el traductor (`compat/csharp/cs2jc`). Las que funcionan (848 el 7-nov) son una prueba de BP y JC:
+  una que deje de funcionar es una regresión. Viven fuera del repositorio y se pasan con `cs2jc --lote`, comparando con
+  el lote anterior.
+
 ---
 
 ## Lo que NO somos
