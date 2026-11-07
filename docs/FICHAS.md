@@ -7428,6 +7428,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   cuatro en FALLO: la VM-Java decía `fileSize('no_existe_h75.txt'): no_existe_h75.txt`); ahora, 31 bien, las dos VMs
   iguales. El de `lastModified` acepta también el texto de una placa sin fechas en su FS («no implementado en esta
   plataforma»).
+- **La 3, hecha (7-nov).** Un programa sí llega: `Core.__mutexLock` y `__mutexUnlock` son públicos (yo había dicho que
+  no). Antes, con un id que no vale, la VM-Java lanzaba un `RuntimeError` y la VM-C paraba la VM; y con un null, la
+  VM-Java leía como id la memoria del principio (con un `Mutex` de id 0 vivo, lo habría cerrado) y la VM-C paraba la VM.
+  Ahora, en las dos: un id que no vale, `RuntimeError` «mutex.lock: id inválido N» (y `unlock`), el texto de la
+  VM-Java; un null, `NullReferenceError` «referencia nula: mutex.lock de un Mutex null», antes de leer nada. Cuatro
+  casos en `ErroresConTipo`: 35 bien, las dos VMs iguales. La red, con la 1 y la 3: VERDE —la paridad, 205; MOD8, 197 y los 8 SKIP de siempre; dos workers, 205; la cápsula, 59; las pruebas de C, 112/112; norma 9/9, sim 14/14, sombra 15/15— y `check-jc`, 203.
+- **Queda la 2** (el censo y el arreglo).
 
 #### ✅ `#804` — el `super()` implícito no encuentra un constructor de la base con todos sus parámetros con valor por defecto (abierta el 7-nov; salió en el tema 4 de H8 · **CERRADA el 7-nov: no es un fallo, es la regla de Eduardo**, el commit de `#804`)
 

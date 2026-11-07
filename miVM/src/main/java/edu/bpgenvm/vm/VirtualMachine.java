@@ -6829,6 +6829,9 @@ public class VirtualMachine {
             }
             case MUTEX_LOCK: {
                 int mutexRef = popTc(tc);
+                // V8 #805 — un null, antes de leer su campo: leía la memoria del principio como el id (y con un Mutex de
+                // id 0 vivo, lo cerraba). Core.__mutexLock es público: un programa llega aquí.
+                if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.lock de un Mutex null");
                 int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (mid < 0 || mid >= mutexes.size()) {
                     // B3 v2 — lanzamos RuntimeError BP atrapable en lugar de
@@ -6857,6 +6860,7 @@ public class VirtualMachine {
             }
             case MUTEX_UNLOCK: {
                 int mutexRef = popTc(tc);
+                if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.unlock de un Mutex null");   // #805
                 int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (mid < 0 || mid >= mutexes.size()) {
                     throwBpRuntimeError(tc, "mutex.unlock: id inválido " + mid);

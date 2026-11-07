@@ -46,6 +46,14 @@ module ErroresConTipo
     end cambia
   end Caja
 
+  // #805: un «Mutex» con un id que no vale (su campo 0, el que lee el builtin)
+  class IdFalso
+    var id: integer
+    public function IdFalso(i: integer)
+      this.id := i
+    end IdFalso
+  end IdFalso
+
   function mira(cond: boolean, que: string)
     if cond then
       print "ok   " + que
@@ -258,6 +266,27 @@ module ErroresConTipo
     endtry
   end lanzaNula
 
+  // #805: el builtin del Mutex (Core.__mutexLock es público) con un id que no vale y con un null: atrapables en las dos
+  // VMs (antes, la VM-C paraba la VM, y la VM-Java leía el id de un null en la memoria del principio)
+  function cerrojo(caso: integer): string
+    try
+      if caso == 1 then
+        __mutexLock(IdFalso(999))
+      elseif caso == 2 then
+        __mutexUnlock(IdFalso(999))
+      elseif caso == 3 then
+        __mutexLock(null)
+      else
+        __mutexUnlock(null)
+      endif
+      return "nada"
+    catch e: NullReferenceError
+      return "NullReferenceError: " + e.msg
+    catch e2: RuntimeError
+      return "RuntimeError: " + e2.msg
+    endtry
+  end cerrojo
+
   function Main()
     var r: string := aritmetica(1)
     mira(r == "ArithmeticError: División por cero", "división por cero: " + r)
@@ -324,6 +353,15 @@ module ErroresConTipo
     mira(r == "RuntimeError: División por cero", "RuntimeError las atrapa: " + r)
     r := codificacion()
     mira(r == "EncodingError: fromBytes: UTF-8 mal formado en el byte 0 (0xFF)", "EncodingError, la suya: " + r)
+
+    r := cerrojo(1)
+    mira(r == "RuntimeError: mutex.lock: id inválido 999", "un Mutex con un id que no vale: " + r)
+    r := cerrojo(2)
+    mira(r == "RuntimeError: mutex.unlock: id inválido 999", "y su unlock: " + r)
+    r := cerrojo(3)
+    mira(r == "NullReferenceError: referencia nula: mutex.lock de un Mutex null", "un Mutex null: " + r)
+    r := cerrojo(4)
+    mira(r == "NullReferenceError: referencia nula: mutex.unlock de un Mutex null", "y su unlock: " + r)
 
     r := lanzaNula(1)
     mira(r == "NullReferenceError: referencia nula: throw de un objeto null", "un throw de un null: " + r)

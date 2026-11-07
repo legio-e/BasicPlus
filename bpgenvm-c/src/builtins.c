@@ -3945,14 +3945,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * la VM) está en field[0] del objeto, escrito por el ctor de
          * Mutex que llama a __mutexCreate. */
         uint32_t mref = pop_ref(vm, tc);
-        if (mref == 0) {
-            push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
-        }
+        /* V8 #805 — un null y un id que no vale, atrapables y con el texto de la VM-Java: antes paraban la VM
+         * (BPVM_ERR_NULL_RECEIVER, BPVM_ERR_RUNTIME). Core.__mutexLock es público: un programa llega aquí. */
+        if (mref == 0) return builtin_throw_nula(vm, tc, "referencia nula: mutex.lock de un Mutex null");
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            bpvm_diag("[bpvm-c] mutex_lock: mid inválido %" PRId32 "", mid);
-            push_i32(vm, tc, 0);
-            return BPVM_ERR_RUNTIME;
+            char em[48];
+            snprintf(em, sizeof em, "mutex.lock: id inválido %" PRId32, mid);
+            return builtin_throw(vm, tc, em);
         }
         /* La propiedad la mueve `bpvm_mutex_try_acquire`, que lleva el cerrojo
          * dentro: aqui solo queda lo que es de BP (lanzar y empujar el retorno).
@@ -3971,14 +3971,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_MUTEX_UNLOCK: {
         uint32_t mref = pop_ref(vm, tc);
-        if (mref == 0) {
-            push_i32(vm, tc, 0); return BPVM_ERR_NULL_RECEIVER;
-        }
+        if (mref == 0) return builtin_throw_nula(vm, tc, "referencia nula: mutex.unlock de un Mutex null");   /* #805 */
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
         if (mid < 0 || mid >= vm->mutex_count) {
-            bpvm_diag("[bpvm-c] mutex_unlock: mid inválido %" PRId32 "", mid);
-            push_i32(vm, tc, 0);
-            return BPVM_ERR_RUNTIME;
+            char em[48];
+            snprintf(em, sizeof em, "mutex.unlock: id inválido %" PRId32, mid);
+            return builtin_throw(vm, tc, em);
         }
         /* Igual que el lock: la propiedad y el traspaso al waiter van dentro de
          * `bpvm_mutex_release`, bajo el cerrojo. Antes el traspaso se hacia aqui
