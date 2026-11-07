@@ -1973,7 +1973,7 @@ Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP
 Lo que quedaba de H3 era que se fuera la red con un cliente conectado. Apagar la WiFi del router no se puede (Eduardo: *«nos quedamos sin conexión»*), así que se parte en dos casos:
 
 1. **La placa desaparece, y hay que ver qué hace el IDE.** Con `AirApaga` desde el IDE, que apaga la radio de golpe. El IDE se quedaba colgado: `#803`, arreglado, con un latido en el IDE y el `PING` contestado en marcha en la VM-C. Medido en la P4: lo dice a los 11 s, porque la WiFi ya ha vuelto y contesta que esa conexión no existe; con la red caída del todo, a los 15.
-2. **El cliente desaparece, y hay que ver qué hace la placa.** Es el `SO_KEEPALIVE`, que debe echarlo en unos 25 s. Sin probar: hace falta otra placa con WiFi que se conecte como cliente y se reinicie sin despedirse.
+2. **El cliente desaparece, y hay que ver qué hace la placa.** Es el `SO_KEEPALIVE`. La S3 se conectó a la P4 como cliente, con `Net`, y apagó su radio sin cerrar: la P4 la dio por ida a los 25,6 s (10 + 3 × 5) y volvió a hablar por la UART. Reiniciarla no servía: a los 2 s vuelve con la misma IP y contesta que esa conexión no existe, que no es lo que se quería probar.
 
 Lo único sin probar en placa, ni con estos dos casos, es que desaparezca el router de verdad y la placa se reconecte sola: eso lo cubre `make test-wifi`, en el PC.
 
