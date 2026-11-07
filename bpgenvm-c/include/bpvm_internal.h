@@ -1777,6 +1777,9 @@ typedef struct {
      * ceder entre medias: aquí cada una tiene la suya. Sólo vale con el heap de ESTE RUN descarrilado
      * (`vm->gc_descarrilo`, que se borra al empezar cada RUN): una que se quedara sin consumir no se cuela en otro. */
     uint8_t        reserva_descarrilada;
+    /* V8 #805 — la VM de la native en marcha (bpvm_aot_call_guarded): la entrada de la native (read_ref, el helper con el
+     * que su thunk lee los argumentos) mira con ella si una referencia todavía existe. Al final: el thunk no ve esto. */
+    struct bpvm*   vm;
 } bpvm_aot_callctx_t;
 
 /* Contexto AOT del worker actual (TLS en host). */

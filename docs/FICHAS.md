@@ -7387,6 +7387,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#807` — una referencia caducada a un array (u otro objeto) que se pasa a un builtin no da error (abierta el 7-nov; salió en `#805`)
+
+- **Lo que pasa:** medido con un `byte[]` en una property `owner` que se cambia: `fromBytes(v)` y `move(v, otro, …)` lo
+  leen sin decir nada, en las dos VMs (con su hueco ya reutilizado, leerían otro objeto). Los opcodes (`len(v)`,
+  `v[0]`), bien: el `NullReferenceError` «referencia a objeto eliminado (use-after-free)».
+- **Por qué:** la entrada de un builtin (`#774`, `#805`) sólo mira sus parámetros string.
+- **Lo natural:** la misma tabla, con los parámetros referencia (los arrays y los objetos). **Sin hacer: por decidir
+  (Eduardo).**
+
 #### ✅ `#806` — `throw` de una excepción null no se atrapa, ni con un `catch` sin tipo (abierta el 7-nov; salió en H7.5 · **CERRADA el 7-nov**, el commit de `#806`)
 
 - **Lo que pasa:** con `var e: Exception := null`, `throw e` para el programa en las dos VMs, «throw de un objeto que no es una excepción», sin pasar por ningún `catch`. Igual en las dos.
@@ -7408,7 +7417,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   corpus, un hilo sin atrapar deja el programa en error). `OPCODES.md`, el manual en las dos lenguas y `PENDIENTES`, al
   día. La red: VERDE —la paridad, 205; MOD8, 197 y los 8 SKIP de siempre; dos workers, 205; la cápsula, 59; las pruebas de C, 112/112; norma 9/9, sim 14/14, sombra 15/15; el estrés, packs-abi y la stdlib embebida, bien— y `check-jc`, 203 y los 2 SKIP de siempre.
 
-#### 🔵 `#805` — las dos VMs difieren en tres caminos de error (abierta el 7-nov; salió en el inventario de H7.5)
+#### ✅ `#805` — las dos VMs difieren en tres caminos de error (abierta el 7-nov; salió en el inventario de H7.5 · **CERRADA el 7-nov**, los commits de `#805`)
 
 - **El texto de un fallo con ficheros:** `mkdir`, `rmdir`, `fileSize` y `lastModified` dan en la VM-Java el mensaje del sistema (`e.getMessage()`), y en la VM-C uno suyo (`mkdir('x'): no se pudo crear`). Un programa que escribe `e.msg` saca otra cosa en cada VM.
 - **Escribir una cadena eliminada:** la VM-C lanza «referencia a objeto eliminado (use-after-free)» (`PRINT_STRING`, `#660`); la VM-Java no lo mira.
@@ -7434,7 +7443,26 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Ahora, en las dos: un id que no vale, `RuntimeError` «mutex.lock: id inválido N» (y `unlock`), el texto de la
   VM-Java; un null, `NullReferenceError` «referencia nula: mutex.lock de un Mutex null», antes de leer nada. Cuatro
   casos en `ErroresConTipo`: 35 bien, las dos VMs iguales. La red, con la 1 y la 3: VERDE —la paridad, 205; MOD8, 197 y los 8 SKIP de siempre; dos workers, 205; la cápsula, 59; las pruebas de C, 112/112; norma 9/9, sim 14/14, sombra 15/15— y `check-jc`, 203.
-- **Queda la 2** (el censo y el arreglo).
+- **La 2, hecha (7-nov).** Eduardo, al ver el censo: *«A ver, estamos hablando de cadenas o de referencias a cadenas? .
+  Las cadenas no pueden ser nulas pero las referencias a cadenas si.»* Es una referencia que no es null pero cuya cadena
+  ya no existe (la soltó su dueña). *«En este caso el sitio correcto para chequearlo sería la lectura de la referencia
+  […] Si lo hacemos ahí solamente hay que implementarlo en un sitio.»* Y *«Aquí la lectura la podemos devidir a 2 niveles. Una lectura a bajo nivel que es la que haría el GC, y ahí si no existe no salta un error. En cambio la lectura a alto nivel, llama primero a la lectura a bajo nivel y si esta le dice que no existe el string entonces salta el error.»* (*«OK, adelante»*).
+  - **La lectura de bajo nivel**, la que dice si el objeto existe, sin error: `bpvm_ref_dead` (VM-C) y `refViva` (miVM,
+    la que ya usaba `requireAlive`), con la referencia entera (8 bytes, con su generación). La de convertirla en una
+    dirección (`bpref_deref`, `refDeref`) no puede mirarlo: dentro de los builtins y de las natives la referencia circula
+    en 32 bits, sin generación, y vería muertas las buenas.
+  - **La de alto nivel** la llama y lanza el `NullReferenceError` «referencia a objeto eliminado (use-after-free)», en
+    tres sitios: la entrada de un builtin (la tabla de `#774`, sus parámetros string, ampliada a los dos que toman el
+    null como "", `__strCopy` y `__avisaDestructor`, con su marca: `nulo_vale` en C, `nuloVale()` en Java, generadas por
+    `gen_builtins.py`); los `print` de miVM (en la VM-C ya estaba, `#660`); y la entrada de una native (`read_ref`, el
+    helper con el que su thunk lee los argumentos, con la VM en el contexto de la llamada: los packs no cambian).
+  - **Lo prueban:** doce usos en `ErroresConTipo` (el print, strlen, charAt, substring, lower, trim, indexOf, contains,
+    replace, split, fileExists y concatenar). Con las VMs de antes, la VM-Java se caía en el primero (`OutOfMemoryError`)
+    y la VM-C sólo daba bien el print (strlen, 0; lower, «No space in heap»…); ahora, el mismo error en todos: 47 bien,
+    las dos VMs iguales. Y en `NatErrores`, una native con una cadena eliminada a la entrada: `test-aoterrores`, 13/13,
+    el AOT igual que interpretado. La red: VERDE —la paridad, 205; MOD8, 197 y los 8 SKIP de siempre; dos workers, 205; la cápsula, 59; las pruebas de C, 112/112; norma 9/9, sim 14/14, sombra 15/15— y `check-jc`, 203.
+  - **Lo que no cubre** (en `PENDIENTES`): dentro de una native, una referencia caducada que no venga de sus
+    argumentos (un campo leído allí) no se puede mirar; y los parámetros de un builtin que no son string, `#807`.
 
 #### ✅ `#804` — el `super()` implícito no encuentra un constructor de la base con todos sus parámetros con valor por defecto (abierta el 7-nov; salió en el tema 4 de H8 · **CERRADA el 7-nov: no es un fallo, es la regla de Eduardo**, el commit de `#804`)
 

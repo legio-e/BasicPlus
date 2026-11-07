@@ -81,6 +81,22 @@ module NatErrores
     endtry
   end lanzaNulaConTry
 
+  // #805: una referencia a una cadena que ya no existe (la soltó su dueña, una property owner), a la entrada de una
+  // native: la lee su thunk, con la referencia entera; dentro ya no se podría (va sin su generación)
+  class Titular
+    public property owner texto: string
+    public function Titular(t: string)
+      this.texto := t
+    end Titular
+    public function cambia(t: string)
+      this.texto := t   // suelta la de antes
+    end cambia
+  end Titular
+
+  native function largoDe(s: string): integer
+    return strlen(s)
+  end largoDe
+
   // la clase con que se atrapa lo que lanza cada native: la primera de la lista que le toca
   function clase(caso: integer): string
     var cero: integer := 0
@@ -107,8 +123,13 @@ module NatErrores
       elseif caso == 9 then
         var c: Caja := Caja(1)
         print c.delOtro(null)
-      else
+      elseif caso == 10 then
         print lanzaNula(nulaE, 1)
+      else
+        var t: Titular := Titular(intToString(12345))
+        var vieja: string := t.texto
+        t.cambia(intToString(678))
+        print largoDe(vieja)
       endif
       return "nada"
     catch e: CastError
@@ -155,5 +176,7 @@ module NatErrores
     r := clase(10)
     mira(r == "NullReferenceError: referencia nula: throw de un objeto null", "un throw de un null: " + r)
     mira(lanzaNulaConTry(null) == -1, "un throw de un null con un try en la native: lo atrapa NullReferenceError")
+    r := clase(11)
+    mira(r == "NullReferenceError: referencia a objeto eliminado (use-after-free)", "una cadena eliminada, a la entrada: " + r)
   end Main
 end NatErrores

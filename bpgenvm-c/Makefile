@@ -1362,19 +1362,19 @@ test-aoterrores: $(LIBOBJ)
 	$(call stdlibdep,Core)
 	$(call aotmain,NatErrores,build/aoterrores)
 	@n=$$(grep -c "bpvm_aot_register_by_name" build/aoterrores/aot_NatErrores.c); \
-	 if [ "$$n" -ne 11 ]; then cat build/aoterrores/aot.log; echo "  ROJO: el AOT tradujo $$n de las 11 natives de NatErrores"; exit 1; fi
+	 if [ "$$n" -ne 12 ]; then cat build/aoterrores/aot.log; echo "  ROJO: el AOT tradujo $$n de las 12 natives de NatErrores"; exit 1; fi
 	@n=$$(grep -c "aot_NatErrores_lanza(vm, " build/aoterrores/aot_NatErrores.c); \
 	 if [ "$$n" -lt 4 ]; then echo "  ROJO: el C del AOT lanza con su tipo en $$n sitios (al menos 4: las dos divisiones, la estrecha y el receptor)"; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aoterrores.c build/aoterrores/aot_NatErrores.c $(LIBOBJ) \
 	  -o build/test_aoterrores.exe $(LDFLAGS)
-	@echo "--- H7.5 los errores con su tipo en una native (esperado: AOT == interpretado, 12/12, sin FALLO) ---"
+	@echo "--- H7.5 los errores con su tipo en una native (esperado: AOT == interpretado, 13/13, sin FALLO) ---"
 	@./build/test_aoterrores.exe samples/NatErrores.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.aot; \
 	 ./build/test_aoterrores.exe samples/NatErrores.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aoterrores.int; \
 	 n=$$(grep -c '^ok ' build/aoterrores.aot); \
 	 if grep -q '^FALLO' build/aoterrores.aot build/aoterrores.int; then grep -h '^FALLO' build/aoterrores.aot build/aoterrores.int; echo "  ROJO: FALLO"; exit 1; fi; \
 	 if ! cmp -s build/aoterrores.int build/aoterrores.aot; then diff build/aoterrores.int build/aoterrores.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
-	 if [ "$$n" -ne 12 ]; then cat build/aoterrores.aot; echo "  ROJO: $$n de 12 comprobaciones"; exit 1; fi; \
-	 echo "[status=OK] 12/12 con el AOT, igual que interpretado"
+	 if [ "$$n" -ne 13 ]; then cat build/aoterrores.aot; echo "  ROJO: $$n de 13 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 13/13 con el AOT, igual que interpretado"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

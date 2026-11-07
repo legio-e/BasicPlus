@@ -46,6 +46,17 @@ module ErroresConTipo
     end cambia
   end Caja
 
+  // #805: una referencia a una cadena que ya no existe: la soltó su dueña, una property owner
+  class Titular
+    public property owner texto: string
+    public function Titular(t: string)
+      this.texto := t
+    end Titular
+    public function cambia(t: string)
+      this.texto := t   // suelta la de antes: esa cadena se elimina
+    end cambia
+  end Titular
+
   // #805: un «Mutex» con un id que no vale (su campo 0, el que lee el builtin)
   class IdFalso
     var id: integer
@@ -266,6 +277,53 @@ module ErroresConTipo
     endtry
   end lanzaNula
 
+  // #805: una referencia a una cadena que ya no existe (no es null: apunta a una que se eliminó)
+  function caducada(): string
+    var t: Titular := Titular(intToString(12345))
+    var v: string := t.texto
+    t.cambia(intToString(678))
+    return v
+  end caducada
+
+  // #805 (Eduardo: «la lectura a alto nivel, llama primero a la lectura a bajo nivel y si esta le dice que no existe el
+  // string entonces salta el error») — cada uso de esa referencia, el mismo error en todos: el print (un opcode), los
+  // builtins (su entrada) y la concatenación (un builtin que toma el null como "", pero no una referencia caducada)
+  function eliminada(caso: integer): string
+    var v: string := caducada()
+    try
+      if caso == 1 then
+        print v
+      elseif caso == 2 then
+        print strlen(v)
+      elseif caso == 3 then
+        print charAt(v, 0)
+      elseif caso == 4 then
+        print substring(v, 0, 2)
+      elseif caso == 5 then
+        print lower(v)
+      elseif caso == 6 then
+        print trim(v)
+      elseif caso == 7 then
+        print indexOf(v, "3")
+      elseif caso == 8 then
+        print contains(v, "3")
+      elseif caso == 9 then
+        print replace(v, "1", "9")
+      elseif caso == 10 then
+        print len(split(v, "3"))
+      elseif caso == 11 then
+        print fileExists(v)
+      else
+        print "x" + v
+      endif
+      return "nada"
+    catch e: NullReferenceError
+      return "NullReferenceError: " + e.msg
+    catch e2: RuntimeError
+      return "RuntimeError: " + e2.msg
+    endtry
+  end eliminada
+
   // #805: el builtin del Mutex (Core.__mutexLock es público) con un id que no vale y con un null: atrapables en las dos
   // VMs (antes, la VM-C paraba la VM, y la VM-Java leía el id de un null en la memoria del principio)
   function cerrojo(caso: integer): string
@@ -353,6 +411,13 @@ module ErroresConTipo
     mira(r == "RuntimeError: División por cero", "RuntimeError las atrapa: " + r)
     r := codificacion()
     mira(r == "EncodingError: fromBytes: UTF-8 mal formado en el byte 0 (0xFF)", "EncodingError, la suya: " + r)
+
+    var uso: integer := 1
+    while uso <= 12 do
+      r := eliminada(uso)
+      mira(r == "NullReferenceError: referencia a objeto eliminado (use-after-free)", "una cadena eliminada, el uso " + uso + ": " + r)
+      uso := uso + 1
+    endwh
 
     r := cerrojo(1)
     mira(r == "RuntimeError: mutex.lock: id inválido 999", "un Mutex con un id que no vale: " + r)

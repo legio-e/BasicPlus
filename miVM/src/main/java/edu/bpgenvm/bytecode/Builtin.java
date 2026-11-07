@@ -273,7 +273,7 @@ public enum Builtin {
     SPI_DEV_EXEC("__spiDevExec"),   // [260] __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
     I2C_WRITE_READ("__i2cWriteRead"),   // [261] __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
     I2C_EXEC("__i2cExec"),   // [262] __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
-    STR_COPY("__strCopy"),   // [263] __strCopy(src: string, dst: byte[], pos: integer): integer
+    STR_COPY("__strCopy", 20),   // [263] __strCopy(src: string, dst: byte[], pos: integer): integer
     HEAP_SIZE("__heapSize"),   // [264] __heapSize(): integer
     HEAP_FREE("__heapFree"),   // [265] __heapFree(): integer
     HEAP_LARGEST_FREE("__heapLargestFree"),   // [266] __heapLargestFree(): integer
@@ -286,7 +286,7 @@ public enum Builtin {
     ORDEN_DESTRUCCION("__ordenDestruccion"),   // [273] __ordenDestruccion(x: any): any[]
     PREPARA_DESTRUCTOR("__preparaDestructor"),   // [274] __preparaDestructor(x: any): integer
     LIBERA_SOLO("__liberaSolo"),   // [275] __liberaSolo(x: any)
-    AVISA_DESTRUCTOR("__avisaDestructor"),   // [276] __avisaDestructor(x: any, msg: string)
+    AVISA_DESTRUCTOR("__avisaDestructor", 8),   // [276] __avisaDestructor(x: any, msg: string)
     SIGUIENTE_PENDIENTE("__siguientePendiente"),   // [277] __siguientePendiente(): any
     PWM_RELEASE("__pwmRelease"),   // [278] __pwmRelease(sliceId: integer, pin: integer)
     PULSE_RELEASE("__pulseRelease"),   // [279] __pulseRelease(counterId: integer, pin: integer)
@@ -322,8 +322,8 @@ public enum Builtin {
 
     public final String bpName;
     public final int id;
-    /** #774 — dónde está cada parámetro string al llamarlo (bytes bajo sp): un null ahí es «referencia nula».
-     *  Los que tratan el null como "" (concatenar, escribir), sin ninguno. */
+    /** #774 — dónde está cada parámetro string al llamarlo (bytes bajo sp): un null ahí es «referencia nula», salvo
+     *  en los que lo tratan como "" (nuloVale); #805, y una referencia caducada, en todos, «objeto eliminado». */
     public final int[] cadenas;
 
     Builtin(String bpName, int... cadenas) { this.bpName = bpName; this.id = ordinal(); this.cadenas = cadenas; }
@@ -338,6 +338,16 @@ public enum Builtin {
             case OVERLAY_LOAD: return "Overlay.load";
             case READ_FILE_I: return "readFile";
             default: return bpName.startsWith("__") ? bpName.substring(2) : bpName;
+        }
+    }
+
+    /** #774/#805 — ¿trata el null de sus parámetros string como ""? (NULL_ES_VACIA en el generador; el mismo
+     *  que la marca nulo_vale de builtin_cadenas.h). Una referencia caducada no vale en ninguno. */
+    public boolean nuloVale() {
+        switch (this) {
+            case AVISA_DESTRUCTOR: return true;
+            case STR_COPY: return true;
+            default: return false;
         }
     }
 

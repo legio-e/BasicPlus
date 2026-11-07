@@ -1496,11 +1496,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * de las firmas de Core.bp (builtin_cadenas.h); miVM mira lo mismo (Builtin.cadenas). Los que tratan el null como ""
      * (concatenar, BUILTIN_STR_COPY; el aviso de un destructor) no tienen ninguno; escribir es un opcode. Llamado desde
      * una native, lo mismo: call_builtin le ha puesto los argumentos en la pila. */
+    /* V8 #805 (Eduardo, 7-nov: «la lectura a alto nivel, llama primero a la lectura a bajo nivel y si esta le dice que
+     * no existe el string entonces salta el error») — y una referencia a una cadena que ya no existe, en todos (también en
+     * los que toman el null como "", nulo_vale): la lectura de bajo nivel es bpvm_ref_dead, con la referencia entera de la
+     * pila; antes, el builtin la leía como si nada (strlen daba 0). Desde una native, call_builtin la ha regenerado: viva. */
     if ((unsigned) id < (unsigned) BUILTIN__CUANTOS && bpvm_builtin_cadena_de[id] != 0u) {
         const bpvm_builtin_cadenas_t* c = &bpvm_builtin_cadenas[bpvm_builtin_cadena_de[id]];
         int k;
-        for (k = 0; k < 3 && c->off[k] != 0u; k++)
-            if (bpref_is_null(bpref_load(vm, tc->sp - c->off[k]))) return cadena_nula(vm, tc, c->nombre);
+        for (k = 0; k < 3 && c->off[k] != 0u; k++) {
+            bpref_t s = bpref_load(vm, tc->sp - c->off[k]);
+            if (bpref_is_null(s)) {
+                if (!c->nulo_vale) return cadena_nula(vm, tc, c->nombre);
+            } else if (bpvm_ref_dead(vm, s)) {
+                return builtin_throw_nula(vm, tc, "referencia a objeto eliminado (use-after-free)");
+            }
+        }
     }
     switch (id) {
 

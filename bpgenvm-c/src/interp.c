@@ -320,6 +320,7 @@ int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
     bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
     bpvm_aot_callctx_t prev_cc = *cc;
     cc->tc = tc; cc->sp_p = sp; cc->bp_p = bp;
+    cc->vm = vm;   /* V8 #805: para la entrada de la native (read_ref) */
     /* #302 paso 3 — el techo para el escaneo conservador del GC (ver el campo).
      * Con anidamiento gana el guard MÁS EXTERNO: sus frames quedan por encima
      * del interno y también contienen handles vivos. `prev_cc` es un local de

@@ -3142,20 +3142,30 @@ public class VirtualMachine {
         if (ref == 0) { tc.sp = sp; throwBpError(tc, CLASE_NULA, texto); }
     }
     private void requireAlive(ThreadContext tc, int sp, long ref) {
-        if ((ref & HANDLE_TAG) == 0) return;           // null/constante: siempre vivo
-        int idx = handleIdx(ref);
-        // Paso 4b: compara la GENERACIÓN del handle con la del slot. En régimen
-        // monotónico (4b) todo handle minteado lleva gen=0, así que esto equivale al
-        // dead-flag (handleGen[idx]!=0); en 4c, con reuso, un slot reciclado tiene
-        // gen bumpeada y un handle rancio (gen vieja) NO matchea → grita.
-        if (idx > 0 && idx < handleNext && handleGen[idx] != handleGenOf(ref)) {
+        if (!refViva(ref)) {
             if (System.getenv("BPVM_DEBUG_UAF") != null) {   // DIAG temporal #302
+                int idx = handleIdx(ref);
                 System.err.printf("[uaf-diag] ref=0x%016x idx=%d handleGen[idx]=%d genOf(ref)=%d addr=%d%n",
                         ref, idx, handleGen[idx], handleGenOf(ref), handleAddr[idx]);
             }
             tc.sp = sp;
             throwBpError(tc, CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
         }
+    }
+
+    /** V8 #805 — LA LECTURA DE BAJO NIVEL (Eduardo: la del GC, «y ahí si no existe no salta un error»): ¿existe todavía el
+     *  objeto de esta referencia? Con la referencia ENTERA, la de la pila o un campo (8 bytes, con su generación): la de 32
+     *  bits que circula dentro de un builtin no la lleva. La de alto nivel la llama y, si dice que no, lanza:
+     *  requireAlive (los opcodes) y la entrada de un builtin (dispatchBuiltin, sus parámetros string). Espejo de
+     *  bpvm_ref_dead (VM-C). */
+    private boolean refViva(long ref) {
+        if ((ref & HANDLE_TAG) == 0) return true;           // null/constante: siempre vivo
+        int idx = handleIdx(ref);
+        // Paso 4b: compara la GENERACIÓN del handle con la del slot. En régimen
+        // monotónico (4b) todo handle minteado lleva gen=0, así que esto equivale al
+        // dead-flag (handleGen[idx]!=0); en 4c, con reuso, un slot reciclado tiene
+        // gen bumpeada y un handle rancio (gen vieja) NO matchea → grita.
+        return !(idx > 0 && idx < handleNext && handleGen[idx] != handleGenOf(ref));
     }
 
     /** Resuelve una referencia a su dirección física en memory[]. Sin TAG → null(0) o
@@ -4065,6 +4075,7 @@ public class VirtualMachine {
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
                     sp -= REF_SIZE; long ref = refLoad(mem, sp);
+                    requireAlive(tc, sp, ref);   // V8 #805: una cadena eliminada, como la VM-C (#660); antes se caía la VM
                     lineaFin(tc, readVmString(ref));  // H2: decodifica UTF-8. V7/H7 #600: la línea, entera
                     break;
                 }
@@ -4439,6 +4450,7 @@ public class VirtualMachine {
                 }
                 case 0x58: { // PRINT_STR_NONL
                     sp -= REF_SIZE; long ref = refLoad(mem, sp);
+                    requireAlive(tc, sp, ref);   // V8 #805
                     lineaPieza(tc, readVmString(ref));  // H2: decodifica UTF-8. V7/H7 #600
                     break;
                 }
@@ -5547,9 +5559,17 @@ public class VirtualMachine {
         // cadena no puede ser null»; la variable sí). Dónde están sus parámetros string en la pila lo genera
         // gen_builtins.py de las firmas de Core.bp (Builtin.cadenas); la VM-C mira lo mismo (builtin_cadenas.h). Los que
         // tratan el null como "" (concatenar, __strCopy; el aviso de un destructor) no tienen ninguno; escribir es un opcode.
-        for (int off : b.cadenas)
-            if (refLoad(memory, tc.sp - off) == 0)
-                throwBpError(tc, CLASE_NULA, "referencia nula: " + b.nombreDeError() + " de un string null");
+        // V8 #805 (Eduardo, 7-nov: «la lectura a alto nivel, llama primero a la lectura a bajo nivel y si esta le dice que
+        // no existe el string entonces salta el error») — y una referencia a una cadena que ya no existe, en todos (también
+        // en los que toman el null como ""): antes, el builtin la leía y la VM se caía (el print, strlen, charAt…).
+        for (int off : b.cadenas) {
+            long s = refLoad(memory, tc.sp - off);
+            if (s == 0) {
+                if (!b.nuloVale()) throwBpError(tc, CLASE_NULA, "referencia nula: " + b.nombreDeError() + " de un string null");
+            } else if (!refViva(s)) {
+                throwBpError(tc, CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
+            }
+        }
         switch (b) {
             case STRLEN: {
                 long ref = popTcRef(tc);   // H1.2a: string ref 8 bytes

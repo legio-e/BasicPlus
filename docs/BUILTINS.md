@@ -328,6 +328,13 @@ contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 287 entradas; en V6, 
    del AOT que no pasan por el despacho (`string_length`, `string_char_at`, `string_char_code_at`,
    `string_substring`) lo miran a mano, con el mismo texto. `make check-builtins` (en la red) avisa si lo generado no
    está al día.
+   Y una referencia **caducada** (`#805`, V8: no es `null`, apunta a una cadena que ya no existe, porque la soltó su
+   dueña): en todos, también en los de `NULL_ES_VACIA` (los marca `nulo_vale` en C y `nuloVale()` en Java), «referencia
+   a objeto eliminado (use-after-free)», un `NullReferenceError`, con la misma tabla. Es la lectura a dos niveles de
+   Eduardo: la de bajo nivel dice si el objeto existe (`bpvm_ref_dead`, `refViva`), con la referencia entera de la pila,
+   y la de alto nivel, aquí, lanza. Los cuatro atajos del AOT no pueden mirarlo (reciben la referencia en 32 bits, sin
+   su generación): lo mira la entrada de la native, al leer sus argumentos (`read_ref`). Los parámetros que no son
+   `string` (un array, un objeto), todavía no: `#807`.
 
 ---
 

@@ -14,7 +14,11 @@ y se COMPRUEBA que los demás módulos de la stdlib (`Math.sin` → 24…) usan 
 «una cadena no puede ser null»; la variable sí). De la firma de Core.bp sale dónde está cada parámetro string al llamar
 al builtin (bytes bajo sp: el último argumento, arriba; un integer, un float o un boolean ocupan 4, y un long, un double
 o una referencia, 8), y las dos VMs lo miran antes de entrar (Builtin.cadenas en miVM, builtin_cadenas.h en la VM-C).
-Fuera, los que tratan el null como "" a propósito (NULL_ES_VACIA): concatenar y escribir.
+Los que tratan el null como "" a propósito (NULL_ES_VACIA: concatenar y el aviso de un destructor), con su marca: el
+null vale, pero no una referencia caducada.
+#805 (V8, 7-nov) — Y UNA REFERENCIA A UNA CADENA QUE YA NO EXISTE: la misma tabla, «referencia a objeto eliminado
+(use-after-free)» antes de entrar, en todos (Eduardo: la lectura de alto nivel llama a la de bajo nivel, y si le dice
+que el string no existe, salta el error).
 Reglas: el id es el número escrito; la primera declaración con ese número es la CANÓNICA (su
 nombre es el nombre BP del builtin) y las siguientes con el mismo número son alias (`newObjArray`
 de `__newRefArray`); la constante Java/C es el nombre BP sin `__` en MAYÚSCULAS_CON_GUIONES;
@@ -33,7 +37,8 @@ JAVA = os.path.join(RAIZ, "miVM", "src", "main", "java", "edu", "bpgenvm", "byte
 CH   = os.path.join(RAIZ, "bpgenvm-c", "src", "builtin_ids.h")
 CC   = os.path.join(RAIZ, "bpgenvm-c", "src", "builtin_cadenas.h")
 
-# #774 — los builtins con un parámetro string que tratan el null como "" (como print): sin comprobar.
+# #774 — los builtins con un parámetro string que tratan el null como "" (como print): el null, sin comprobar; #805,
+# una referencia caducada, sí.
 NULL_ES_VACIA = {
     "__strCopy": "la concatenación (los __strconcat del compilador): un null se concatena como \"\"",
     "__avisaDestructor": "escribe el mensaje de un destructor que lanzó (e.msg, que puede ser null)",
@@ -83,8 +88,7 @@ def cadenas(nombre, params):
     tams = [tamano(t) for t in tipos]
     if None in tams:
         print("  ✗ %s(%s): un tipo sin tamaño conocido en la pila (%s)" % (nombre, params, tipos[tams.index(None)])); sys.exit(1)
-    if nombre in NULL_ES_VACIA: return []
-    return [sum(tams[k:]) for k, t in enumerate(tipos) if t == "string"]
+    return [sum(tams[k:]) for k, t in enumerate(tipos) if t == "string"]   # #805: también los de NULL_ES_VACIA
 
 def nombre_de_error(nombre):
     """El del mensaje, «referencia nula: <nombre> de un string null»: el nombre BP sin los __ (o el de NOMBRE_DE_ERROR)."""
@@ -133,8 +137,8 @@ def java(tabla, alias):
     o.append("")
     o.append("    public final String bpName;")
     o.append("    public final int id;")
-    o.append("    /** #774 — dónde está cada parámetro string al llamarlo (bytes bajo sp): un null ahí es «referencia nula».")
-    o.append("     *  Los que tratan el null como \"\" (concatenar, escribir), sin ninguno. */")
+    o.append("    /** #774 — dónde está cada parámetro string al llamarlo (bytes bajo sp): un null ahí es «referencia nula», salvo")
+    o.append("     *  en los que lo tratan como \"\" (nuloVale); #805, y una referencia caducada, en todos, «objeto eliminado». */")
     o.append("    public final int[] cadenas;")
     o.append("")
     o.append("    Builtin(String bpName, int... cadenas) { this.bpName = bpName; this.id = ordinal(); this.cadenas = cadenas; }")
@@ -146,6 +150,16 @@ def java(tabla, alias):
     for nombre, nuevo in sorted(NOMBRE_DE_ERROR.items()):
         o.append("            case %s: return \"%s\";" % (constante(nombre), nuevo))
     o.append("            default: return bpName.startsWith(\"__\") ? bpName.substring(2) : bpName;")
+    o.append("        }")
+    o.append("    }")
+    o.append("")
+    o.append("    /** #774/#805 — ¿trata el null de sus parámetros string como \"\"? (NULL_ES_VACIA en el generador; el mismo")
+    o.append("     *  que la marca nulo_vale de builtin_cadenas.h). Una referencia caducada no vale en ninguno. */")
+    o.append("    public boolean nuloVale() {")
+    o.append("        switch (this) {")
+    for nombre in sorted(NULL_ES_VACIA):
+        o.append("            case %s: return true;" % constante(nombre))
+    o.append("            default: return false;")
     o.append("        }")
     o.append("    }")
     o.append("")
@@ -189,7 +203,8 @@ def c_cadenas(tabla):
             print("  ✗ %s: más de 3 parámetros string (la tabla de C tiene sitio para 3)" % nombre); sys.exit(1)
         if max(offs) > 255:
             print("  ✗ %s: un parámetro string a más de 255 bytes de sp (la tabla de C usa un byte)" % nombre); sys.exit(1)
-        filas.append((nombre_de_error(nombre), offs, i, "%s(%s)%s" % (nombre, params, (": " + ret) if ret else "")))
+        filas.append((nombre_de_error(nombre), offs, i, "%s(%s)%s" % (nombre, params, (": " + ret) if ret else ""),
+                      1 if nombre in NULL_ES_VACIA else 0))
         indice.append(len(filas))
     if len(filas) > 255:
         print("  ✗ %d builtins con parámetros string: la tabla de C indexa con un byte" % len(filas)); sys.exit(1)
@@ -199,8 +214,10 @@ def c_cadenas(tabla):
     o.append(" *")
     o.append(" * #774 (V8, 2-nov) — LOS PARÁMETROS string DE CADA BUILTIN: dónde está su referencia al llamarlo (bytes bajo sp;")
     o.append(" * el último argumento, arriba). Un null ahí es «referencia nula: <nombre> de un string null», antes de entrar")
-    o.append(" * (bpvm_call_builtin); lo mismo que Builtin.cadenas en miVM. Los que tratan el null como \"\" (concatenar,")
-    o.append(" * escribir: NULL_ES_VACIA en el generador), sin ninguno. */")
+    o.append(" * (bpvm_call_builtin); lo mismo que Builtin.cadenas en miVM. Los que tratan el null como \"\" (concatenar y el")
+    o.append(" * aviso de un destructor: NULL_ES_VACIA en el generador), con su marca: nulo_vale.")
+    o.append(" * #805 (V8, 7-nov) — y una referencia a una cadena que ya no existe, en todos: «referencia a objeto eliminado")
+    o.append(" * (use-after-free)», también antes de entrar. */")
     o.append("#ifndef BPVM_BUILTIN_CADENAS_H")
     o.append("#define BPVM_BUILTIN_CADENAS_H")
     o.append("")
@@ -210,13 +227,14 @@ def c_cadenas(tabla):
     o.append("typedef struct {")
     o.append("    const char* nombre;   /* el del mensaje: el nombre BP, sin los __ */")
     o.append("    uint8_t     off[3];   /* bytes bajo sp; 0, no hay más */")
+    o.append("    uint8_t     nulo_vale;   /* 1: el null es \"\" (NULL_ES_VACIA); una referencia caducada no vale nunca */")
     o.append("} bpvm_builtin_cadenas_t;")
     o.append("")
     o.append("static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[%d] = {" % (len(filas) + 1))
-    o.append("    { \"\", { 0, 0, 0 } },")
-    for nombre, offs, i, firma in filas:
+    o.append("    { \"\", { 0, 0, 0 }, 0 },")
+    for nombre, offs, i, firma, nulo in filas:
         o3 = (offs + [0, 0, 0])[:3]
-        o.append("    { %-22s { %3d, %3d, %3d } },   /* [%d] %s */" % ("\"%s\"," % nombre, o3[0], o3[1], o3[2], i, firma))
+        o.append("    { %-22s { %3d, %3d, %3d }, %d },   /* [%d] %s */" % ("\"%s\"," % nombre, o3[0], o3[1], o3[2], nulo, i, firma))
     o.append("};")
     o.append("")
     o.append("/* La fila de arriba de cada builtin, por su id (0: ningún parámetro string que mirar). */")

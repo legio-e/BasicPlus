@@ -92,6 +92,19 @@ static inline uint32_t A(bpvm_t* vm, uint32_t ref) {
 static uint32_t h_read_ref(const uint8_t* p) {
     return (uint32_t) bpvm_read_i64_be(p);
 }
+/* V8 #805 — LA ENTRADA DE UNA NATIVE: su thunk lee aquí cada argumento referencia (el `read_ref` de la tabla, y sólo
+ * eso: AotCEmitter), con la referencia ENTERA de la pila, su generación incluida. La lectura de alto nivel (Eduardo):
+ * la de bajo nivel, bpvm_ref_dead, y si dice que ya no existe, el error del intérprete al usarla, aquí, por el límite de
+ * la native (armado). Dentro de la native la referencia ya circula sin generación, en 32 bits: allí no se podría mirar.
+ * Sin una native en marcha (sin VM en el contexto), como antes. */
+static uint32_t h_read_ref_arg(const uint8_t* p) {
+    bpref_t r;
+    bpvm_t* vm = bpvm_aot_callctx()->vm;
+    r.v = (uint64_t) bpvm_read_i64_be(p);
+    if (vm != NULL && bpvm_ref_dead(vm, r))
+        bpvm_aot_throw_tipo(vm, BPVM_CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
+    return (uint32_t) r.v;
+}
 static void h_write_ref(bpvm_t* vm, uint8_t* p, uint32_t ref) {
     bpvm_write_i64_be(p, (int64_t) bpref_regen(vm, ref).v);
 }
@@ -1034,7 +1047,7 @@ const aot_helpers_v2_t bpvm_aot_helpers_v2 = {
     /* #213 — throw de excepción construida (clase de usuario desde native). */
     .throw_ref           = h_throw_ref,
     /* #302 paso 2 — frontera de referencias thunk↔pila BP. */
-    .read_ref            = h_read_ref,
+    .read_ref            = h_read_ref_arg,   /* V8 #805: la entrada de la native */
     .write_ref           = h_write_ref,
     /* #381 — la misma frontera para `long`: 8 bytes big-endian, igual que los
      * escribe el intérprete. Son las funciones del runtime tal cual; el `.mdn`
