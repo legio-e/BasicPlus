@@ -706,7 +706,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Power</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> is exact (integer);
       <code>float^int</code> by squaring; <code>float^float</code> via exp·ln (float)</td></tr>
   <tr><td>Bitwise (integer only)</td><td><code>&amp; | xor shl shr</code> (there is no bitwise NOT: <code>x xor -1</code>; <code>~</code> belongs to the destructor, <a href="#destructor">§9.4b</a>)</td></tr>
-  <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
+  <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>. Between two objects, <code>==</code> and
+      <code>!=</code> tell whether they are <strong>the same object</strong>; they work with two of the same type, with an
+      interface, with <code>null</code> and with a class and one of its ancestors (<code>Object</code> included), as in
+      Java. Two unrelated classes cannot be compared: they could never be the same object</td></tr>
   <tr><td>Logical</td><td><code>and or not</code></td></tr>
   <tr><td>Assignment</td><td><code>:= += -=</code></td></tr>
   <tr><td>Access</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>

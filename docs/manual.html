@@ -931,7 +931,10 @@ gpio.pin[<span class="num">3</span>] := <span class="kw">true</span>        <spa
       alfabético por punto de código (el de los bytes de UTF-8: <code>"Z" &lt; "a"</code>, <code>"ab" &lt; "abc"</code>,
       <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Con una variable <code>string</code> a <code>null</code>,
       <code>==</code> sólo es igual a otra <code>null</code>, y el orden lanza «referencia nula»
-      (<a href="#string-null">§ la variable null</a>)</td></tr>
+      (<a href="#string-null">§ la variable null</a>). Entre dos objetos, <code>==</code> y <code>!=</code> dicen si
+      son <strong>el mismo objeto</strong>; valen con dos del mismo tipo, con una interfaz, con <code>null</code> y con una
+      clase y una antecesora suya (<code>Object</code> incluido), como en Java. Dos clases sin parentesco, no: nunca
+      serían el mismo objeto</td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -= *= /= mod= &amp;= |= xor= shl= shr=</code> (los compuestos, abajo)</td></tr>
   <tr><td>Ternario</td><td><code>iif(condición, a, b)</code>: el valor de <code>a</code> si la condición se cumple, y si

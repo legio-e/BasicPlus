@@ -78,6 +78,12 @@ module CsSystem
       function void Dispose();
    }
 
+   // `ICloneable` (H8, tema 8): `Clone()` da un Object, como en .NET
+   public interface ICloneable
+   {
+      function Object Clone();
+   }
+
    // ------------------------------------------------------------------------------------------- el tipo de un objeto
    // `x.GetType()` lo resuelve casi siempre el traductor (cs2jc/Tipos.cs): no hay un `Type`. Aquí, lo que se pide al ejecutar.
 

@@ -790,8 +790,14 @@ namespace Cs2Jc
                 // una cadena con otra referencia (`o == "x"`, con o un object): en C#, la identidad; JC no las compara
                 // (test-111). Dos cadenas, el texto, en los dos.
                 bool unaCadena = EsCadena(ti) != EsCadena(td);
+                // H8, tema 8 (7-nov): una clase con una antecesora suya (Object incluido), como en Java: JC ya las compara
+                bool emparentadas = ti is INamedTypeSymbol ni && td is INamedTypeSymbol nd && !EsCadena(ti) && !EsCadena(td)
+                                    && (Hereda(ni, nd.OriginalDefinition) || Hereda(nd, ni.OriginalDefinition));
+                // un T de un genérico es un Object en JC (#793): con una referencia que no sea una cadena, la identidad
+                if ((ti is ITypeParameterSymbol && !EsCadena(td)) || (td is ITypeParameterSymbol && !EsCadena(ti))) emparentadas = true;
                 if (ti != null && td != null && !ti.IsValueType && !td.IsValueType
-                    && (unaCadena || (!EsCadena(ti) && !EsCadena(td) && !SymbolEqualityComparer.Default.Equals(ti, td) && !conInterfaz)))
+                    && (unaCadena || (!EsCadena(ti) && !EsCadena(td) && !SymbolEqualityComparer.Default.Equals(ti, td) && !conInterfaz
+                                      && !emparentadas)))
                     return Rechaza(b, Porque.H7(Porque.IgualdadRefs));
             }
             // una cadena con lo que sea: C# mete lo que no es cadena en una caja para unirlo; JC lo une sin ella

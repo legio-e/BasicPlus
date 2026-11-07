@@ -87,7 +87,8 @@ namespace Cs2Jc
         /// y una variable puede ser de su tipo.
         static readonly HashSet<string> InterfacesDeCsSystem = new HashSet<string>
         {
-            "System.IDisposable", "System.Collections.IEnumerable", "System.Collections.IEnumerator"
+            "System.IDisposable", "System.Collections.IEnumerable", "System.Collections.IEnumerator",
+            "System.ICloneable"   // H8, tema 8 (7-nov)
         };
 
         /// Lo que tiene de .NET `Hashtable` en CsSystem (H8, tema 3), y por `IDictionary`: se llama igual. Lo demás, la biblioteca.
@@ -302,6 +303,10 @@ namespace Cs2Jc
                 case "System.IDisposable.Dispose()":
                 case "System.IO.TextWriter.Dispose()":
                     if (objeto != null) return Expr(objeto.Expression) + ".Dispose()";
+                    break;
+                // `c.Clone()` por la interfaz: la de CsSystem (H8, tema 8)
+                case "System.ICloneable.Clone()":
+                    if (objeto != null) return Expr(objeto.Expression) + ".Clone()";
                     break;
                 case "System.IO.StringWriter.ToString()":
                     if (objeto != null) return Expr(objeto.Expression) + ".toString()";

@@ -6158,6 +6158,20 @@ Juntas: 1 y 2, +9; con 4 y 5, +13; con 3, +27. Ninguna toca JC.
 - **Hecho en el compilador (7-nov):** `var` en `Param` y en los dos parsers (`var n: integer`, `var int n`) y en los dos escritores; en la interfaz del módulo, `var nombre:tipo` (bpi 12, sólo si se usa) y la marca `&` en la clave canónica, para que un compilador que no lo sepa no enlace en vez de descuadrar la pila; en el semántico, `checkArgVar` y `refAProperty`, con un mensaje por regla; en el emisor, dos parámetros ocultos por cada `var` (`__vo_n`, el objeto, y `__vr_n`, el long), leer con `INVOKE_SLOT` y la ranura de abajo y escribir con la de arriba, y cuatro huecos en `argSlotCount`; el envoltorio de un método llamado desde otro módulo reenvía los dos. Lo probado: `samples/VarParam.bp` en las dos VMs (sumar, asignar, reenviar un var, leerlo, `this::valor`, una cadena, un long, la property de una hija, un getter y un setter escritos, que corren una vez cada uno en `n += m`, y un objeto que se crea al llamar), su ida y vuelta por JC, y `VarParamTest`. Con el compilador de antes y el nuevo, 693 de 748 fuentes dan los mismos `.mod`; la única nueva, `VarParam`.
 - **Dos cosas que señalé:** (1) con una cadena o un objeto, `ref` no cambia el texto ni el objeto: cambia a cuál apunta la variable del que llama (`out string error`, `ref Nodo raiz`). Tiene sentido, y con este mecanismo sale sin hacer nada: una property de tipo `string` tiene su setter igual. Recomiendo no limitarlo a los escalares. (2) Como casi todo lo que pasa C# son variables, en las pruebas lo salva el traductor con la caja del ajuste 3, que tendría una property `v`: se pasaría `ref caja.v`. Las dos ideas encajan.
 
+### Los temas 6, 7 y 8 (7-nov)
+
+Con el lote de ese día (Mono, 805): casi todo lo que falta en los tres pide algo que está fuera por decisión.
+
+| tema | válidas | funcionan | fallan | no se traducen | de ellas, con algo de fuera |
+|---|---|---|---|---|---|
+| 6, excepciones | 69 | 42 | 0 | 27 | 23 (async/await e hilos de .NET, `yield`, `dynamic`, reflexión, `checked`, `decimal`) |
+| 7, herencia y virtuales | 48 | 38 | 2 | 8 | 6 (reflexión, `dynamic`, interop, el entero a enum de `#522`) |
+| 8, interfaces simples | 78 | 60 | 1 | 17 | 12 (reflexión, sobre todo) |
+
+- **El 6:** lo único de fondo, que un error de la VM tenga su tipo (`catch (NullReferenceException)`): lo piden 14 en todo el lote. Eduardo: *«los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen así»*: es **H7.5** (FICHAS). Con él y el filtro `when` en el traductor, entrarían dos del tema.
+- **El 7:** `test-29` es una regla distinta a propósito (C# prefiere el método de la hija aunque convierta peor; JC, el más exacto, como Java). Los métodos no virtuales (`new` en C#; los piden 9, 4 sólo eso) irían contra el modelo de Java: no.
+- **El 8, hecho** (Eduardo: *«OK 1) y 2)»*): **`==` y `!=` entre una clase y una antecesora suya** (`Object` incluido), la identidad, como en Java, en JC y en BP (`comparableForEquality`; `samples/IgualdadRefs.bp`, en la red; `IgualdadRefsTest`, que dos clases sin parentesco sigan sin compararse; con el compilador de antes y el nuevo, los mismos `.mod` en los 694 que ya compilaban); en el traductor, también un `T` de un genérico con una referencia, que en JC es un `Object`. Una cadena con un `Object` sigue fuera (`test-111`). Y **`ICloneable`** en `CsSystem`. **Mono: 810** (+5: `gtest-294`, `gtest-455`, `gtest-466`, `test-316` y `test-585`); fallan las mismas 6. Lo de implementar con un tipo concreto lo que la interfaz declara con `T` (25 lo piden, 12 sólo eso), con los genéricos.
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
@@ -6516,6 +6530,7 @@ traductor; la red; y la placa, en la próxima tanda.
   nada más («se esperaba un array o una List en 'for in'»). Con una interfaz (en Java, `Iterable` y su `iterator()`;
   en C#, `IEnumerable` y su `GetEnumerator()`), una clase del programa también se podría recorrer. En el lote de Mono,
   «foreach sobre colecciones propias» lo piden 48 pruebas (2 sólo eso).
+- **Las interfaces del lenguaje, juntas** (Eduardo, 7-nov): *«Podriamos tener un módulo de interfaces algo como Module BP y dentro solamente interfaces básicas del lenguaje como IComparable, etc.»* Y tras hablarlo: *«De momento si quieres en Core. A mi me gusta la Idea de Java donde separan las interfaces de las implementaciones, dejando abierto a que una interfaz la puedan implementar diferentes librerías. Pero quizás eso sea algo para mas adelante, no ahora en la V8.»* Lo propuesto: los nombres de Java, sin la `I` (`Comparable`, `Iterable` o `Collection`, `Cloneable`, `Closeable`), y el traductor convierte los de C# (`IComparable` → `Comparable`, `ICloneable` → `Cloneable`); hoy `ICloneable`, `IDisposable` e `IEnumerable` viven en la biblioteca del traductor, `CsSystem`. **En V8, si hace falta, en `Core`; el módulo aparte, con las interfaces separadas de las implementaciones, para después de V8.**
 - **Por analizar:** lo que pide cada una al lenguaje (el `for … in` con una interfaz; si `Comparable` pasa de clase a
   interfaz, lo que cambia para los envoltorios y para lo ya compilado), a la stdlib (`List`, `Map`) y a las dos VMs.
 

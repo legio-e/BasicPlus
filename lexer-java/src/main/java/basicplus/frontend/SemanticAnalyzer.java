@@ -4889,6 +4889,10 @@ public final class SemanticAnalyzer {
         // que sí, como en Java y C#)
         if (a instanceof BpType.ClassType && b instanceof BpType.ClassType
                 && (((BpType.ClassType) a).cls.isInterface || ((BpType.ClassType) b).cls.isInterface)) return true;
+        // V8/H8, tema 8 (7-nov; Eduardo: «OK 1)») — una clase con una antecesora suya (Object incluido): la identidad, como
+        // en Java. Un Perro y un Gato, no: nunca serían el mismo objeto
+        if (a instanceof BpType.ClassType && b instanceof BpType.ClassType
+                && (a.isAssignableFrom(b) || b.isAssignableFrom(a))) return true;
         if (a instanceof NullType && b.isReference()) return true;
         if (b instanceof NullType && a.isReference()) return true;
         // #774 — una variable string, con null: ¿no referencia ninguna cadena? (__strequals: null sólo es igual a null)

@@ -1,0 +1,47 @@
+// IgualdadRefs.bp — V8/H8, tema 8 (7-nov; Eduardo: «OK 1)»): `==` y `!=` entre una referencia y otra de una clase
+// antecesora suya (Object incluido) comparan la identidad, como en Java. Antes, sólo del mismo tipo, con una interfaz o
+// con null. Un Perro y un Gato siguen sin poder compararse: nunca serían el mismo objeto (samples/errores no lo
+// necesita: lo dice IgualdadRefsTest). Se comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh.
+module IgualdadRefs
+
+  var fallos: integer
+
+  class Animal
+    public function Animal()
+    end Animal
+  end Animal
+
+  class Perro extends Animal
+    public function Perro()
+      super()
+    end Perro
+  end Perro
+
+  function mira(cond: boolean, que: string)
+    if cond then
+      print "ok   " + que
+    else
+      print "FALLO " + que
+      fallos := fallos + 1
+    endif
+  end mira
+
+  function Main()
+    fallos := 0
+    var p: Perro := Perro()
+    var otro: Perro := Perro()
+    var a: Animal := p
+    var o: Object := p
+    mira(a == p, "un Animal y un Perro, el mismo objeto")
+    mira(p == a, "y al revés")
+    mira(not (a != p), "!= entre los dos")
+    mira(o == p, "un Object y un Perro")
+    mira(a == o, "un Animal y un Object")
+    mira(a != otro, "otro Perro no es el mismo")
+    var nadie: Animal := null
+    mira(nadie != p, "un Animal null y un Perro")
+    if fallos == 0 then
+      print "IgualdadRefs: todo bien"
+    endif
+  end Main
+end IgualdadRefs
