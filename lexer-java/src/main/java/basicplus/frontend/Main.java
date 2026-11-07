@@ -2505,6 +2505,7 @@ public final class Main {
                     for (ModuleInterface.ParamSig ps : fs.params) {
                         Symbol.ParamSymbol psym = new Symbol.ParamSymbol(ps.name, 0, 0);
                         psym.type = ps.type;
+                        psym.isVar = ps.isVar;   // V8/H7.4
                         if (ps.defaultValue != null)   // H8.1
                             psym.defaultExpr = SemanticAnalyzer.literalExprFromValue(ps.defaultValue, ps.type, 0, 0);
                         f.params.add(psym);
@@ -2683,6 +2684,7 @@ public final class Main {
                         for (ModuleInterface.ParamSig pp : m.params) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                             psm.type = pp.type;
+                            psm.isVar = pp.isVar;   // V8/H7.4
                             if (pp.defaultValue != null)   // H8.1
                                 psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
                             fsym.params.add(psm);
@@ -2747,6 +2749,7 @@ public final class Main {
                         for (ModuleInterface.ParamSig pp : m.params) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                             psm.type = pp.type;
+                            psm.isVar = pp.isVar;   // V8/H7.4
                             if (pp.defaultValue != null)
                                 psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
                             fsym.params.add(psm);
@@ -2786,6 +2789,7 @@ public final class Main {
                         for (ModuleInterface.ParamSig pp : cs.ctorParams) {
                             Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                             psm.type = pp.type;
+                            psm.isVar = pp.isVar;   // V8/H7.4
                             if (pp.defaultValue != null)   // H8.1
                                 psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
                             ctor.params.add(psm);
@@ -2808,6 +2812,7 @@ public final class Main {
                             for (ModuleInterface.ParamSig pp : ov) {
                                 Symbol.ParamSymbol psm = new Symbol.ParamSymbol(pp.name, 0, 0);
                                 psm.type = pp.type;
+                                psm.isVar = pp.isVar;   // V8/H7.4
                                 if (pp.defaultValue != null)
                                     psm.defaultExpr = SemanticAnalyzer.literalExprFromValue(pp.defaultValue, pp.type, 0, 0);
                                 oc.params.add(psm);

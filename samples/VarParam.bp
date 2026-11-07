@@ -1,0 +1,128 @@
+// mod8: fuera — los parámetros var son del enlace tardío (MOD9): llevan las ranuras de una property, que pone el cargador
+// VarParam.bp — V8/H7.4: los parámetros `var` (Eduardo, 7-nov). A un `var` se le pasa `objeto::property`, y leer y
+// escribir el parámetro es leer y escribir esa property: por su getter y su setter, que viajan como dos ranuras en un
+// long, con el objeto al lado. También otro parámetro var, por su nombre. Se comprueba a sí mismo: una línea que empieza
+// por FALLO es rojo en compat.sh.
+module VarParam
+
+  var fallos: integer
+
+  class Contador
+    public property valor: integer
+    public property nombre: string
+    public property grande: long
+    public function Contador()
+      this.valor := 0
+      this.nombre := "uno"
+      this.grande := 0L
+    end Contador
+
+    // dentro de la clase, la suya: this::valor
+    public function duplica()
+      suma(this::valor, this.valor)
+    end duplica
+  end Contador
+
+  // una hija: la property es la del padre, y su ranura, la misma
+  class Doble extends Contador
+    public function Doble()
+      super()
+    end Doble
+  end Doble
+
+  // el getter y el setter escritos: se ve cuántas veces corre cada uno
+  class Vigilado
+    var lecturas: integer
+    var escrituras: integer
+    public property v: integer
+      get
+        this.lecturas := this.lecturas + 1
+        return field
+      endget
+      set(x)
+        this.escrituras := this.escrituras + 1
+        field := x
+      endset
+    endprop
+    public function Vigilado()
+      this.lecturas := 0
+      this.escrituras := 0
+    end Vigilado
+    public function cuantasLecturas(): integer
+      return this.lecturas
+    end cuantasLecturas
+    public function cuantasEscrituras(): integer
+      return this.escrituras
+    end cuantasEscrituras
+  end Vigilado
+
+  function mira(cond: boolean, que: string)
+    if cond then
+      print "ok   " + que
+    else
+      print "FALLO " + que
+      fallos := fallos + 1
+    endif
+  end mira
+
+  public function suma(var n: integer, m: integer)
+    n += m
+  end suma
+
+  function pon(var n: integer, m: integer)
+    n := m
+  end pon
+
+  function reenvia(var n: integer)
+    suma(n, 10)
+  end reenvia
+
+  function doble(var n: integer): integer
+    return n * 2
+  end doble
+
+  function alarga(var s: string, t: string)
+    s := s + t
+  end alarga
+
+  function sumaLarga(var n: long, m: long)
+    n += m
+  end sumaLarga
+
+  function crea(): Contador
+    var c: Contador := Contador()
+    c.valor := 40
+    return c
+  end crea
+
+  function Main()
+    fallos := 0
+    var c: Contador := Contador()
+    suma(c::valor, 5)
+    mira(c.valor == 5, "suma(c::valor, 5): " + c.valor)
+    pon(c::valor, 9)
+    mira(c.valor == 9, "pon(c::valor, 9): " + c.valor)
+    reenvia(c::valor)
+    mira(c.valor == 19, "reenvia, que pasa su var a otro: " + c.valor)
+    mira(doble(c::valor) == 38, "leer el var: " + doble(c::valor))
+    c.duplica()
+    mira(c.valor == 38, "this::valor, dentro de la clase: " + c.valor)
+    alarga(c::nombre, " y dos")
+    mira(c.nombre == "uno y dos", "una cadena: " + c.nombre)
+    sumaLarga(c::grande, 5000000000L)
+    mira(c.grande == 5000000000L, "un long: " + c.grande)
+    var d: Doble := Doble()
+    suma(d::valor, 7)
+    mira(d.valor == 7, "la property de una hija: " + d.valor)
+    var w: Vigilado := Vigilado()
+    suma(w::v, 3)
+    mira(w.cuantasLecturas() == 1 and w.cuantasEscrituras() == 1, "n += m: un getter y un setter (" + w.cuantasLecturas()
+         + " y " + w.cuantasEscrituras() + ")")
+    mira(w.v == 3, "con su setter escrito: " + w.v)
+    suma(crea()::valor, 2)
+    print "un objeto que se crea al llamar: sin fallo"
+    if fallos == 0 then
+      print "VarParam: todo bien"
+    endif
+  end Main
+end VarParam

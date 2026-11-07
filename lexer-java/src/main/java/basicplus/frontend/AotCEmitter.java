@@ -3237,6 +3237,9 @@ public final class AotCEmitter {
                 + "float/long/double/void → pendiente.");
         }
         for (Ast.Param p : target.params) {
+            if (p.isVar)                                   // V8/H7.4: el puente no lleva objeto y ranuras
+                throw new UnsupportedAotException("AOT: call native→BP a '" + name + "' (line " + c.line
+                        + "): tiene parámetros var, y el puente no los lleva");
             if (!isBridgeI32Type(p.type)) {
                 throw new UnsupportedAotException(
                     "AOT: call native→BP a '" + name + "' (line " + c.line + "): el puente v1 "
@@ -3275,6 +3278,9 @@ public final class AotCEmitter {
                 + "v1 solo soporta retorno i32; float/long/double/void → pendiente.");
         }
         for (Symbol.ParamSymbol p : fs.params) {
+            if (p.isVar)                                   // V8/H7.4: el puente no lleva objeto y ranuras
+                throw new UnsupportedAotException("AOT: call native→BP a '" + fs.name + "' (line " + c.line
+                        + "): tiene parámetros var, y el puente no los lleva");
             if (!isBridgeI32Type(p.type)) {
                 throw new UnsupportedAotException(
                     "AOT: call native→BP cross-module a '" + qn + "' (line " + c.line + "): el puente "
@@ -3350,6 +3356,9 @@ public final class AotCEmitter {
                 + "solo soporta retorno i32; float/long/double/void → pendiente.");
         }
         for (Symbol.ParamSymbol p : fs.params) {
+            if (p.isVar)                                   // V8/H7.4: el puente no lleva objeto y ranuras
+                throw new UnsupportedAotException("AOT: call native→BP a '" + fs.name + "' (line " + c.line
+                        + "): tiene parámetros var, y el puente no los lleva");
             if (!isBridgeI32Type(p.type)) {
                 throw new UnsupportedAotException(
                     "AOT: método native→BP '" + fs.name + "' (line " + c.line + "): el puente v1 "

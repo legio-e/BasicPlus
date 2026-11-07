@@ -325,6 +325,14 @@ El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
 propiedad — es lo que hace `samples/MemInfo.bp`, donde la lista sólo sirve de ancla
 contra el recolector.
 
+### Los parámetros `var` sólo reciben la property de un objeto (V8/H7.4, decidido el 7-nov)
+
+`function suma(var n: integer, m: integer)` y `suma(c::valor, 5)` (manual §8.1b). De momento no se pasan: las
+properties de un módulo y las estáticas (no tienen objeto: llamarlas por su dirección pediría un opcode nuevo), las de
+un objeto declarado como interfaz (en la llamada no se sabe su ranura), las `owner` y nada en MOD8. Tampoco en un
+constructor, un evento ni una `native`. Y el depurador no enseña el valor de un parámetro `var`: son dos valores
+ocultos, y verlo pediría llamar al getter.
+
 ## ⏭️ Para V8 — lo que conviene saber al programar hoy
 
 Lo que V7 deja para V8: el tema de V8 —la WiFi, el Bluetooth y el bajo consumo— y lo que

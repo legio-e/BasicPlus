@@ -689,11 +689,14 @@ final class JcParser {
     }
 
     private Param parametro() {
+        boolean esVar = acepta("var");                 // V8/H7.4: `var int n`
         TypeRef tp = tipo();
         Tok n = actual();
         String nm = nombre("el nombre del parámetro");
         IExpr def = acepta("=") ? expresion() : null;
-        return new Param(nm, tp, def, n.linea, n.columna);
+        Param p = new Param(nm, tp, def, n.linea, n.columna);
+        p.isVar = esVar;
+        return p;
     }
 
     // ============================================================

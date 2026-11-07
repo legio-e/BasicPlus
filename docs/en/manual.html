@@ -192,6 +192,7 @@
 
     <li class="group"><a href="#funciones">8. Functions</a></li>
     <li class="sub"><a href="#defaults">8.1 Default parameter values</a></li>
+    <li class="sub"><a href="#var">8.1b var parameters</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuples (multiple return)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 native functions (AOT)</a></li>
     <li class="sub"><a href="#inline">8.3b Intrinsic functions: <code>inline</code></a></li>
@@ -913,6 +914,37 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       cost in the VM) and travels in the interface: it works the same
       way when calling functions from another library.</li>
 </ul>
+
+<h3 id="var">8.1b <code>var</code> parameters</h3>
+<pre><code><span class="kw">function</span> <span class="fn">suma</span>(<span class="kw">var</span> n: <span class="type">integer</span>, m: <span class="type">integer</span>)
+  n += m                          <span class="comment">// reads and writes the property it was given</span>
+<span class="kw">end</span> suma
+
+<span class="kw">var</span> c: Contador := Contador()
+suma(c::valor, <span class="num">5</span>)              <span class="comment">// c.valor goes up by 5</span></code></pre>
+<p>
+  A <code>var</code> parameter does not receive a value but a <strong>property of an object</strong>, passed as
+  <code>object::property</code>: reading the parameter reads the property (its getter), and assigning to it writes
+  it (its setter). It is C#'s <code>ref</code>, but only with properties: there are no references to variables,
+  which this VM does not have. In JC: <code>void suma(var int n, int m)</code> and the same call.
+</p>
+<ul>
+  <li>It takes <code>object::property</code>, or another <code>var</code> parameter by its name, passed as is. A
+      variable, a field, an array element or <code>object.property</code> (its value) are compile errors.</li>
+  <li>The property has the <strong>same type</strong> as the parameter, any type, and the caller must be able to
+      read and write it. With a string or an object, it changes what the property points to, not the text or the
+      object.</li>
+  <li>The object is evaluated once, at the call. Inside, each read calls the getter and each assignment the setter;
+      <code>n += m</code>, one of each.</li>
+  <li>No default value, and no overloads that differ only in <code>var</code>. Not in a constructor, an event or a
+      <code>native</code>.</li>
+  <li>Not yet: module and static properties (they have no object), an object declared as an interface, an
+      <code>owner</code> property, and MOD8.</li>
+</ul>
+<p>
+  Inside, two values travel: the object and a <code>long</code> with the slots of the getter and the setter, the
+  way an event keeps its receiver and its method. No new objects and no change to the VM.
+</p>
 
 <h3 id="tuplas">8.2 Tuples (multiple return)</h3>
 <pre><code><span class="comment">// A function can return SEVERAL values: a tuple type (T1, T2, ...)</span>

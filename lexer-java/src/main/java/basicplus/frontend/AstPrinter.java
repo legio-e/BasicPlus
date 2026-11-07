@@ -83,7 +83,7 @@ public final class AstPrinter {
         }
         if (node instanceof Param) {
             Param p = (Param) node;
-            sb.append(ind).append("Param ").append(p.name).append("\n");
+            sb.append(ind).append("Param ").append(p.isVar ? "var " : "").append(p.name).append("\n");
             write(p.type, sb, depth + 1);
             return;
         }

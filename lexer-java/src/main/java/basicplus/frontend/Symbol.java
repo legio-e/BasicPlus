@@ -366,8 +366,17 @@ public abstract class Symbol {
          *  OVERRIDE de otro. Misma codificación que el mangling. */
         public String signatureKey() {
             StringBuilder sb = new StringBuilder();
-            for (ParamSymbol p : params) sb.append(typeCode(p.type, this));
+            for (ParamSymbol p : params) {
+                if (p.isVar) sb.append('&');                 // V8/H7.4: otra ABI, otra firma (no un override)
+                sb.append(typeCode(p.type, this));
+            }
             return sb.toString();
+        }
+
+        /** V8/H7.4 — ¿lleva algún parámetro `var`? */
+        public boolean tieneVar() {
+            for (ParamSymbol p : params) if (p.isVar) return true;
+            return false;
         }
 
         public FunctionSymbol(String name, boolean isPublic, boolean isFinal, boolean isStatic,
@@ -518,6 +527,8 @@ public abstract class Symbol {
         public BpType type;
         /** H8.1 — valor por defecto (expresión literal constante normalizada), o null. */
         public Ast.IExpr defaultExpr;
+        /** V8/H7.4 — `var`: se le pasa `objeto::property` y viajan el objeto y las ranuras de su getter y su setter. */
+        public boolean isVar;
         public ParamSymbol(String name, int line, int column) { super(name, line, column); }
     }
 
@@ -844,6 +855,7 @@ public abstract class Symbol {
             StringBuilder sb = new StringBuilder(f.name).append('(');
             for (ParamSymbol p : f.params) {
                 if (p.type == null) throw new TipoSinResolver("parametro '" + p.name + "' de '" + f.name + "'");
+                if (p.isVar) sb.append('&');                 // V8/H7.4: el que no lo sepa no enlaza, en vez de descuadrar la pila
                 sb.append(tipo(p.type, moduloLocal));
             }
             sb.append(')');

@@ -2148,13 +2148,13 @@ public final class MivmEmitter {
             String fname = crossModuleMethodName(cls, fs);
             w.addFunction(fname, true);   // publica: cross-module
             declareParamRef("this");
-            for (ParamSymbol p : fs.params) declareParamByType(p.name, p.type);
+            for (ParamSymbol p : fs.params) declaraParam(p);   // V8/H7.4
             FunctionSymbol synthFs = new FunctionSymbol(fname, true, false, false, null, null);
             synthFs.returnType = fs.returnType;
             beginFunctionScope(synthFs, fs.returnType);
             try {
                 w.emitGetParam("this");
-                for (ParamSymbol p : fs.params) w.emitGetParam(p.name);
+                for (ParamSymbol p : fs.params) reenviaParam(p);   // V8/H7.4
                 w.emitCall(cls.name + "." + emitName(fs));   // CALL local, NO virtual
                 if (fs.returnType != null && !(fs.returnType instanceof BpType.VoidType)) {
                     w.emitSetLocal("__result");
@@ -3086,7 +3086,7 @@ public final class MivmEmitter {
     // H6.a.2: además pasa el tag de tipo BP para el .dbg.
     private void declareParamsWidthAware(FunctionSymbol fs) {
         for (ParamSymbol p : fs.params) {
-            declareParamByType(p.name, p.type);   // H1.8 (antes: ?8:4 aqui)
+            declaraParam(p);                      // H1.8 (antes: ?8:4 aqui); V8/H7.4: un var son dos
         }
     }
 
@@ -3097,6 +3097,87 @@ public final class MivmEmitter {
      *  SINTETIZADOS que declaran sus params a mano (StringBuilder, Object, properties). */
     private void declareParamByType(String name, BpType type) {
         w.declareParam(name, occupies8Bytes(type) ? 8 : 4, varDbgTypeTag(type));
+    }
+
+    /* V8/H7.4 — UN PARÁMETRO VAR SON DOS VALORES OCULTOS: el objeto (8 B, una referencia que ve el GC) y un long con la
+     * ranura del getter de su property en la mitad de abajo y la del setter en la de arriba (Eduardo, 7-nov: «se pasan
+     * las direcciones del getter y del setter, juntos en un long»). Leer el parámetro es INVOKE_SLOT con la del getter;
+     * escribirlo, con la del setter. Sin clases ni objetos nuevos, y sin tocar la VM: es lo que guarda un evento. */
+    private static String varObj(String n) { return "__vo_" + n; }
+    private static String varRan(String n) { return "__vr_" + n; }
+
+    private void declaraParam(ParamSymbol p) {
+        if (p.isVar) {
+            w.declareParam(varObj(p.name), 8, null);
+            w.declareParam(varRan(p.name), 8, null);
+        } else declareParamByType(p.name, p.type);
+    }
+
+    private void reenviaParam(ParamSymbol p) throws IOException {
+        if (p.isVar) {
+            w.emitGetParam(varObj(p.name));
+            w.emitGetParam(varRan(p.name));
+        } else w.emitGetParam(p.name);
+    }
+
+    /** Leer un parámetro var: el getter de su property, por su ranura. */
+    private void emitLeeVar(ParamSymbol p) throws IOException {
+        w.emitGetParam(varObj(p.name));
+        w.emitGetParam(varRan(p.name));
+        w.emit(OpCode.I64_TO_I32);                        // la ranura del getter: la mitad de abajo
+        w.emit(OpCode.INVOKE_SLOT);
+        w.emitByte(0);
+    }
+
+    /** Escribir un parámetro var, con el objeto y el valor ya en la pila: el setter, por su ranura. */
+    private void emitEscribeVar(ParamSymbol p) throws IOException {
+        w.emitGetParam(varRan(p.name));
+        w.emit(OpCode.LPUSH);
+        w.emitLong(32);
+        w.emit(OpCode.LSHR_U);
+        w.emit(OpCode.I64_TO_I32);                        // la del setter: la de arriba
+        w.emit(OpCode.INVOKE_SLOT);
+        w.emitByte(occupies8Bytes(p.type) ? 2 : 1);
+        declareLocal("__discard");                        // lo que devuelve un setter, como en `obj.p := v`
+        w.emitSetLocal("__discard");
+    }
+
+    /** Un argumento: su valor, convertido al tipo del parámetro; o, para un parámetro var, el objeto y el long con las
+     *  ranuras de su property (`x::p`), o los dos valores de otro parámetro var. */
+    private void emitArgumento(IExpr arg, ParamSymbol p) throws IOException {
+        if (p == null || !p.isVar) {
+            emitExpr(arg);
+            if (p != null) coerceToTarget(arg, p.type);
+            return;
+        }
+        if (!mod9()) {
+            errors.add("los parámetros var ('" + p.name + "') son del enlace tardío (MOD9): en MOD8 no se compilan");
+            return;
+        }
+        if (arg instanceof Ast.MethodRefExpr) {
+            SemanticInfo.RefVar rv = info.refsVar.get(arg);
+            if (rv == null) {
+                errors.add("'::" + ((Ast.MethodRefExpr) arg).method + "' sin resolver para el parámetro var '" + p.name
+                        + "' (bug del emisor)");
+                return;
+            }
+            emitExpr(((Ast.MethodRefExpr) arg).target);    // el objeto, calculado una vez
+            w.emitPushRef(refMet(rv.cls, claveGetter(rv.prop.name, rv.prop.type)));
+            w.emit(OpCode.I32_TO_I64);
+            w.emitPushRef(refMet(rv.cls, claveSetter(rv.prop.name, rv.prop.type)));
+            w.emit(OpCode.I32_TO_I64);
+            w.emit(OpCode.LPUSH);
+            w.emitLong(32);
+            w.emit(OpCode.LSHL);
+            w.emit(OpCode.LBOR);
+            return;
+        }
+        Symbol sy = info.exprSymbols.get(arg);
+        if (sy instanceof ParamSymbol && ((ParamSymbol) sy).isVar) {
+            reenviaParam((ParamSymbol) sy);
+            return;
+        }
+        errors.add("argumento del parámetro var '" + p.name + "' sin resolver (bug del emisor)");
     }
 
     /** H1.8 (Eduardo) — gemelo de declareParamByType para los GLOBALES. Declara por el
@@ -3393,6 +3474,20 @@ public final class MivmEmitter {
                     && ((PropertySymbol) sym).isOwner;
             boolean targetIsOwner = targetIsOwnerLocal || targetIsOwnerInstanceField || targetIsOwnerProperty;
             String targetName = ((IdentifierExpr) target).name;
+
+            if (sym instanceof ParamSymbol && ((ParamSymbol) sym).isVar) {   // V8/H7.4: escribir su property
+                ParamSymbol pv = (ParamSymbol) sym;
+                w.emitGetParam(varObj(pv.name));
+                if (a.op == Ast.AssignOpKind.ASSIGN) {
+                    emitExpr(a.value);
+                    coerceToTarget(a.value, tType);
+                } else {
+                    emitLeeVar(pv);
+                    emitCompuesto(a, tType, true);
+                }
+                emitEscribeVar(pv);
+                return;
+            }
 
             switch (a.op) {
                 case ASSIGN:
@@ -5732,8 +5827,7 @@ public final class MivmEmitter {
                         return;
                     }
                     for (int i = 0; i < c.args.size(); i++) {
-                        emitExpr(c.args.get(i));
-                        if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                        emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
                     }
                     try {
                         w.emit(OpCode.CALL_BUILTIN);
@@ -5747,8 +5841,7 @@ public final class MivmEmitter {
                 // opcodes en lugar de generar una llamada (los args quedan en pila
                 // exactamente igual; el lambda del registro asume ese contrato).
                 for (int i = 0; i < c.args.size(); i++) {
-                    emitExpr(c.args.get(i));
-                    if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                    emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
                 }
                 if (fs.isIntrinsic) {   // H1 (20-sep): el bytecode del cuerpo `inline`, aquí
                     if (fs.inlineOps == null) { errors.add("intrínseca sin cuerpo inline: " + fs.name); return; }
@@ -5785,8 +5878,7 @@ public final class MivmEmitter {
             // FunctionSymbol viene con isExternal y ownerClass==null.
             if (fs.isExternal) {
                 for (int i = 0; i < c.args.size(); i++) {
-                    emitExpr(c.args.get(i));
-                    if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                    emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
                 }
                 if (fs.isIntrinsic) {
                     // Intrínseco cross-module: en lugar de CALL_EXT, el emisor
@@ -5802,8 +5894,7 @@ public final class MivmEmitter {
             }
             if (fs.isStatic) {
                 for (int i = 0; i < c.args.size(); i++) {
-                    emitExpr(c.args.get(i));
-                    if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                    emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
                 }
                 emitStaticCall(fs);   // V7/H2 (#492-B): CALL local o CALL_EXT al alias si la clase es externa
                 return;
@@ -5814,8 +5905,7 @@ public final class MivmEmitter {
                 //   push this, push args, CALL Parent.simpleName
                 w.emitGetParam("this");
                 for (int i = 0; i < c.args.size(); i++) {
-                    emitExpr(c.args.get(i));
-                    if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                    emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
                 }
                 /* #451 — si el padre vive en OTRO modulo, la llamada tiene que ser
                  * cross-module: `emitCall` busca por nombre en la tabla LOCAL y
@@ -5867,8 +5957,7 @@ public final class MivmEmitter {
             //     empujado hace de `this`, igual que super.foo().
             emitExpr(ma.target);
             for (int i = 0; i < c.args.size(); i++) {
-                emitExpr(c.args.get(i));
-                if (i < fs.params.size()) coerceToTarget(c.args.get(i), fs.params.get(i).type);
+                emitArgumento(c.args.get(i), i < fs.params.size() ? fs.params.get(i) : null);
             }
             emitInvocacion(fs, ma.target);
             return;
@@ -6509,6 +6598,7 @@ public final class MivmEmitter {
     private int argSlotCount(FunctionSymbol fs) {
         int slots = 0;
         for (int i = 0; i < fs.params.size(); i++) {
+            if (fs.params.get(i).isVar) { slots += 4; continue; }   // V8/H7.4: el objeto y el long
             slots += occupies8Bytes(fs.params.get(i).type) ? 2 : 1;
         }
         return slots;
@@ -7016,6 +7106,7 @@ public final class MivmEmitter {
     }
     private void loadFromSymbol(Symbol sym, String name) throws IOException {
         if (sym instanceof ParamSymbol) {
+            if (((ParamSymbol) sym).isVar) { emitLeeVar((ParamSymbol) sym); return; }   // V8/H7.4
             w.emitGetParam(sym.name);
         } else if (sym instanceof VarSymbol) {
             VarSymbol v = (VarSymbol) sym;
@@ -7082,6 +7173,10 @@ public final class MivmEmitter {
 
     private void storeToSymbol(Symbol sym, String name) throws IOException {
         if (sym instanceof ParamSymbol) {
+            if (((ParamSymbol) sym).isVar) {               // V8/H7.4: sólo con := o un compuesto (emitAssign)
+                errors.add("el parámetro var '" + sym.name + "' sólo se escribe con ':=' o un compuesto");
+                return;
+            }
             w.emitSetParam(sym.name);
         } else if (sym instanceof VarSymbol) {
             VarSymbol v = (VarSymbol) sym;

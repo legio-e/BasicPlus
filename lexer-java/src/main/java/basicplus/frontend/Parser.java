@@ -816,13 +816,16 @@ public final class Parser {
 
     private Param parseParam() {
         Token tok = current();
+        boolean esVar = match(TokenType.VAR);          // V8/H7.4: `var n: integer`
         String n = consumeIdentifier("nombre del parámetro");
         consume(TokenType.COLON, "se esperaba ':' tras el nombre del parámetro");
         TypeRef t = parseType();
         // H8.1 — valor por defecto opcional: `nombre: tipo := <literal>`
         IExpr def = null;
         if (match(TokenType.ASSIGN)) def = parseExpr();
-        return new Param(n, t, def, tok.line, tok.column);
+        Param p = new Param(n, t, def, tok.line, tok.column);
+        p.isVar = esVar;
+        return p;
     }
 
     // ============================================================

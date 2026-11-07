@@ -182,7 +182,9 @@ func_def    ::= [ 'final' ] 'function' decl_name '(' [ params ] ')' [ ':' type ]
                 'end' [ decl_name ] NEWLINE ;
 
 params      ::= param { ',' param } ;
-param       ::= name ':' type [ ':=' literal ] ;   (* H8.1: valor por defecto constante; los params con default van al final *)
+param       ::= [ 'var' ] name ':' type [ ':=' literal ] ;
+                (* V8/H7.4: a un 'var' se le pasa primary '::' name (una property de un objeto), u otro parámetro var *)
+                  (* H8.1: valor por defecto constante; los params con default van al final *)
 
 return_stmt ::= 'return' [ expr ] NEWLINE ;
 

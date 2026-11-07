@@ -76,6 +76,8 @@ public final class ModuleInterface {
     /** V8/H8 (#793) — un módulo con genéricos en su interfaz (`Core.List<Cc.Sensor>`, `element <tipo>`) escribe la 11, y los
      *  demás, la de siempre: su texto y su ifaceCrc no cambian. */
     public static final int VERSION_CON_GENERICOS = 11;
+    /** V8/H7.4 — un módulo con parámetros `var` en su interfaz escribe la 12 (`var nombre:tipo`); los demás, la de siempre. */
+    public static final int VERSION_CON_VAR = 12;
     /** La versión que ESCRIBE este build: 9 con `--formato=9` (enlace tardío: las ranuras son del cargador,
      *  la interfaz no publica ninguna); 8 en MOD8 (`field … slot n`, `event … recv n`, `layout`). */
     static int versionQueSeEscribe() { return Main.FORMATO == 9 ? 9 : 8; }
@@ -135,6 +137,8 @@ public final class ModuleInterface {
         public final BpType type;
         /** H8.1 — valor por defecto (Long/Double/String/Boolean) o null si no tiene. */
         public final Object defaultValue;
+        /** V8/H7.4 — `var` (bpi 12): se escribe `var nombre:tipo`. */
+        public boolean isVar;
         public ParamSig(String name, BpType type) { this(name, type, null); }
         public ParamSig(String name, BpType type, Object defaultValue) {
             this.name = name; this.type = type; this.defaultValue = defaultValue;
@@ -388,7 +392,7 @@ public final class ModuleInterface {
                         continue;
                     }
                     List<ParamSig> ps = new ArrayList<>(fs.params.size());
-                    for (ParamSymbol p : fs.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                    for (ParamSymbol p : fs.params) ps.add(sigDe(p));
                     FuncSig fsig = new FuncSig(fs.name, true, fs.isStatic, fs.isIntrinsic, ps, fs.returnType);
                     if (fs.inlineOps != null) fsig.inlineText = Ast.InlineStmt.textoDe(fs.inlineOps);   // H1 (20-sep)
                     iface.functions.add(fsig);
@@ -495,7 +499,7 @@ public final class ModuleInterface {
                 return null;
             }
             ctorParams = new ArrayList<>();
-            for (ParamSymbol p : ctor.params) ctorParams.add(new ParamSig(p.name, p.type, paramDefault(p)));
+            for (ParamSymbol p : ctor.params) ctorParams.add(sigDe(p));
         }
         // V7/H2 (#509) — las demás sobrecargas del constructor, en orden de cadena.
         // Una que no sea exportable se salta CON aviso pero no renumera: la cabeza
@@ -508,7 +512,7 @@ public final class ModuleInterface {
                 String issue = signatureIssue(c);
                 if (issue != null) { skipped.add("class " + cls.name + ": constructor (sobrecarga): " + issue); continue; }
                 List<ParamSig> ps = new ArrayList<>();
-                for (ParamSymbol p : c.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                for (ParamSymbol p : c.params) ps.add(sigDe(p));
                 ctorOverloads.add(ps);
                 ctorOverloadsVis.add(visDeCtor(c));   // #515
             }
@@ -575,7 +579,7 @@ public final class ModuleInterface {
                         continue;
                     }
                     List<ParamSig> ps = new ArrayList<>(fsym.params.size());
-                    for (ParamSymbol p : fsym.params) ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                    for (ParamSymbol p : fsym.params) ps.add(sigDe(p));
                     FuncSig msig = new FuncSig(fsym.name, fsym.isPublic, fsym.isStatic, ps, fsym.returnType);
                     msig.isFinal = fsym.isFinal;       // V7/H2 (bpi 8)
                     if (fsym.isStatic) staticMethods.add(msig); else methods.add(msig);   // V7/H2 (#492-B)
@@ -712,7 +716,7 @@ public final class ModuleInterface {
                         opaque = true;
                         break;
                     }
-                    ps.add(new ParamSig(p.name, p.type, paramDefault(p)));
+                    ps.add(sigDe(p));
                 }
             } else {
                 opaque = true;   // sin símbolo: sólo cuenta para el layout
@@ -1173,6 +1177,7 @@ public final class ModuleInterface {
             // la de siempre, y su texto (y su ifaceCrc) no cambia
             if (ver == 9) for (ClassSig c : classes) if (c.isInterface || !c.interfaces.isEmpty()) ver = VERSION_CON_INTERFACES;
             if (ver >= 9 && usaGenericos()) ver = VERSION_CON_GENERICOS;   // V8/H8 (#793)
+            if (ver >= 9 && usaVar()) ver = VERSION_CON_VAR;                // V8/H7.4
             boolean conNumeros = ver < 9;   // bpi 9: la forma de una clase la decide el cargador; aquí no viaja ningún número
             pw.println("bpi " + ver);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
@@ -1437,7 +1442,15 @@ public final class ModuleInterface {
     }
 
     /** H8.1 — escribe "name:type" y, si tiene valor por defecto, "=<literal>". */
+    /** V8/H7.4 — la firma de un parámetro, con su `var`. */
+    private static ParamSig sigDe(ParamSymbol p) {
+        ParamSig s = new ParamSig(p.name, p.type, paramDefault(p));
+        s.isVar = p.isVar;
+        return s;
+    }
+
     private static void appendParam(StringBuilder sb, ParamSig p) {
+        if (p.isVar) sb.append("var ");                    // V8/H7.4 (bpi 12)
         sb.append(p.name).append(':').append(typeToString(p.type));
         if (p.defaultValue != null) sb.append('=').append(encodeLiteral(p.defaultValue));
     }
@@ -1456,6 +1469,16 @@ public final class ModuleInterface {
     }
 
     /** V8/H8 (#793) — ¿la interfaz escribe algún genérico? Si no, el módulo sigue en su versión. */
+    /** V8/H7.4 — ¿algún parámetro `var` en lo que se publica? */
+    private boolean usaVar() {
+        for (FuncSig f : functions) for (ParamSig p : f.params) if (p.isVar) return true;
+        for (ClassSig c : classes) {
+            for (FuncSig m : c.methods) for (ParamSig p : m.params) if (p.isVar) return true;
+            for (FuncSig m : c.staticMethods) for (ParamSig p : m.params) if (p.isVar) return true;
+        }
+        return false;
+    }
+
     private boolean usaGenericos() {
         for (FuncSig f : functions) if (firmaConArgumentos(f)) return true;
         for (PropSig p : properties) if (llevaArgumentos(p.type)) return true;
@@ -1621,7 +1644,7 @@ public final class ModuleInterface {
                             + "compilador soporta v" + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION
                             + "). Regenéralo desde su fuente .bp.");
                     // N6 — versión más nueva: no abortamos; leemos best-effort.
-                    tolerant = ver > VERSION_CON_GENERICOS;
+                    tolerant = ver > VERSION_CON_VAR;
                     sawHeader = true;
                     continue;
                 }
@@ -1859,6 +1882,8 @@ public final class ModuleInterface {
                 throw new IOException(file + ":" + lineNo + ": param mal formado: '" + pTok + "'");
             String pname = pTok.substring(0, colon).trim();
             String rest  = pTok.substring(colon + 1).trim();
+            boolean esVar = pname.startsWith("var ");        // V8/H7.4 (bpi 12)
+            if (esVar) pname = pname.substring(4).trim();
             // H8.1 — valor por defecto opcional: `tipo=<literal>`. El '=' a nivel
             // superior (fuera de comillas/paréntesis) separa el tipo del default.
             int eq = indexOfTopLevel(rest, '=');
@@ -1866,7 +1891,9 @@ public final class ModuleInterface {
             String pdef  = (eq < 0) ? null : rest.substring(eq + 1).trim();
             BpType pty = parseType(file, lineNo, ptype);
             Object dval = (pdef == null) ? null : decodeLiteral(pty, pdef, file, lineNo);
-            params.add(new ParamSig(pname, pty, dval));
+            ParamSig sig = new ParamSig(pname, pty, dval);
+            sig.isVar = esVar;
+            params.add(sig);
         }
         return params;
     }

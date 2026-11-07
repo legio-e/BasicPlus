@@ -25,6 +25,15 @@ public final class SemanticInfo {
      *  sólo tiene que escribirlo: así el slot se decide en UN sitio. */
     public final Map<Ast.IExpr, Integer> methodRefSlots = new IdentityHashMap<>();
 
+    /** V8/H7.4 — cada `objeto::property` que se pasa a un parámetro var: la property y la clase del objeto, para que el
+     *  emisor ponga las ranuras de su getter y su setter. */
+    public final Map<Ast.IExpr, RefVar> refsVar = new IdentityHashMap<>();
+    public static final class RefVar {
+        public final Symbol.PropertySymbol prop;
+        public final Symbol.ClassSymbol cls;
+        public RefVar(Symbol.PropertySymbol prop, Symbol.ClassSymbol cls) { this.prop = prop; this.cls = cls; }
+    }
+
     /** #389 — las llamadas que NO son llamadas: `Cosa(o)` / `string(o)`, o sea
      *  la conversión de REFERENCIA escrita con el nombre del tipo (la misma
      *  forma que `byte(someInt)` de L10 o `integer(d)` de H1.3b, extendida a
@@ -99,7 +108,9 @@ public final class SemanticInfo {
                 || e instanceof Ast.NullLitExpr || e instanceof Ast.ThisExpr) return true;
         if (e instanceof Ast.IdentifierExpr) {
             Symbol s = exprSymbols.get(e);
-            return s instanceof Symbol.VarSymbol || s instanceof Symbol.ParamSymbol || s instanceof Symbol.ConstSymbol;
+            // V8/H7.4 — un parámetro var no es puro: leerlo llama al getter de una property
+            return s instanceof Symbol.VarSymbol || (s instanceof Symbol.ParamSymbol && !((Symbol.ParamSymbol) s).isVar)
+                    || s instanceof Symbol.ConstSymbol;
         }
         if (e instanceof Ast.MemberAccessExpr)
             return exprSymbols.get(e) instanceof Symbol.VarSymbol && esPuro(((Ast.MemberAccessExpr) e).target);

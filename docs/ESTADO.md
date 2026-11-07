@@ -27,6 +27,11 @@
 
 ## Última sesión
 
+> **7-nov, tarde** — **H7.4, los parámetros `var`, hechos en el compilador** (Eduardo: *«OK, adelante»*; `V8_IDEAS` §E9, «El tema 4»). El diseño, de Eduardo en tres pasos: la palabra `var`, como en Pascal (`out` no se usa); *«se pasan las direcciones del getter y del setter, juntos en un long»*, sin clases; y en la llamada, `objeto::property`. Yo añadí que hace falta el objeto, y él: *«si hace falta pasar el objeto se pasa»*.
+> - **Por dentro:** el objeto y un long con las dos ranuras, que es lo que guarda un evento; leer y escribir, con `INVOKE_SLOT`. Sin tocar la VM.
+> - **Comprobado:** `VarParam` igual en las dos VMs, su ida y vuelta por JC, `VarParamTest` (13 casos) y los mismos `.mod` que antes en todo lo que ya compilaba.
+> - **Lo siguiente:** el traductor (`ref` y `out` a `var`, y las locales en una caja) y los otros cuatro ajustes del tema 4.
+>
 > **7-nov** — **La WiFi de la Pico 2 W, aplazada a otra versión** (Eduardo: *«Nada, nos saltamos la wifi de la Pico 2. Nos quedamos con los de ESP32 de momento. Ya veremos mas adelante, en otras versiones.»*). Se leyó su esquema y la licencia de su driver; no se programó ni se bajó nada. Lo leído, en `V8_IDEAS` §E3, «La Pico 2 W, aplazada».
 > - **Cuando la red se va (`#803`):** sin poder apagar el router, `AirApaga` desde el IDE hizo de red caída, y el IDE se quedó colgado, con los botones en gris y sin decir nada. Arreglado con un latido en el IDE: 10 s sin oír nada, un `PING`, y 5 s más. Eduardo, en la ventana: *«OK, todo funciona»*.
 > - **Un error mío:** le dije que no hacía falta tocar el firmware, porque la placa contestaría `BUSY`. No contestaba nada: el `PING` se iba a la cola del depurador. La placa de mentira contestaba y la P4 no. La VM-Java contesta siempre, así que era una diferencia entre las VMs, y se arregló en la VM-C, con su caso en `run_smoke`. La P4 lleva esa imagen.

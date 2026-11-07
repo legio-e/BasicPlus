@@ -711,6 +711,7 @@ public final class SemanticAnalyzer {
         for (Param p : ed.params) {
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
             psym.defaultExpr = p.defaultValue;   // H8.1: se normaliza al resolver tipos
+            if (p.isVar) err(p.line, p.column, "un evento no lleva parámetros var ('" + p.name + "')");   // V8/H7.4
             sym.params.add(psym);
         }
         if (!scope.tryDefine(sym))
@@ -764,7 +765,7 @@ public final class SemanticAnalyzer {
             if (c != null) {
                 for (ParamSymbol p : c.params) {
                     ParamSymbol q = new ParamSymbol(p.name, p.line, p.column);
-                    q.type = p.type; q.defaultExpr = p.defaultExpr;
+                    q.type = p.type; q.defaultExpr = p.defaultExpr; q.isVar = p.isVar;
                     synth.params.add(q);
                 }
                 synth.implicitSuper = true; synth.implicitSuperCtor = c;   // super(MIS params) a ESA sobrecarga
@@ -1021,6 +1022,17 @@ public final class SemanticAnalyzer {
             checkNombreReservado(p.name, p.line, p.column);   // M4
             ParamSymbol psym = new ParamSymbol(p.name, p.line, p.column);
             psym.defaultExpr = p.defaultValue;   // H8.1: crudo aquí; se valida/normaliza al resolver tipos
+            psym.isVar = p.isVar;                // V8/H7.4
+            if (p.isVar) {
+                if (p.defaultValue != null)
+                    err(p.line, p.column, "el parámetro var '" + p.name + "' no lleva valor por defecto: lo que se le pasa"
+                            + " es una property, no un valor");
+                if (f.isNative || f.isIntrinsic)
+                    err(p.line, p.column, "una función " + (f.isNative ? "native" : "con cuerpo 'inline'")
+                            + " no lleva parámetros var ('" + p.name + "')");
+                if (owner != null && nombre.equals(owner.name))
+                    err(p.line, p.column, "un constructor no lleva parámetros var ('" + p.name + "')");
+            }
             sym.params.add(psym);
         }
         if (!scope.tryDefine(sym)) {
@@ -1466,8 +1478,24 @@ public final class SemanticAnalyzer {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
                 for (Symbol m : cls.staticMembers.getSymbols()) checkOverloadChain(m);
+                for (Symbol m : cls.instanceMembers.getSymbols()) checkSoloVar(m);   // V8/H7.4: en los de instancia, sólo esto
             }
         }
+    }
+
+    /** V8/H7.4 — dos sobrecargas que sólo difieren en `var`: en la llamada se distinguen (`x::p` frente a un valor), pero
+     *  se decidió que no (Eduardo, 7-nov): el que lee la llamada tiene que saber a cuál va sin mirar los argumentos. */
+    private void checkSoloVar(Symbol s) {
+        if (!(s instanceof FunctionSymbol)) return;
+        FunctionSymbol head = (FunctionSymbol) s;
+        if (!head.overloaded) return;
+        for (FunctionSymbol a = head; a != null; a = a.nextOverload)
+            for (FunctionSymbol b = a.nextOverload; b != null; b = b.nextOverload)
+                if (a.hasSameSignatureAs(b) && (a.tieneVar() || b.tieneVar())) {
+                    int ln  = (b.astNode != null) ? b.astNode.line   : head.line;
+                    int col = (b.astNode != null) ? b.astNode.column : head.column;
+                    err(ln, col, "sobrecarga de '" + head.name + "' que sólo difiere en 'var': no se permite");
+                }
     }
 
     /** H5.a-E3 — asigna {@link FunctionSymbol#slotKey} a TODA función del módulo.
@@ -1569,8 +1597,11 @@ public final class SemanticAnalyzer {
                 if (a.hasSameSignatureAs(b)) {
                     int ln  = (b.astNode != null) ? b.astNode.line   : head.line;
                     int col = (b.astNode != null) ? b.astNode.column : head.column;
-                    err(ln, col, "sobrecarga duplicada: '" + head.name
-                            + "' con la misma firma de parámetros ya declarada");
+                    if (a.tieneVar() || b.tieneVar())        // V8/H7.4
+                        err(ln, col, "sobrecarga de '" + head.name + "' que sólo difiere en 'var': no se permite");
+                    else
+                        err(ln, col, "sobrecarga duplicada: '" + head.name
+                                + "' con la misma firma de parámetros ya declarada");
                 }
             }
         }
@@ -2658,6 +2689,7 @@ public final class SemanticAnalyzer {
         for (FunctionSymbol f = cand; f != null; f = f.nextOverload) cands.add(f);
         for (FunctionSymbol f : cands) {
             if (f.params.size() != ev.params.size()) continue;
+            if (f.tieneVar()) continue;                    // V8/H7.4: un evento no pasa properties
             boolean ok = true;
             for (int i = 0; i < f.params.size(); i++) {
                 BpType a = f.params.get(i).type, b = ev.params.get(i).type;
@@ -2709,6 +2741,76 @@ public final class SemanticAnalyzer {
     }
 
     /** Un `::` fuera de una suscripción no significa nada: hay que decirlo. */
+    /** V8/H7.4 — lo que se le pasa a un parámetro var: `objeto::property`, u otro parámetro var por su nombre. Y `x::p`
+     *  sólo va a un parámetro var. */
+    private void checkArgVar(ParamSymbol p, IExpr a, int i, Scope scope) {
+        Node nn = (Node) a;
+        if (!p.isVar) {
+            Ast.MethodRefExpr mr = (Ast.MethodRefExpr) a;
+            analyzeExpr(mr.target, scope, null);
+            err(nn.line, nn.column, "argumento " + (i + 1) + ": '::" + mr.method + "' sólo se pasa a un parámetro var, y '"
+                    + p.name + "' no lo es");
+            return;
+        }
+        if (a instanceof Ast.MethodRefExpr) {
+            PropertySymbol prop = refAProperty((Ast.MethodRefExpr) a, scope, true);
+            if (prop != null && p.type != null && prop.type != null && !p.type.sameAs(prop.type))
+                err(nn.line, nn.column, "argumento " + (i + 1) + ": la property '" + prop.name + "' es '" + prop.type.display()
+                        + "' y el parámetro var '" + p.name + "' es '" + p.type.display() + "': tienen que ser del mismo tipo");
+            return;
+        }
+        analyzeExpr(a, scope, p.type);
+        Symbol s = info.exprSymbols.get(a);
+        if (a instanceof IdentifierExpr && s instanceof ParamSymbol && ((ParamSymbol) s).isVar) {
+            ParamSymbol q = (ParamSymbol) s;
+            if (p.type != null && q.type != null && !p.type.sameAs(q.type))
+                err(nn.line, nn.column, "argumento " + (i + 1) + ": el parámetro var '" + q.name + "' es '" + q.type.display()
+                        + "' y '" + p.name + "' es '" + p.type.display() + "': tienen que ser del mismo tipo");
+            return;
+        }
+        err(nn.line, nn.column, "argumento " + (i + 1) + ": '" + p.name + "' es un parámetro var: se le pasa 'objeto::property'"
+                + (a instanceof MemberAccessExpr ? " (con '::', no con '.': con el punto se pasa su valor)" : "")
+                + " u otro parámetro var");
+    }
+
+    /** V8/H7.4 — `x::p`: la property `p` del objeto `x`, para un parámetro var. Con {@code reporta}, dice por qué no vale;
+     *  sin él (desde analyzeExpr, para elegir la sobrecarga), calla y devuelve null. */
+    private PropertySymbol refAProperty(Ast.MethodRefExpr mr, Scope scope, boolean reporta) {
+        if (mr.target instanceof SuperExpr) {
+            if (reporta) err(mr.line, mr.column, "'super::" + mr.method + "': a un parámetro var se le pasa la property de un"
+                    + " objeto; la de la propia clase es 'this::" + mr.method + "'");
+            return null;
+        }
+        BpType recvT = analyzeExpr(mr.target, scope, null);
+        if (recvT instanceof ErrorType) return null;
+        if (!(recvT instanceof BpType.ClassType)) {
+            if (reporta) err(mr.line, mr.column, "'::" + mr.method + "': a la izquierda va un objeto. Las properties de un"
+                    + " módulo y las estáticas no se pasan a un parámetro var: no tienen objeto");
+            return null;
+        }
+        ClassSymbol rc = ((BpType.ClassType) recvT).cls;
+        if (rc.isInterface) {
+            if (reporta) err(mr.line, mr.column, "'" + rc.name + "' es una interfaz: de momento, a un parámetro var sólo se le"
+                    + " pasa la property de un objeto declarado con su clase");
+            return null;
+        }
+        Symbol ms = rc.lookupInstance(mr.method);
+        if (!(ms instanceof PropertySymbol) || ((PropertySymbol) ms).isStatic) {
+            if (reporta) err(mr.line, mr.column, (ms instanceof FunctionSymbol)
+                    ? "'" + mr.method + "' es un método: a un parámetro var se le pasa una property"
+                    : "'" + rc.name + "' no tiene una property '" + mr.method + "'");
+            return null;
+        }
+        PropertySymbol prop = (PropertySymbol) ms;
+        if (prop.isOwner) {                            // su setter libera el valor viejo, y por un var no se movería el nuevo
+            if (reporta) err(mr.line, mr.column, "'" + mr.method + "' es una property owner: no se pasa a un parámetro var");
+            return null;
+        }
+        if (reporta) checkVisibility(mr.line, mr.column, prop, rc, !(mr.target instanceof ThisExpr));
+        info.refsVar.put(mr, new SemanticInfo.RefVar(prop, rc));
+        return prop;
+    }
+
     private void rejectStrayMethodRef(IExpr e) {
         if (e instanceof Ast.MethodRefExpr) {
             Ast.MethodRefExpr m = (Ast.MethodRefExpr) e;
@@ -3338,6 +3440,10 @@ public final class SemanticAnalyzer {
         else if (e instanceof ParenExpr)     t = analyzeExpr(((ParenExpr) e).inner, scope, expected);
         else if (e instanceof ArrayLitExpr)  t = analyzeArrayLit((ArrayLitExpr) e, scope, expected);
         else if (e instanceof IdentifierExpr) t = analyzeIdentifier((IdentifierExpr) e, scope);
+        else if (e instanceof Ast.MethodRefExpr) {     // V8/H7.4: `x::p`, una property para un parámetro var (sin decir nada:
+            PropertySymbol pr = refAProperty((Ast.MethodRefExpr) e, scope, false);   // lo dice checkArgs, que sabe a qué va)
+            t = (pr != null && pr.type != null) ? pr.type : ErrorType.INSTANCE;
+        }
         else if (e instanceof MemberAccessExpr) t = analyzeMemberAccess((MemberAccessExpr) e, scope);
         else if (e instanceof IndexExpr)     t = analyzeIndex((IndexExpr) e, scope);
         else if (e instanceof CallExpr && esTernario((CallExpr) e))
@@ -3966,6 +4072,11 @@ public final class SemanticAnalyzer {
                     + " así que no se puede escribir como 'obj::" + bc.method + "'");
             return;
         }
+        if (fn.tieneVar()) {                           // V8/H7.4
+            err(bc.line, bc.column, "'" + bc.method + "' tiene parámetros var: no se lanza en un hilo con 'obj::"
+                    + bc.method + "(…)'");
+            return;
+        }
         // Lanzar algo en un thread no da acceso a lo que no lo tendría escrito a
         // mano: `lookupInstance` también encuentra los privados, así que la
         // visibilidad se comprueba igual que en una llamada normal.
@@ -4380,6 +4491,10 @@ public final class SemanticAnalyzer {
             err(line, col, "número de argumentos incorrecto: se esperaban " + ps.size() + ", se pasaron " + args.size());
         int n = Math.min(ps.size(), args.size());
         for (int i = 0; i < n; i++) {
+            if (ps.get(i).isVar || args.get(i) instanceof Ast.MethodRefExpr) {   // V8/H7.4
+                checkArgVar(ps.get(i), args.get(i), i, scope);
+                continue;
+            }
             BpType t = analyzeExpr(args.get(i), scope, ps.get(i).type);
             if (ps.get(i).type != null && !ps.get(i).type.isAssignableFrom(t)) {
                 Node nn = (Node) args.get(i);

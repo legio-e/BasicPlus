@@ -369,7 +369,7 @@ public final class EscritorJc {
     private String parametros(List<Param> ps) {
         List<String> out = new ArrayList<>();
         for (Param p : ps) {
-            String s = tipo(p.type) + " " + nombre(p.name, p);
+            String s = (p.isVar ? "var " : "") + tipo(p.type) + " " + nombre(p.name, p);   // V8/H7.4
             if (p.defaultValue != null) s += " = " + expr(p.defaultValue);
             out.add(s);
         }

@@ -198,6 +198,7 @@ public final class EscritorBp {
         for (int i = 0; i < ps.size(); i++) {
             Param p = ps.get(i);
             if (i > 0) s.append(", ");
+            if (p.isVar) s.append("var ");                  // V8/H7.4
             s.append(p.name).append(": ").append(tipo(p.type));
             if (p.defaultValue != null) s.append(" := ").append(expr(p.defaultValue));
         }

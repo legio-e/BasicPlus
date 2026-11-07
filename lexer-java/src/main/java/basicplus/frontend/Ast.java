@@ -254,6 +254,9 @@ public final class Ast {
         public final String name;
         public final TypeRef type;
         public final IExpr defaultValue;   // H8.1: valor por defecto (literal const) o null
+        /** V8/H7.4 — `var n: integer` (en JC, `var int n`): se pasa `objeto::property`, y leer y escribir el parámetro
+         *  es leer y escribir esa property. Mutable, como `FuncDef.isPrivate`: lo pega el parser. */
+        public boolean isVar = false;
         public Param(String name, TypeRef type, int line, int column) {
             this(name, type, null, line, column);
         }

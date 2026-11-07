@@ -196,6 +196,7 @@
 
     <li class="group"><a href="#funciones">8. Funciones</a></li>
     <li class="sub"><a href="#defaults">8.1 Parámetros con valor por defecto</a></li>
+    <li class="sub"><a href="#var">8.1b Parámetros var</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuplas (retorno múltiple)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 Funciones native (AOT)</a></li>
     <li class="sub"><a href="#inline">8.3b Funciones intrínsecas: <code>inline</code></a></li>
@@ -1216,6 +1217,36 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       coste en la VM) y viaja en la interfaz: funciona igual al
       llamar funciones de otra librería.</li>
 </ul>
+
+<h3 id="var">8.1b Parámetros <code>var</code></h3>
+<pre><code><span class="kw">function</span> <span class="fn">suma</span>(<span class="kw">var</span> n: <span class="type">integer</span>, m: <span class="type">integer</span>)
+  n += m                          <span class="comment">// lee y escribe la property que le pasaron</span>
+<span class="kw">end</span> suma
+
+<span class="kw">var</span> c: Contador := Contador()
+suma(c::valor, <span class="num">5</span>)              <span class="comment">// c.valor sube 5</span></code></pre>
+<p>
+  Un parámetro <code>var</code> no recibe un valor, sino una <strong>property de un objeto</strong>, que se pasa
+  con <code>objeto::property</code>: leer el parámetro es leer la property (su getter), y asignarle es escribirla
+  (su setter). Es el <code>ref</code> de C#, pero sólo con properties: no hay referencias a variables, que en
+  esta VM no existen. En JC: <code>void suma(var int n, int m)</code> y la misma llamada.
+</p>
+<ul>
+  <li>Se le pasa <code>objeto::property</code>, u otro parámetro <code>var</code> por su nombre, que se pasa tal
+      cual. Una variable, un campo, una casilla o <code>objeto.property</code> (su valor) dan error al compilar.</li>
+  <li>La property, del <strong>mismo tipo</strong> que el parámetro, cualquiera, y que quien llama pueda leer y
+      escribir. Con una cadena o un objeto, cambia a cuál apunta la property, no el texto ni el objeto.</li>
+  <li>El objeto se calcula una vez, al llamar. Dentro, cada lectura llama al getter y cada asignación al setter;
+      <code>n += m</code>, uno de cada.</li>
+  <li>Sin valor por defecto, y sin sobrecargas que difieran sólo en <code>var</code>. No en un constructor, un
+      evento ni una <code>native</code>.</li>
+  <li>De momento no: las properties de un módulo y las estáticas (no tienen objeto), un objeto declarado como
+      interfaz, una property <code>owner</code> y MOD8.</li>
+</ul>
+<p>
+  Por dentro viajan dos valores: el objeto y un <code>long</code> con las ranuras del getter y del setter, como
+  guarda un evento su receptor y su método. Sin objetos nuevos ni cambios en la VM.
+</p>
 
 <h3 id="tuplas">8.2 Tuplas (retorno múltiple)</h3>
 <pre><code><span class="comment">// Una función puede devolver VARIOS valores: tipo tupla (T1, T2, ...)</span>

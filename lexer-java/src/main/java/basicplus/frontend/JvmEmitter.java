@@ -712,6 +712,7 @@ public final class JvmEmitter implements Opcodes {
 
         // Parámetros
         for (ParamSymbol p : fs.params) {
+            if (p.isVar) errors.add("[" + fs.line + ":" + fs.column + "] los parámetros var ('" + p.name + "') no van al backend JVM");   // V8/H7.4
             int slot = ctx.allocSlot(p.type);
             ctx.paramSlots.put(p, slot);
         }
