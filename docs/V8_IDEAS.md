@@ -6203,6 +6203,15 @@ opciones; con ellas, todavía no), y con varios o ninguno, un `params ReadOnlySp
 y un `Object`, como se dejó en el tema 8) y `test-330` (`IFormattable foo = -1`: el `Integer` de BP tendría que
 implementar una interfaz de .NET). **El tema 9: 42 de 85; Mono, 846.**
 
+### El tema 10, los métodos de extensión (7-nov; cerrado sin cambios)
+
+Con el lote de ese día (Mono, 846): 36 válidas, 16 funcionan, ninguna falla, y 20 no se traducen. Lo que es del tema
+ya se traduce (la llamada estática que son: `x.Doble(a)` es `Ext.Doble(x, a)`). De las 20, 8 piden algo de fuera (LINQ,
+la reflexión, saber `T` al ejecutar, las lambdas), y las otras 12, alguna de las mejoras grandes que quedaron para V9:
+los delegados (6), las colecciones genéricas de .NET, `IEnumerable<T>` y las demás (6), y un `struct` con estado (1);
+a las que sólo les falta una, `gtest-exmethod-47` (los delegados) y `gtest-exmethod-38` (el `struct`). Eduardo: *«OK,
+cierra el tema 10»*. **El tema 10: 16 de 36.**
+
 ### H7.5, los errores de la VM con su tipo (7-nov; hecho)
 
 Eduardo: *«A ver los runtime error se puede poner una excepción dentro como excepción específica. En Java ya lo hacen
