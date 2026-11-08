@@ -496,8 +496,64 @@ necesita su propia entrada, con el suyo.
    placas, las tablas de BasicPlus, la US primero.
 6. **`#811`, ahora**, antes de seguir con el paso 2 (el mismo *«si»*).
 
-**Por decidir:** el evento (¿el mismo int32?), qué bit es cada estado y, como el int32 no lleva el carácter, por dónde
-le llega al programa.
+7. **El evento, el int32 y el carácter** (Eduardo: *«OK a los 3»*): `onKey(t: Keyboards.Keyboard, k: integer, c:
+   string)`; el carácter, `""` en una especial. Quien pregunta: `readKey()` da el int32 y `getChar()` el carácter de la
+   última leída. La VM guarda las dos cosas juntas en el búfer de cada tecla: el int32 no puede llevar el carácter, y en
+   el PC sólo lo sabe el sistema.
+8. **Los bits de estado, el byte de modificadores del estándar HID** (el que manda el teclado), en la parte alta: 16
+   Ctrl izquierdo, 17 Shift izquierdo, 18 Alt, 19 Windows izquierdo, 20 Ctrl derecho, 21 Shift derecho, 22 AltGr (el
+   Alt derecho), 23 Windows derecho; y 24 Bloq Mayús, 25 Bloq Num, 26 Bloq Despl y 27 Fn. Con funciones para no mirar
+   bits: `Keyboards.getCode(k)`, `isShift(k)`, `isCtrl(k)`, `isAlt(k)`, `isAltGr(k)`, `isWin(k)` e `isFn(k)`.
+9. **Comparar con una tecla, `Keyboards.isKey(k, Keyboards.Key.ENTER)`**: un enum no se compara con un entero.
+10. **El hilo de los eventos** (Eduardo: *«El teclado (el objeto) sería crearlo en el mismo hilo que el gui. Ahora el
+    teclado puede tener un evento así que el evento lo captura quién lo instancie»*). Llevar la GUI al hilo del main,
+    no (*«Pues no. El LVGL tiene la manía de acaparlo todo y si dejas el LVGL en el hilo principal ya casi no puedes
+    hacer nada mas»*). Lo que se queda (*«OK, si, mucho mejor»*):
+    - **en un programa con GUI, el teclado lo crea la propia GUI, en su hilo**: lo instancia y captura sus eventos, y se
+      los pasa a LVGL (en la VM-Java, a Swing): el campo con el foco recibe los caracteres, Enter pulsa el botón, Tab
+      pasa al siguiente. Y si el programa quiere las teclas tal cual, la pantalla tiene su evento,
+      `scr.onKey := pant::tecla`, que la GUI lanza en su hilo, como un clic. Es el paso 4;
+    - **sin GUI**, el programa crea su `Keyboards.Keyboard` y sus eventos van al hilo que lo creó, que tiene que estar
+      corriendo (un bucle con `sleep`, por ejemplo); `hasKey()` y `readKey()`, desde cualquier hilo. Es el paso 2.
+
+**El plan para programarlo** (8-nov, al parar para el descanso; lo interno es mío, lo que ve el programa está decidido):
+- **El teclado del SO, en la HAL BP** (`bpvm_teclado.c`; en la VM-Java, `Teclado.java`), con su cerrojo: el búfer que
+  lee `readKey()` (32 teclas) y, aparte, las que faltan por avisar (16). Cada tecla, el int32 y su carácter como código
+  Unicode (0 en una especial): así la VM no reserva cadenas; las hace `Keyboards`, en BP, con `Str.fromCharCode`.
+- **Los teclados del programa:** `Keyboards.Keyboard()` llama a `__kbOpen(this)`: la VM apunta la referencia entera
+  (con su generación, que dice si sigue vivo: no lo mantiene vivo), el hilo que lo crea y la ranura de su `__despacha`,
+  por nombre (lo que ya hace `__guiSlotOf`). `close()` y el destructor, `__kbClose(this)`.
+- **El reparto, entre turno y turno**, donde hoy la VM saca un evento por turno: por cada tecla por avisar y cada
+  teclado vivo, un evento de la cola de siempre para su hilo (`__despacha(k, cp)`, que hace el `raise onKey`). Si la
+  cola (16) no tiene sitio para todos, la tecla espera al turno siguiente; si el hilo ya no existe, el teclado se borra.
+- **Los builtins, del 325 al 331:** `__kbOpen`, `__kbClose`, `__kbHasKey`, `__kbReadKey` (el int32; su carácter se
+  queda en el hilo), `__kbReadChar` (el código del carácter de la última leída por ese hilo), `__kbInject(k, cp)` (para
+  las pruebas: entra como una tecla de verdad) y `__kbIsConnected`.
+- **En el PC, las teclas de la ventana**, sólo con un teclado conectado (`bpvm_bt`: uno de clase `keyboard`): en la
+  VM-C y el micro simulado, los `SDL_KEYDOWN` (el `scancode` de SDL ya es el código HID; sin las repeticiones) y su
+  `SDL_TEXTINPUT` (el carácter); en la VM-Java, un `KeyEventDispatcher` de Swing (`KEY_PRESSED`, con una tabla de los
+  `VK_` a los códigos HID, y su `KEY_TYPED`), con los lados de los modificadores por su `getKeyLocation`. Una tecla que
+  da carácter espera a su texto, y si no llega, sale sin él en la siguiente pulsación o al soltarla; con Ctrl, Alt o
+  Windows (no AltGr), sale en seguida. El AltGr de Windows trae un Ctrl de más, que se quita.
+- **El módulo `Keyboards`:** el enum `Key` (los códigos HID), `getCode`, `isShift`, `isCtrl`, `isAlt`, `isAltGr`,
+  `isWin`, `isFn`, `isCapsLock`, `isKey`, y la clase `Keyboard` (`onKey`, `hasKey`, `readKey`, `getChar`,
+  `isConnected` y `close`). En el pack de la stdlib, no en las imágenes.
+- **La prueba de la red**, sin ventana: un programa que mete teclas con `__kbInject`, con dos teclados (el evento a
+  los dos; `readKey` se la lleva el primero), y espera sus eventos con un bucle de `sleep` (se reparte uno por turno).
+- **Por mirar al programar:** que el reparto no cambie lo que ya hacen las dos VMs cuando no hay teclados (la red); y
+  la pila de un `__despacha` en un hilo pequeño.
+
+```basic
+function event tecla(t: Keyboards.Keyboard, k: integer, c: string)
+  if Keyboards.isKey(k, Keyboards.Key.ENTER) then
+    print "Enter"
+  elseif Keyboards.isCtrl(k) and Keyboards.isKey(k, Keyboards.Key.C) then
+    print "Ctrl+C"
+  elseif c != "" then
+    print "tecla: " + c
+  endif
+end tecla
+```
 
 ---
 
