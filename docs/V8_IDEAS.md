@@ -293,6 +293,87 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
   **Hecho el 19-oct** (§E3, «Paso 1»).
 - **La memoria**: cuánto ocupan NimBLE y ESP-Hosted.
 
+### Lo que ve el programa: el diseño del 8-nov (Eduardo)
+
+Al retomar H2 (8-nov, con la S3, la C5 y la P4 conectadas). Eduardo: *«Funcionalidades, encender y apagar, scan,
+conectar y desconectar. Ahora una vez tenemos un ratón o un teclado conectados hay que engancharlos al resto del
+sistema»*; y el criterio: *«No hay prisa, tardamos lo que sea necesario. Podemos hacer mas o menos pero lo que hagamos
+ha ser funcional, algo que sea útil al usuario.»*
+
+**El Bluetooth, `Air.Bluetooth`** (la clase que ya existe, vacía, con la forma de `Air.Wifi`):
+
+```basic
+import Air
+var bt: Air.Bluetooth := Air.Bluetooth()
+bt.turnOn()
+var vistos: List := bt.scan(10000)        // 10 s: los aparatos en modo de emparejar (nombre, dirección, intensidad)
+var d: Air.BtDevice := vistos.get(0)
+bt.connect(d)                             // la primera vez empareja y lo recuerda; después, por su dirección
+bt.disconnect(d)                          // cierra esa conexión; el Bluetooth sigue, con los demás
+bt.forget(d)                              // lo olvida, con sus claves
+var guardados: List := bt.listDevices()   // los recordados, cada uno con si está conectado
+bt.turnOff()
+```
+
+- **`disconnect`** (Eduardo: *«desconectar me refiero a cerrar la conexión con el dispositivo, pero no cerramos el
+  bluetooth porque podemos tener mas dispositivos conectados»*): el aparato sigue recordado, pero no vuelve solo hasta
+  otro `connect` o el siguiente arranque.
+- **Reconectar, por la dirección guardada**, sin volver a emparejar (*«Ya probamos que al scanear y seleccionar
+  guardabamos la MAC address del dispositivo, así que cuando tuviésemos que volver a conectar la utilizamos en vez de
+  volver a emparejar»*; lo probado el 14-oct). `forget` es lo único que obliga a emparejar otra vez (*«1) OK»*).
+- **Lo recordado**, en un JSON de `/sys`, con las claves fuera de la NVS (14-oct). Al arrancar, si el Bluetooth está
+  activado, el firmware espera a los recordados, con cualquier programa o sin ninguno.
+- Los nombres siguen la convención (métodos con verbo): `listDevices()`, no `devices()`.
+
+**El teclado y el ratón, enganchados al resto del sistema**, de dos formas:
+
+1. **En un programa con GUI, sin escribir nada** (14-oct, la API de entrada genérica): el ratón mueve una flecha por
+   la pantalla y hace clic; el teclado escribe en el campo con el foco, Tab pasa al siguiente y Enter pulsa el botón.
+   Los programas de hoy funcionarían tal cual.
+2. **Con una clase para cada uno, en su módulo**. Eduardo: *«Cada uno con un módulo propio»*, y *«Los módulos en
+   plural la clase en singular»*, como `Overlays` con `Overlay`:
+
+```basic
+import Keyboards
+import Mice
+var tk: Keyboards.Keyboard := Keyboards.Keyboard()
+tk.onKey := this::tecla
+var ra: Mice.Mouse := Mice.Mouse()
+ra.onClick := this::clic
+
+function event tecla(t: Keyboards.Keyboard, c: string, codigo: integer)
+  print "tecla: " + c                   // "a", "Ñ"…; las especiales (Enter, flechas), por su código
+end tecla
+
+function event clic(r: Mice.Mouse, boton: integer, x: integer, y: integer)
+  print "clic en " + x + ", " + y
+end clic
+```
+
+   - **Eventos y preguntar directamente, las dos cosas** (*«2) OK»*): además de `onKey`, `tk.hasKey()` y
+     `tk.readKey()`, como el `INKEY$` de los BASIC; y del ratón, su posición y sus botones.
+   - **Las distribuciones de cada país** (Eduardo: *«En el caso del teclado habrá que diseñar teclados por paises así
+     que no será únicamente la clase Keyboard»*): van en `Keyboards`, con la US estándar primero (14-oct) y las demás
+     después; la de cada placa se elige en la configuración.
+   - **El ratón va con una pantalla** (Eduardo: *«Si no hay pantalla un ratón no tiene mucho sentido. Pero el S3 que
+     ahora no tiene pantalla el usuario podría conectarle una por SPI. Hay pantallas sin táctil así que un ratón le
+     proporciona una forma de interactuar»*): su posición son los puntos de esa pantalla, la de la placa o una por SPI.
+     Sin pantalla, se puede conectar, pero no hace nada.
+   - **Independientes del Bluetooth**: mañana puede ser un teclado USB (la P4 y la S3 tienen USB *host*) con las mismas
+     clases.
+
+**Primero en el PC, en las dos VMs** (la cascada): allí el teclado y el ratón son los del PC, y el Bluetooth tiene
+aparatos simulados, como el I2C y el SPI. Después, la S3, la C5 y la P4.
+
+**Por detallar, al llegar a cada parte:**
+- el evento de una tecla: si avisa también al soltarla, y los códigos de las especiales;
+- los eventos del ratón (moverse, la rueda) y su forma de preguntar;
+- la regla de las radios (§E3) con un teclado o un ratón conectados: qué cuenta como actividad para apagar a los
+  10 minutos;
+- el nombre del JSON de `/sys` y si las claves van en él o aparte (un fichero que el IDE no enseñe);
+- **el paso 4, el programa de configuración** (Eduardo: *«El punto 4 habrá que detallarlo»*): sus pantallas y cómo
+  se lanza.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
