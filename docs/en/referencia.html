@@ -2391,17 +2391,17 @@ bt.turnOn()
 bt.disconnect(d)                             // that connection; Bluetooth stays on, with the others</code></pre>
 <table>
   <tr><th><code>Air.Bluetooth</code> method</th><th>What it does</th></tr>
-  <tr><td><code>turnOn(): boolean</code></td><td>Turns on and waits until ready, up to 5&nbsp;s; remembered devices come back on their own. On a board without Bluetooth, a <code>RuntimeError</code></td></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Turns on and waits until ready, up to 5&nbsp;s; remembered devices come back on their own (one that is not there is not an error: it just does not connect). On a board without Bluetooth, a <code>RuntimeError</code></td></tr>
   <tr><td><code>turnOff()</code></td><td>Turns off: closes every connection</td></tr>
   <tr><td><code>isOn(): boolean</code></td><td>Is it on and ready?</td></tr>
   <tr><td><code>isAvailable(): boolean</code></td><td>Does this board have Bluetooth? Without turning anything on</td></tr>
   <tr><td><code>scan(ms): List</code></td><td>Looks for <code>ms</code> for devices in pairing mode: a <code>List</code> of <code>BtDevice</code>, without the connected ones (up to 16)</td></tr>
   <tr><td><code>connect(d): boolean</code></td><td>Connects. The first time it pairs and remembers it; after that, by its address. <code>false</code> if it is not found</td></tr>
-  <tr><td><code>disconnect(d)</code></td><td>Closes that connection; it stays remembered, but does not come back on its own until another <code>connect</code> or the next boot</td></tr>
+  <tr><td><code>disconnect(d)</code></td><td>Closes that connection; it stays remembered: it comes back with another <code>connect</code>, or on its own when Bluetooth is turned on again</td></tr>
   <tr><td><code>forget(d)</code></td><td>Forgets it: the connection, its keys and its entry in the file</td></tr>
   <tr><td><code>listDevices(): List</code></td><td>The remembered ones, in the order they were first connected</td></tr>
   <tr><td><code>isConnected(): boolean</code></td><td>Is any remembered device connected?</td></tr>
-  <tr><td><code>isEnabled(): boolean</code> / <code>setEnabled(b)</code></td><td>Whether it turns on by itself at boot: the file says so (<code>"enabled"</code>)</td></tr>
+  <tr><td><code>isAutoStart(): boolean</code> / <code>setAutoStart(b)</code></td><td>Whether it turns on by itself at boot: the file says so (<code>"autoStart"</code>, as in <code>/sys/wifi.json</code>)</td></tr>
 </table>
 <p>
   <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
@@ -2411,14 +2411,15 @@ bt.disconnect(d)                             // that connection; Bluetooth stays
   <code>isConnected()</code>.
 </p>
 <p>
-  <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>enabled</code> and the
-  devices, by address. The board reads it at boot: if it says <code>enabled</code>, it turns on and waits for the
+  <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>autoStart</code> and the
+  devices, by address. The board reads it at boot: if it says <code>autoStart</code>, it turns on and waits for the
   remembered ones. <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
 </p>
-<pre><code>{ "enabled": true,
+<pre><code>{ "autoStart": true,
   "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
 <p>
-  <strong>Where.</strong> On the <strong>PC</strong>, a simulated Bluetooth, the same in both VMs, with two test devices:
+  <strong>Where.</strong> On the <strong>PC</strong>, a simulated Bluetooth, the same in both VMs and in the IDE's
+  simulated micro, with two test devices:
   «Teclado simulado» (keyboard) and «Ratón simulado» (mouse). On the boards (the S3, the C5 and the P4), next; for now
   <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
 </p>

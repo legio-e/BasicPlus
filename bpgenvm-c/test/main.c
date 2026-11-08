@@ -391,7 +391,7 @@ static int main_real(int argc, char** argv) {
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
     bpvm_wifi_register_host();     /* V8/H3 — la WiFi del PC: el módulo Air */
     bpvm_bt_register_host();       /* V8/H2 — el Bluetooth del PC, simulado (bt_host.c) */
-    bpvm_bt_arranque();            /* y como una placa al arrancar: si /sys/bluetooth.json dice "enabled", los recordados */
+    bpvm_bt_arranque();            /* y como una placa al arrancar: si /sys/bluetooth.json dice "autoStart", los recordados */
     bpvm_sonido_register_host();   /* V8/H4 (#708) — el audio del sistema (o en silencio, con BPVM_SONIDO=mudo) */
 
     /* H3 — zona de packs simulada: la región RAM hace de flash interna del

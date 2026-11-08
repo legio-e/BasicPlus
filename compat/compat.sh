@@ -948,7 +948,9 @@ check_sim() {
   local fails=0 sal rc t n sim="$ROOT/bpgenvm-c/build/bpvm-sim-red.exe"
   # sim_dbg_smoke y run_smoke: V7/H10, el RUN común, paso 0 (3-oct) —el depurador por el cable (con #634: un KILL en
   # pausa), que llevaba meses con un .mod MOD5 que ya nadie cargaba; y lo que HOY hace el RUN en los casos que nada más
-  # mira (un fallo de carga, un NUL, 512 controles, un carácter en el byte 512, un KILL sin programa)—.
+  # mira (un fallo de carga, un NUL, 512 controles, un carácter en el byte 512, un KILL sin programa)—; y desde el 8-nov
+  # (V8/H2), el Bluetooth simulado del micro simulado: AirBluetooth, lo mismo que en la VM-C del PC, y el arranque con
+  # /sys/bluetooth.json en autoStart.
   # stat_base_smoke: V7 #654 (7-oct) —una pregunta del cable (STAT por nombre con otra `base`) no mueve la
   # carpeta del programa en marcha: 300 preguntas mientras corre, y «cambios: 0»—.
   # run_tarea_smoke: V7/H12, etapas 0 y 1 (4-oct) —la tarea `run`: mil RUN seguidos, la salida tardía, el KILL barriendo

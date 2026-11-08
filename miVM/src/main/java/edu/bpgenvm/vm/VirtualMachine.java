@@ -356,7 +356,7 @@ public class VirtualMachine {
         if (bluetooth == null) bluetooth = new Bluetooth(this::leeDeLaPlaca);
         return bluetooth;
     }
-    /** Como una placa al arrancar: si /sys/bluetooth.json dice "enabled", los recordados (lo llama Main). */
+    /** Como una placa al arrancar: si /sys/bluetooth.json dice "autoStart", los recordados (lo llama Main). */
     public void arrancaBluetooth() { bluetooth().arranque(); }
     /** Un fichero de la placa ("/sys/…"), dentro de la flash (#808); sin flash, la ruta tal cual. null si no está. */
     private byte[] leeDeLaPlaca(String ruta) {

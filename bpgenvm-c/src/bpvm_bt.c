@@ -152,17 +152,20 @@ static int lee_fichero(char* buf, size_t cap, json_obj_t* raiz) {
     return json_parse(buf, (size_t) n, raiz) == 0 ? 0 : -1;
 }
 
-static int fichero_enabled(void) {
+/* ¿Arranca encendido? "autoStart", como en /sys/wifi.json (Eduardo: «como en la wifi»). */
+static int fichero_auto_start(void) {
     json_obj_t raiz;
     int r = 0;
     char* buf = (char*) bpvm_malloc_os(BT_JSON_MAX);   /* sólo mientras se lee */
     if (!buf) return 0;
-    if (lee_fichero(buf, BT_JSON_MAX, &raiz) == 0) r = json_get_bool(&raiz, "enabled", 0);
+    if (lee_fichero(buf, BT_JSON_MAX, &raiz) == 0) r = json_get_bool(&raiz, "autoStart", 0);
     bpvm_free(buf);
     return r;
 }
 
-/* Cada recordado, por su dirección: la radio lo conecta (en una placa, lo espera; en el PC, lo encuentra). */
+/* Cada recordado, por su dirección: la radio lo conecta (en una placa, lo espera; en el PC, lo encuentra). Si alguno no
+ * está o no conecta, no es un error (Eduardo: «al menos que lo intenten pero si no están o no conectan que no se produzca
+ * un error»): se pasa al siguiente. */
 static void reconectar_recordados(void) {
     json_obj_t raiz, aparatos, a;
     const json_pair_t* d;
@@ -335,7 +338,7 @@ void bpvm_bt_clase_de(const char* dir, char* out, size_t n) {
 
 void bpvm_bt_arranque(void) {
     char det[128];
-    if (!radio() || !fichero_enabled()) return;
+    if (!radio() || !fichero_auto_start()) return;
     if (encender(det, sizeof det) != 0) bpvm_diag("bluetooth: no se enciende: %s", det);
 }
 
@@ -344,7 +347,7 @@ void bpvm_bt_fin_de_run(void) {
     if (!s_tocado) return;
     s_tocado = 0;
     if (!radio()) return;   /* sin radio, el programa no pudo cambiar nada */
-    if (fichero_enabled()) {
+    if (fichero_auto_start()) {
         if (bpvm_bt_estado() == BPVM_BT_OFF && encender(det, sizeof det) != 0) bpvm_diag("bluetooth: no se enciende: %s", det);
     } else {
         apagar();

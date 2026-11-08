@@ -5,8 +5,8 @@
  * Lo COMÚN (bpvm_bt.c): el estado, lo encontrado en la última búsqueda, lo conectado y lo recordado de /sys/bluetooth.json
  * (lo escribe la clase, en BP; aquí sólo se lee, para esperar a los recordados al encender y al arrancar). Lo de debajo, LA
  * RADIO, es una tabla por nombre con la marca 'BT  ', como 'WIFI': la publica quien la tenga. Hoy, el PC (bt_host.c: un
- * Bluetooth simulado, con dos aparatos de mentira, igual que la VM-Java); mañana, la imagen de las ESP (NimBLE). Sin
- * tabla, la placa no tiene Bluetooth y se dice.
+ * Bluetooth simulado, con dos aparatos de mentira, igual que la VM-Java; también en el micro simulado del IDE); mañana, la
+ * imagen de las ESP (NimBLE). Sin tabla, la placa no tiene Bluetooth y se dice.
  *
  * LA TABLA 'BT  ' (bpvm_pack_api_t: nombre → función):
  *     "encender"     int  encender(bpvm_bt_aviso_fn aviso, char* err, size_t n)
@@ -72,8 +72,9 @@ void bpvm_bt_olvidar(const char* dir);
 int  bpvm_bt_conectado(const char* dir);
 void bpvm_bt_clase_de(const char* dir, char* out, size_t n);   /* "" si no está conectado */
 
-/* El arranque y el fin de un RUN, como la WiFi: al arrancar, si el fichero dice "enabled", se enciende y espera a los
- * recordados; al acabar un programa que lo tocó, vuelve a lo que diga el fichero. */
+/* El arranque y el fin de un RUN, como la WiFi: al arrancar, si el fichero dice "autoStart", se enciende y espera a los
+ * recordados (si alguno no está o no conecta, no es un error); al acabar un programa que lo tocó, vuelve a lo que diga el
+ * fichero. */
 void bpvm_bt_arranque(void);
 void bpvm_bt_fin_de_run(void);
 

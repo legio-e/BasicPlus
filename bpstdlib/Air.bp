@@ -124,15 +124,18 @@ module Air
   //   var guardados: List := bt.listDevices()
   //   bt.turnOff()
   //
-  // LO RECORDADO, en /sys/bluetooth.json: si arranca encendido ("enabled") y los aparatos, por su
-  // dirección. Lo escribe esta clase; la VM lo lee al encender (y la placa, al arrancar), y espera a los
-  // recordados: vuelven solos, sin emparejar otra vez.
+  // LO RECORDADO, en /sys/bluetooth.json: si arranca encendido ("autoStart", como en /sys/wifi.json) y los
+  // aparatos, por su dirección. Lo escribe esta clase; la VM lo lee al encender (y la placa, al arrancar), y
+  // espera a los recordados: vuelven solos, sin emparejar otra vez. Lo intentan; si alguno no está o no
+  // conecta, no es un error (Eduardo: «que se conecten solos al activar el Bluetooth ( al menos que lo
+  // intenten pero si no están o no conectan que no se produzca un error )»).
   //
-  //   { "enabled": true,
+  //   { "autoStart": true,
   //     "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }
   //
-  // EN EL PC, un Bluetooth simulado, igual en las dos VMs: la búsqueda encuentra «Teclado simulado» y
-  // «Ratón simulado»; con el teclado conectado, el teclado de la ventana de la GUI es el suyo.
+  // EN EL PC, un Bluetooth simulado, igual en las dos VMs y en el micro simulado del IDE: la búsqueda
+  // encuentra «Teclado simulado» y «Ratón simulado»; con el teclado conectado, el teclado de la ventana de la
+  // GUI es el suyo.
   // ============================================================
   public function __btIsAvailable(): boolean
     inline CALL_BUILTIN 309
@@ -239,8 +242,8 @@ module Air
       return __btIsAvailable()
     end isAvailable
 
-    // Enciende y espera a que esté listo, hasta 5 s; los aparatos recordados vuelven solos. true si lo
-    // está. En una placa sin Bluetooth, un RuntimeError.
+    // Enciende y espera a que esté listo, hasta 5 s; los aparatos recordados vuelven solos (si alguno no
+    // está, no es un error: no conecta). true si lo está. En una placa sin Bluetooth, un RuntimeError.
     public function turnOn(): boolean
       if not __btIsAvailable() then
         throw RuntimeError("Bluetooth: esta placa no lo tiene")
@@ -317,8 +320,8 @@ module Air
       return true
     end connect
 
-    // Cierra la conexión con ese aparato; el Bluetooth sigue, con los demás. Sigue recordado, pero no
-    // vuelve solo hasta otro connect o el siguiente arranque.
+    // Cierra la conexión con ese aparato; el Bluetooth sigue, con los demás. Sigue recordado: vuelve con
+    // otro connect, o solo, al volver a encender el Bluetooth (o al arrancar la placa).
     public function disconnect(d: BtDevice)
       __btDisconnect(d.getAddress())
     end disconnect
@@ -353,17 +356,17 @@ module Air
       return l
     end listDevices
 
-    // ¿Arranca encendido? Lo dice el fichero ("enabled"); sin fichero, no.
-    public function isEnabled(): boolean
-      return this.leer().getBoolOr("enabled", false)
-    end isEnabled
+    // ¿Arranca encendido? Lo dice el fichero ("autoStart", como la WiFi); sin fichero, no.
+    public function isAutoStart(): boolean
+      return this.leer().getBoolOr("autoStart", false)
+    end isAutoStart
 
     // Que arranque encendido, o no: lo apunta en el fichero.
-    public function setEnabled(b: boolean)
+    public function setAutoStart(b: boolean)
       var raiz: Json.JsonObject := this.leer()
-      raiz.put("enabled", Json.JsonBool(b))
+      raiz.put("autoStart", Json.JsonBool(b))
       this.escribir(raiz)
-    end setEnabled
+    end setAutoStart
 
     function encendido(que: string)
       if __btGetState() < 2 then

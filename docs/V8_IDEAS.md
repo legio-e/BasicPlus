@@ -435,14 +435,23 @@ El orden de trabajo (Eduardo: *«OK»*): 1) el Bluetooth simulado del PC; 2) el 
   arrancar. Los aparatos van en un objeto con la dirección de clave, no en una lista: `json_min`, el lector de la VM-C,
   no lee listas.
   ```
-  { "enabled": true,
+  { "autoStart": true,
     "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }
   ```
-- **Lo que he añadido a la lista de Eduardo**, para que él lo valide: `isOn()`; `isEnabled()` y `setEnabled(b)`, el
-  `"enabled"` del fichero (si arranca encendido; sin ellos, nadie podía activarlo); `turnOn()` da `true` cuando está
-  listo, como `Air.Wifi`, y espera hasta 5 s; `connect` de uno que no está da `false`, y con el Bluetooth apagado,
-  un `RuntimeError`, como `scan`. Y una regla: **`turnOn()` conecta todos los recordados**, también el que se
-  desconectó con `disconnect`; lo trato como un arranque de la radio.
+- **Lo que añadí a la lista de Eduardo**: `isOn()`; si arranca encendido, `isAutoStart()` y `setAutoStart(b)` (sin
+  ellos, nadie podía activarlo); `turnOn()` da `true` cuando está listo, como `Air.Wifi`, y espera hasta 5 s; `connect`
+  de uno que no está da `false`, y con el Bluetooth apagado, un `RuntimeError`, como `scan`.
+- **Lo que decidió Eduardo al verlo** (8-nov):
+  1. **El nombre, el de la WiFi** (*«como en la wifi»*): `"autoStart"`, como en `/sys/wifi.json`; lo había llamado
+     `"enabled"`, con `isEnabled()` y `setEnabled(b)`.
+  2. **Al encender, los recordados vuelven solos, sin error** (*«La verdad es que no lo se, de momento que se conecten
+     solos al activar el Bluetooth ( al menos que lo intenten pero si no están o no conectan que no se produzca un
+     error )»*): `turnOn()`, y el arranque con `"autoStart"`, intentan conectar todos los recordados, también uno que se
+     desconectó con `disconnect`; el que no está o no conecta se queda sin conectar, y nada más. Era lo que ya hacía;
+     ahora `AirBluetooth` lo prueba, con un recordado que no existe.
+  3. **El micro simulado del IDE, con el Bluetooth simulado** (*«ponlo»*): `bpvm_sim.c` registra la misma radio que la
+     VM-C del PC, y al arrancar mira su `/sys/bluetooth.json`, el de su littlefs.
+  4. **`#810`, cuando sea** (*«cuando sea ahora no es importante»*).
 - **El fin de RUN**: si el programa lo tocó, vuelve a lo que diga el fichero, como la WiFi.
 - **La memoria, pensando en la C3 y la C6** (`MEMORIA.md`: van justas): `bpvm_bt.c` entra en todas las imágenes, y en
   una placa sin radio gasta 156 B de RAM (medido en la Pico: 96 de datos y 60 de bss; la WiFi, 444) y 3 KB de flash. Las
@@ -451,8 +460,7 @@ El orden de trabajo (Eduardo: *«OK»*): 1) el Bluetooth simulado del PC; 2) el 
 - **Hizo falta `#808`**: el `/sys` del PC iba a la raíz del disco (`C:\sys`). Ahora las dos VMs del PC tienen una
   carpeta que hace de flash (`~/.basicplus/flash`, o `--flash-dir=`), y la red le da a cada ejecución una nueva.
 - **La prueba**, `bpgenvm-c/samples/AirBluetooth.bp`, en la red: las dos VMs dicen lo mismo. Y a mano, el arranque:
-  con el fichero en `"enabled"`, la VM arranca encendida y con los recordados conectados.
-- **Lo que no tiene**: el micro simulado del IDE (`bpvm-sim`) es una placa, y sin radio: `isAvailable()` da `false`.
+  con el fichero en `"autoStart"`, la VM arranca encendida y con los recordados conectados.
 
 ---
 

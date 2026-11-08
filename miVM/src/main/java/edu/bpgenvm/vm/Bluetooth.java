@@ -114,14 +114,14 @@ final class Bluetooth {
     synchronized String claseDe(String dir) { String c = conectados.get(dir); return c == null ? "" : c; }
     String motivo() { return motivo; }
 
-    /** Como una placa al arrancar: si el fichero dice "enabled", se enciende y espera a los recordados. */
-    synchronized void arranque() { if (ficheroEnabled()) encender(); }
+    /** Como una placa al arrancar: si el fichero dice "autoStart", se enciende y espera a los recordados. */
+    synchronized void arranque() { if (ficheroAutoStart()) encender(); }
 
     /** Al acabar un programa que lo tocó: lo que diga el fichero. */
     synchronized void finDeRun() {
         if (!tocado) return;
         tocado = false;
-        if (ficheroEnabled()) { if (estado() == OFF) encender(); }
+        if (ficheroAutoStart()) { if (estado() == OFF) encender(); }
         else apagar();
     }
 
@@ -139,12 +139,15 @@ final class Bluetooth {
         }
     }
 
-    private boolean ficheroEnabled() {
+    /** ¿Arranca encendido? "autoStart", como en /sys/wifi.json (Eduardo: «como en la wifi»). */
+    private boolean ficheroAutoStart() {
         Map<String, Object> m = leerFichero();
-        return m != null && Boolean.TRUE.equals(m.get("enabled"));
+        return m != null && Boolean.TRUE.equals(m.get("autoStart"));
     }
 
-    /** Cada recordado, por su dirección y en el orden del fichero: la radio lo conecta (en el PC, lo encuentra). */
+    /** Cada recordado, por su dirección y en el orden del fichero: la radio lo conecta (en el PC, lo encuentra). Si
+     *  alguno no está o no conecta, no es un error (Eduardo: «al menos que lo intenten pero si no están o no conectan que
+     *  no se produzca un error»). */
     @SuppressWarnings("unchecked")
     private void reconectarRecordados() {
         Map<String, Object> m = leerFichero();

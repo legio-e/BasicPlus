@@ -2754,17 +2754,17 @@ bt.turnOn()
 bt.disconnect(d)                             // esa conexión; el Bluetooth sigue, con los demás</code></pre>
 <table>
   <tr><th>Método de <code>Air.Bluetooth</code></th><th>Qué hace</th></tr>
-  <tr><td><code>turnOn(): boolean</code></td><td>Enciende y espera a que esté listo, hasta 5&nbsp;s; los recordados vuelven solos. En una placa sin Bluetooth, un <code>RuntimeError</code></td></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Enciende y espera a que esté listo, hasta 5&nbsp;s; los recordados vuelven solos (uno que no está no es un error: no conecta, y nada más). En una placa sin Bluetooth, un <code>RuntimeError</code></td></tr>
   <tr><td><code>turnOff()</code></td><td>Apaga: corta todas las conexiones</td></tr>
   <tr><td><code>isOn(): boolean</code></td><td>¿Está encendido y listo?</td></tr>
   <tr><td><code>isAvailable(): boolean</code></td><td>¿Tiene Bluetooth esta placa? Sin encender nada</td></tr>
   <tr><td><code>scan(ms): List</code></td><td>Busca durante <code>ms</code> los aparatos en modo de emparejar: una <code>List</code> de <code>BtDevice</code>, sin los conectados (hasta 16)</td></tr>
   <tr><td><code>connect(d): boolean</code></td><td>Conecta. La primera vez empareja y lo recuerda; después, por su dirección. <code>false</code> si no lo encuentra</td></tr>
-  <tr><td><code>disconnect(d)</code></td><td>Cierra esa conexión; sigue recordado, pero no vuelve solo hasta otro <code>connect</code> o el siguiente arranque</td></tr>
+  <tr><td><code>disconnect(d)</code></td><td>Cierra esa conexión; sigue recordado: vuelve con otro <code>connect</code>, o solo, al volver a encender el Bluetooth</td></tr>
   <tr><td><code>forget(d)</code></td><td>Lo olvida: la conexión, sus claves y su entrada en el fichero</td></tr>
   <tr><td><code>listDevices(): List</code></td><td>Los recordados, en el orden en que se conectaron por primera vez</td></tr>
   <tr><td><code>isConnected(): boolean</code></td><td>¿Hay algún recordado conectado?</td></tr>
-  <tr><td><code>isEnabled(): boolean</code> / <code>setEnabled(b)</code></td><td>Si se enciende solo al arrancar: lo dice el fichero (<code>"enabled"</code>)</td></tr>
+  <tr><td><code>isAutoStart(): boolean</code> / <code>setAutoStart(b)</code></td><td>Si se enciende solo al arrancar: lo dice el fichero (<code>"autoStart"</code>, como en <code>/sys/wifi.json</code>)</td></tr>
 </table>
 <p>
   <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
@@ -2774,15 +2774,16 @@ bt.disconnect(d)                             // esa conexión; el Bluetooth sigu
   <code>isConnected()</code>.
 </p>
 <p>
-  <strong>El fichero.</strong> <code>/sys/bluetooth.json</code> lo escribe la clase: <code>enabled</code> y los aparatos,
-  por su dirección. La placa lo lee al arrancar: si dice <code>enabled</code>, enciende y espera a los recordados.
+  <strong>El fichero.</strong> <code>/sys/bluetooth.json</code> lo escribe la clase: <code>autoStart</code> y los
+  aparatos, por su dirección. La placa lo lee al arrancar: si dice <code>autoStart</code>, enciende y espera a los
+  recordados.
   <strong>Al acabar el programa</strong>, si lo ha tocado, el Bluetooth vuelve a lo que diga el fichero.
 </p>
-<pre><code>{ "enabled": true,
+<pre><code>{ "autoStart": true,
   "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
 <p>
-  <strong>Dónde.</strong> En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs, con dos aparatos de
-  prueba: «Teclado simulado» y «Ratón simulado». En las placas (la S3, la C5 y la P4), lo siguiente; de momento,
+  <strong>Dónde.</strong> En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs y en el micro simulado
+  del IDE, con dos aparatos de prueba: «Teclado simulado» y «Ratón simulado». En las placas (la S3, la C5 y la P4), lo siguiente; de momento,
   <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un <code>RuntimeError</code>.
 </p>
 

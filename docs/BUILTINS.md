@@ -744,11 +744,12 @@ de un método privado, `#752`) y la stdlib (`List`, con su `IndexError`); y una 
 
 El Bluetooth, para el módulo `Air` (`V8_IDEAS` §E1, «Lo que ve el programa»). Lo común está en la HAL BP (`bpvm_bt.c`):
 el estado, lo que encontró la última búsqueda, lo conectado (hasta 8) y, al encender, los recordados de
-`/sys/bluetooth.json`, que vuelven solos, por su dirección. El fichero lo escribe el módulo, con `Json`, y la VM sólo lo
-lee: al encender y al arrancar, si dice `"enabled"`. La radio, como tabla `'BT  '`; esperar a que esté listo o a que acabe
-la búsqueda lo hace el módulo, en BP y con `sleep`. En el PC, `bt_host.c` y, en la VM-Java, `Bluetooth.java`: una radio
-simulada, igual en las dos, con «Teclado simulado» (`02:00:00:00:00:01`) y «Ratón simulado» (`02:00:00:00:00:02`); el
-fichero, en la flash del PC (`#808`). Sin radio (de momento, las placas), `isAvailable` da false y `turnOn` lanza
+`/sys/bluetooth.json`, que vuelven solos, por su dirección: lo intentan, y uno que no está o no conecta no es un error.
+El fichero lo escribe el módulo, con `Json`, y la VM sólo lo lee: al encender, y al arrancar si dice `"autoStart"`, como
+`/sys/wifi.json`. La radio, como tabla `'BT  '`; esperar a que esté listo o a que acabe la búsqueda lo hace el módulo, en
+BP y con `sleep`. En el PC, `bt_host.c` (la VM-C y el micro simulado del IDE) y, en la VM-Java, `Bluetooth.java`: una
+radio simulada, igual en las tres, con «Teclado simulado» (`02:00:00:00:00:01`) y «Ratón simulado»
+(`02:00:00:00:00:02`); el fichero, en la flash del PC (`#808`) o en la del micro simulado. Sin radio (de momento, las placas), `isAvailable` da false y `turnOn` lanza
 «Bluetooth: esta placa no lo tiene». El fin de RUN lo deja como diga el fichero, si el programa lo ha tocado. La prueba:
 `bpgenvm-c/samples/AirBluetooth.bp`.
 

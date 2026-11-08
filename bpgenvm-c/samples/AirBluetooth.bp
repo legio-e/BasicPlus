@@ -1,6 +1,7 @@
-// AirBluetooth.bp — V8/H2 (8-nov): el Bluetooth del PC, simulado, igual en las dos VMs: encender y apagar, buscar,
-// conectar (la primera vez lo recuerda en /sys/bluetooth.json), desconectar, olvidar y los recordados. En el PC, dos
-// aparatos de mentira: «Teclado simulado», que en la búsqueda no dice qué es (como uno de verdad), y «Ratón simulado».
+// AirBluetooth.bp — V8/H2 (8-nov): el Bluetooth del PC, simulado, igual en las dos VMs (y en el micro simulado del IDE):
+// encender y apagar, buscar, conectar (la primera vez lo recuerda en /sys/bluetooth.json), desconectar, olvidar, los
+// recordados (vuelven solos al encender; uno que no está, sin error) y "autoStart", como la WiFi. En el PC, dos aparatos
+// de mentira: «Teclado simulado», que en la búsqueda no dice qué es (como uno de verdad), y «Ratón simulado».
 //
 // El fichero es el de la flash del PC (#808): en la red, una carpeta nueva por VM; en el PC de quien lo corra, la suya.
 // Por eso la prueba empieza y acaba limpiando: olvida lo recordado y lo deja apagado.
@@ -14,7 +15,7 @@ module AirBluetooth
       bt.forget(Air.BtDevice(l.get(i)))
       i := i + 1
     endwh
-    bt.setEnabled(false)
+    bt.setAutoStart(false)
     bt.turnOff()
   end limpia
 
@@ -80,14 +81,21 @@ module AirBluetooth
     print "raton, olvidado: " + raton.isConnected()
     cuenta("recordados", bt.listDevices())
 
-    print "arranca encendido: " + bt.isEnabled()
-    bt.setEnabled(true)
-    print "arranca encendido: " + bt.isEnabled()
+    print "arranca encendido: " + bt.isAutoStart()
+    bt.setAutoStart(true)
+    print "arranca encendido: " + bt.isAutoStart()
     print "el fichero: " + readFile("/sys/bluetooth.json")
+
+    // Un recordado que no está: al encender lo intenta y, si no conecta, no es un error (Eduardo: «al menos que lo
+    // intenten pero si no están o no conectan que no se produzca un error»). El fichero, escrito a mano.
+    writeFile("/sys/bluetooth.json", "{\"autoStart\": false, \"devices\": {\"02:00:00:00:00:07\": {\"name\": \"Otro\", \"addressType\": \"public\", \"kind\": \"unknown\"}, \"02:00:00:00:00:01\": {\"name\": \"Teclado simulado\", \"addressType\": \"random\", \"kind\": \"keyboard\"}}}")
+    bt.turnOff()
+    print "turnOn, con uno que no esta: " + bt.turnOn()
+    cuenta("recordados", bt.listDevices())
 
     limpia(bt)
     cuenta("recordados", bt.listDevices())
-    print "encendido: " + bt.isOn() + " arranca encendido: " + bt.isEnabled()
+    print "encendido: " + bt.isOn() + " arranca encendido: " + bt.isAutoStart()
     print "fin"
   end main
 end AirBluetooth

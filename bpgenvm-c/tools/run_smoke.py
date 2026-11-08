@@ -17,6 +17,10 @@ commit —el diff dice qué cambió—:
   5. un KILL sin programa: NO_SESSION, como en las placas (antes, en el sim, KILL_REPLY);
   6. un PING con un programa en marcha: PONG, como en la VM-Java (#803: iba a la cola del depurador, y sólo se leía en
      una pausa). Es el latido de un cliente por la red: sin respuesta, da por perdida una conexión viva.
+  7. V8/H2 (8-nov): el Bluetooth simulado, también en el micro simulado (Eduardo: «ponlo»): AirBluetooth, la prueba del
+     corpus, dice lo mismo que en la VM-C del PC;
+  8. y, en otro arranque sobre la misma flash, con /sys/bluetooth.json en autoStart: encendido, el recordado conectado
+     y uno que no está, sin conectar y sin error.
 
 Lee el cable en BYTES (un carácter partido no es UTF-8 válido y un lector estricto lo tiraría). Necesita el compilador
 (lexer-java) y la librería de packs (packs/Stdlib.pack), como env_smoke.
@@ -135,6 +139,45 @@ end RunCallado
 """
 
 
+# 7 y 8 — V8/H2 (8-nov): el Bluetooth simulado, también en el micro simulado (Eduardo: «ponlo»). La prueba del corpus,
+# AirBluetooth, tiene que decir aquí lo mismo que en la VM-C del PC; y al arrancar con /sys/bluetooth.json en autoStart,
+# los recordados vuelven solos, y uno que no está no es un error (Eduardo: «al menos que lo intenten pero si no están o
+# no conectan que no se produzca un error»).
+AIR_BT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "samples", "AirBluetooth.bp")
+VM_C = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "build",
+                    "bpgenvm-c.exe" if os.name == "nt" else "bpgenvm-c")
+
+BT_ARRANQUE = """module RunBtArranque
+  import Air
+
+  function Main()
+    var bt: Air.Bluetooth := Air.Bluetooth()
+    print "encendido al arrancar: " + bt.isOn()
+    var l: List := bt.listDevices()
+    var i: integer := 0
+    while i < l.length() do
+      var d: Air.BtDevice := Air.BtDevice(l.get(i))
+      print d.getName() + " conectado=" + d.isConnected()
+      i := i + 1
+    endwh
+  end Main
+end RunBtArranque
+"""
+
+BT_JSON = (b'{"autoStart":true,"devices":{"02:00:00:00:00:01":{"name":"Teclado simulado","addressType":"random",'
+           b'"kind":"keyboard"},"02:00:00:00:00:07":{"name":"Otro","addressType":"public","kind":"unknown"}}}')
+
+
+def salida_pc(mod, dest):
+    """Lo que dice la VM-C del PC con ese .mod, con una flash nueva y sin sus líneas «=== …»; los saltos, LF."""
+    flash = os.path.join(dest, "flash_pc")
+    shutil.rmtree(flash, ignore_errors=True)
+    r = subprocess.run([VM_C, "--flash-dir=" + flash, "--libdir=" + STDLIB_DIR, mod], cwd=dest,
+                       capture_output=True, timeout=120)
+    lineas = r.stdout.replace(b"\r\n", b"\n").split(b"\n")
+    return b"\n".join(l for l in lineas if not l.startswith(b"=== ")).strip(b"\n") + b"\n"
+
+
 def compila(dest, nombre, fuente):
     src = os.path.join(dest, nombre + ".bp")
     with open(src, "w", encoding="utf-8") as f:
@@ -169,7 +212,10 @@ def main():
     tmp = tempfile.mkdtemp(prefix="run_smoke_")
     print("=== run_smoke (el RUN común): lo que hace el RUN del micro simulado ===")
     mods = {}
-    for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA), ("RunCallado", CALLADO)):
+    with open(AIR_BT, encoding="utf-8") as f:
+        air_bt = f.read()
+    for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA), ("RunCallado", CALLADO),
+                           ("AirBluetooth", air_bt), ("RunBtArranque", BT_ARRANQUE)):
         mods[nombre] = compila(tmp, nombre, fuente)
         check(mods[nombre] is not None, "compila %s" % nombre)
     if None in mods.values():
@@ -231,6 +277,47 @@ def main():
         check(pong is not None and pong.get("type") == "PONG",
               "6. un PING en marcha -> PONG antes del EXITED, como en la VM-Java (dice %r)" % (pong,))
         check(ex.get("status") == "OK", "6. y el programa acaba bien (dice %r)" % ex.get("status"))
+
+        # 7 — el Bluetooth simulado del micro simulado (V8/H2): AirBluetooth, lo mismo que en la VM-C del PC
+        with open(mods["AirBluetooth"], "rb") as f:
+            check(c.call_bulk("PUT", f.read(), path="/app/AirBluetooth.mod").get("type") == "PUT_REPLY",
+                  "PUT de AirBluetooth")
+        r, tramas, ex = c.run("/app/AirBluetooth.mod")
+        ex = ex or {}
+        check(ex.get("status") == "OK", "7. AirBluetooth acaba bien (dice %r %r)" % (ex.get("status"), ex.get("errorMessage")))
+        sim, pc = b"".join(tramas), salida_pc(mods["AirBluetooth"], tmp)
+        check(sim == pc and b"vistos: 2\n" in sim,
+              "7. el Bluetooth del micro simulado: AirBluetooth dice lo mismo que en la VM-C del PC (%d líneas)"
+              % sim.count(b"\n"))
+        if sim != pc:
+            for a, b in zip(sim.split(b"\n"), pc.split(b"\n")):
+                if a != b:
+                    print("       sim: %r\n       pc:  %r" % (a, b))
+                    break
+        # y para el 8: lo recordado, con un aparato que no está, y el programa que mira el arranque
+        check(c.call_bulk("PUT", BT_JSON, path="/sys/bluetooth.json").get("type") == "PUT_REPLY",
+              "PUT de /sys/bluetooth.json, con autoStart")
+        with open(mods["RunBtArranque"], "rb") as f:
+            check(c.call_bulk("PUT", f.read(), path="/app/RunBtArranque.mod").get("type") == "PUT_REPLY",
+                  "PUT de RunBtArranque")
+    finally:
+        try:
+            sock.close()
+        finally:
+            proc.terminate()
+            try: proc.wait(timeout=5)
+            except Exception: proc.kill()
+
+    # 8 — otro arranque sobre la misma flash, como una placa: con autoStart, el Bluetooth encendido y los recordados
+    #     conectados, y el que no está, sin conectar y sin error
+    proc, sock, c = arranca(os.path.join(tmp, "sim.flash"))
+    try:
+        r, tramas, ex = c.run("/app/RunBtArranque.mod")
+        ex = ex or {}
+        todo = b"".join(tramas).decode("utf-8", "replace")
+        check(ex.get("status") == "OK", "8. RunBtArranque acaba bien (dice %r %r)" % (ex.get("status"), ex.get("errorMessage")))
+        check(todo == "encendido al arrancar: true\nTeclado simulado conectado=true\nOtro conectado=false\n",
+              "8. al arrancar con autoStart: encendido, el recordado conectado y el que no está, sin error (dice %r)" % todo)
     finally:
         try:
             sock.close()
