@@ -7387,6 +7387,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2)
+
+- **Lo medido** (8-nov): con la ventana de Swing, un arnés (`ClicSwing`, en el scratchpad) pulsa el botón con
+  `doClick()`, lo mismo que un clic del ratón: el programa no recibe nada (`veces: 0`), y el `JButton` tiene **0
+  ActionListener** tras crearlo. Sin ventana, el clic inyectado (`Gui.__guiClick`) sí llega, en las dos VMs, porque no
+  pasa por el enlace.
+- **Por qué** (leído): el compilador apila el `handle` (4 B) y después `this` (una referencia, 8 B); `GUI_BIND_CLICK`
+  saca las dos cosas con `popTc` (4 B), así que `self` y `handle` salen de las dos mitades de la referencia, `bindClick`
+  busca un nodo que no es (y vuelve sin avisar: `nodes.get(handle)` da null) y el `handle` de verdad se queda en la pila
+  hasta el `RET`. `GUI_CLICK` y `GUI_CHANGE`, igual (4 B de una referencia; funcionan de casualidad). La VM-C los saca
+  con `pop_ref`. Es lo mismo que `#324` arregló en `GUI_INVOKE_BY_NAME`.
+- **Lo que falta:** sacarlos con `popTcRef`, y que la red lo vea: hoy ninguna muestra pulsa un botón de verdad en la
+  VM-Java.
+
 #### 🔵 `#810` — una ruta que se sale de la flash del PC (`/../x`): la VM-Java lanza «sandbox: path escapa de la flash», también en `fileExists`; la VM-C, como la placa, falla con el texto de cada operación, y `fileExists` da false (abierta el 8-nov, en `#808`)
 
 - **Lo medido** (8-nov, a mano, `writeFile`, `readFile`, `IO.mkdir` y `fileExists` con `/../x` y `/a/../../x`): la
