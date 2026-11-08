@@ -7387,7 +7387,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2)
+#### ✅ `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2 · **CERRADA el 8-nov**, el commit de `#811`; Eduardo: *«si»*, arreglarlo ya)
 
 - **Lo medido** (8-nov): con la ventana de Swing, un arnés (`ClicSwing`, en el scratchpad) pulsa el botón con
   `doClick()`, lo mismo que un clic del ratón: el programa no recibe nada (`veces: 0`), y el `JButton` tiene **0
@@ -7398,8 +7398,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   busca un nodo que no es (y vuelve sin avisar: `nodes.get(handle)` da null) y el `handle` de verdad se queda en la pila
   hasta el `RET`. `GUI_CLICK` y `GUI_CHANGE`, igual (4 B de una referencia; funcionan de casualidad). La VM-C los saca
   con `pop_ref`. Es lo mismo que `#324` arregló en `GUI_INVOKE_BY_NAME`.
-- **Lo que falta:** sacarlos con `popTcRef`, y que la red lo vea: hoy ninguna muestra pulsa un botón de verdad en la
-  VM-Java.
+- **Lo hecho** (8-nov): los tres, con `popTcRef`, como la VM-C. Con el arnés, el clic de verdad llega
+  (`clic de verdad 1`) y el botón tiene su ActionListener; el inyectado, igual que antes en las dos VMs.
+- **Y el censo de la clase** (un script, `censo_pops.py` en el scratchpad: cada builtin de `Core.bp` con parámetros que
+  son referencias, frente a cómo los saca su `case` en la VM-Java): salieron tres más, con el mismo fallo y que
+  funcionaban de casualidad. `__mutexLock` y `__mutexUnlock`, públicos: cada llamada dejaba 4 B en la pila, y un bucle
+  que los llame en el mismo método la desbordaba a las ~2 000 vueltas (la VM-C, bien). Y `__prompt`, que sólo tiene la
+  VM-Java. Arreglados los tres; lo demás, bien (`__eventRaise` saca su ranura con 4 B a propósito: la apila así el
+  compilador). Lo que la red ve: `MutexBucle`, en el corpus. El clic de verdad no lo ve (la red no abre ventanas): se
+  comprobó con el arnés, a mano.
 
 #### 🔵 `#810` — una ruta que se sale de la flash del PC (`/../x`): la VM-Java lanza «sandbox: path escapa de la flash», también en `fileExists`; la VM-C, como la placa, falla con el texto de cada operación, y `fileExists` da false (abierta el 8-nov, en `#808`)
 

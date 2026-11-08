@@ -5877,10 +5877,14 @@ public class VirtualMachine {
             case PACK_INFO:       { popTc(tc);              pushTcRef(tc, allocVmString("")); break; }
             case PACK_ENTRY_INFO: { popTc(tc); popTc(tc);   pushTcRef(tc, allocVmString("")); break; }
             case GUI_BIND_CLICK: {
-                int self = popTc(tc); int hnd = popTc(tc);
+                // V8 #811 (8-nov) — `self` es una referencia (`self: any`, 8 B) y se sacaba con popTc (4 B): `self` salía de
+                // su palabra baja, que es el objptr, pero `hnd` de la ALTA, la generación; bindClick no encontraba el nodo y
+                // volvía sin avisar (un clic de verdad en un botón no llegaba nunca al programa), y el handle de verdad se
+                // quedaba en la pila hasta el RET. Como la VM-C (pop_ref): la referencia entera, y su palabra baja.
+                int self = (int) popTcRef(tc); int hnd = popTc(tc);
                 gui.bindClick(hnd, self); pushTc(tc, 0); break;
             }
-            case GUI_CLICK:     { int obj = popTc(tc); gui.injectClick(obj); pushTc(tc, 0); break; }
+            case GUI_CLICK:     { int obj = (int) popTcRef(tc); gui.injectClick(obj); pushTc(tc, 0); break; }   // #811: una referencia, 8 B
             // H13 (V3) — Forms: call-by-name del handler. Resuelve `name` como
             // función pública del módulo de `owner` (la ventana) y la invoca con
             // `sender` como arg0. Los args se apilan owner, name, sender.
@@ -5982,7 +5986,7 @@ public class VirtualMachine {
             case GUI_CREATE_CHECKBOX: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createCheckbox(p)); break; }
             case GUI_SET_CHECKED: { int v = popTc(tc); int hnd = popTc(tc); gui.setChecked(hnd, v != 0); pushTc(tc, 0); break; }
             case GUI_GET_CHECKED: { int hnd = popTc(tc); pushTc(tc, gui.getChecked(hnd) ? 1 : 0); break; }
-            case GUI_CHANGE: { int obj = popTc(tc); gui.injectChange(obj); pushTc(tc, 0); break; }
+            case GUI_CHANGE: { int obj = (int) popTcRef(tc); gui.injectChange(obj); pushTc(tc, 0); break; }   // #811: una referencia, 8 B
             // H6 widgets — switch + slider + bar (value-widgets enteros).
             case GUI_CREATE_SWITCH: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createSwitch(p)); break; }
             case GUI_CREATE_SLIDER: { int p = popTc(tc); guiRequireParent(tc, p); pushTc(tc, gui.createSlider(p)); break; }
@@ -6932,7 +6936,10 @@ public class VirtualMachine {
                 break;
             }
             case MUTEX_LOCK: {
-                int mutexRef = popTc(tc);
+                // V8 #811 (8-nov) — el Mutex es una referencia (`m: any`, 8 B): se sacaba con popTc (4 B), que leía su
+                // palabra baja (de casualidad, la buena) y dejaba la alta en la pila, 4 B en cada llamada: un bucle que
+                // llamara a Core.__mutexLock desbordaba la pila (MutexBucle: a las ~2 000 vueltas). Como la VM-C (pop_ref).
+                int mutexRef = (int) popTcRef(tc);
                 // V8 #805 — un null, antes de leer su campo: leía la memoria del principio como el id (y con un Mutex de
                 // id 0 vivo, lo cerraba). Core.__mutexLock es público: un programa llega aquí.
                 if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.lock de un Mutex null");
@@ -6963,7 +6970,7 @@ public class VirtualMachine {
                 break;
             }
             case MUTEX_UNLOCK: {
-                int mutexRef = popTc(tc);
+                int mutexRef = (int) popTcRef(tc);   // #811: una referencia, 8 B (ver MUTEX_LOCK)
                 if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.unlock de un Mutex null");   // #805
                 int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
                 if (mid < 0 || mid >= mutexes.size()) {
@@ -7372,7 +7379,7 @@ public class VirtualMachine {
 
             // ---- N20 — PROMPT(spec): string ----
             case PROMPT: {
-                int specRef = popTc(tc);
+                long specRef = popTcRef(tc);   // #811: una cadena es una referencia, 8 B (con popTc, 4, quedaban 4 en la pila)
                 String spec = readVmString(specRef);
                 // Sin sink al socket → no hay IDE → error atrapable.
                 edu.bpgenvm.vm.debug.PromptSender sender = this.promptSender;

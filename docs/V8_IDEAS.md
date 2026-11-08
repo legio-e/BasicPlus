@@ -462,6 +462,43 @@ El orden de trabajo (Eduardo: *«OK»*): 1) el Bluetooth simulado del PC; 2) el 
 - **La prueba**, `bpgenvm-c/samples/AirBluetooth.bp`, en la red: las dos VMs dicen lo mismo. Y a mano, el arranque:
   con el fichero en `"autoStart"`, la VM arranca encendida y con los recordados conectados.
 
+### El paso 2: el teclado del SO y `Keyboards.Keyboard` (8-nov, en análisis)
+
+**Lo que hay hoy** (el mapa del 8-nov): un evento (`raise`) se encola y lo ejecuta el hilo que lo lanzó, cuando el
+planificador le da turno; nada de fuera de BP mete eventos todavía. El clic de la GUI lo apunta la ventana y lo recoge
+un hilo BP, el de `Gui.run()`, que pregunta cada 10 ms. Lo único que la VM ya mete por su cuenta entre turno y turno son
+los destructores (`#668`). En la VM-C, con un run, la cola de eventos no tiene cerrojo: lo que venga de otro hilo
+necesita su propia entrada, con el suyo.
+
+**Cómo, lo propuesto** («los entrega la VM», lo decidido el 8-nov):
+- el **teclado del SO**, un búfer en la VM (y en el firmware), con su cerrojo: las teclas llegan desde el hilo de la
+  ventana (en la placa, desde el Bluetooth);
+- cada **`Keyboards.Keyboard()` se apunta en la VM** al crearse, sin que eso lo mantenga vivo;
+- **entre turno y turno**, donde hoy se reparten los eventos y los destructores, la VM pasa cada tecla nueva a todos los
+  teclados apuntados y vivos: encola, en el hilo que creó cada uno, su `__despacha`, que hace el `raise onKey`;
+- **`hasKey()` y `readKey()` leen el búfer del SO** (el primero que lee se la lleva);
+- **en el PC**, las teclas de la ventana entran sólo con «Teclado simulado» conectado; y **para la red**, sin
+  ventana, un builtin que mete teclas por programa, como `Gui.__guiClick`.
+
+**Lo decidido** (Eduardo, 8-nov):
+1. **Los códigos, los del estándar HID** (*«si»*): los que manda un teclado Bluetooth o USB, los mismos de SDL, con
+   nombre en un enum, `Keyboards.Key` (`ENTER`, `ESCAPE`, `UP`, `F1`…).
+2. **El evento, al apretar** (*«De momento al apretar»*). **Más adelante, el tiempo** (*«Mas adelante igual nos
+   interesa el tiempo porque una tecla de encendido pulsada brevemente es para encender pero una tecla de encendido
+   pulsada varios segundos es para apagar»*): saber cuánto ha estado pulsada, es decir, también cuándo se suelta.
+
+3. **Una tecla que se mantiene no repite** (*«OK»*): un aviso por pulsación, igual en el PC y en la placa (en el PC se
+   ignoran las repeticiones del sistema); así, cuando se mida el tiempo, no habrá repeticiones de por medio.
+4. **`readKey()` devuelve un int32** (Eduardo: *«Devuelve un int32, la parte baja el código de la tecla y la parte alta
+   los bits de estado ( shift, alt, ctrl, alt gr, Fn, Windows, etc.»*), en vez del objeto por tecla que propuse.
+
+5. **El carácter** (*«3) y 4) si»*): en el PC, el que da el sistema (la distribución del teclado del PC); en las
+   placas, las tablas de BasicPlus, la US primero.
+6. **`#811`, ahora**, antes de seguir con el paso 2 (el mismo *«si»*).
+
+**Por decidir:** el evento (¿el mismo int32?), qué bit es cada estado y, como el int32 no lleva el carácter, por dónde
+le llega al programa.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
