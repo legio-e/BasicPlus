@@ -713,6 +713,13 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   <code>RuntimeError</code> instead of making one up.
 </p>
 <p>
+  <strong>On the PC, the flash is a folder</strong> (V8): a board path, one that starts with <code>/</code>
+  (<code>/sys/bluetooth.json</code>), goes inside <code>~/.basicplus/flash</code> (on Windows,
+  <code>%USERPROFILE%\.basicplus\flash</code>), the same for both VMs, and what is saved there stays, as on a board.
+  Another folder, with <code>--flash-dir=&lt;folder&gt;</code>. A path that climbs above the root (<code>/../x</code>)
+  does not leave it: it fails, as on a board.
+</p>
+<p>
   Separately there is <code>IO.prompt(spec)</code>, which asks the connected IDE
   to render a form and returns the JSON with the user's
   response (see <a href="#stdlib-funcs">§13.1</a>: the primitive BLOCKS

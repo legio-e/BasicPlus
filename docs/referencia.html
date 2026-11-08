@@ -717,6 +717,13 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   así que lanza <code>RuntimeError</code> atrapable en vez de inventarse una.
 </p>
 <p>
+  <strong>En el PC, la flash es una carpeta</strong> (V8): una ruta de la placa, de las que empiezan por <code>/</code>
+  (<code>/sys/bluetooth.json</code>), va dentro de <code>~/.basicplus/flash</code> (en Windows,
+  <code>%USERPROFILE%\.basicplus\flash</code>), la misma en las dos VMs, y lo que se guarda ahí se queda, como en una
+  placa. Otra carpeta, con <code>--flash-dir=&lt;carpeta&gt;</code>. Una ruta que sube más allá de la raíz
+  (<code>/../x</code>) no sale de ella: falla, como en la placa.
+</p>
+<p>
   Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
   que renderice un formulario y devuelve el JSON con la respuesta del
   usuario (ver <a href="#stdlib-funcs">§13.1</a>: la primitiva BLOQUEA

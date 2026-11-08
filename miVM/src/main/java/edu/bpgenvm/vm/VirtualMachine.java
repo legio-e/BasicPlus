@@ -1534,9 +1534,34 @@ public class VirtualMachine {
         System.out.println(sb + (hayLectura ? " (sim → ceros)" : ""));
     }
 
+    /** V8 #808 (8-nov) — LA FLASH DE LA VM DEL PC, una carpeta (Eduardo: «las VM del PC deberían tener una carpeta que
+     *  simule la flash, así que lo se guarde ahí no borre»): una ruta de la placa, absoluta ("/sys/bluetooth.json"), va
+     *  dentro de ella; antes iba a la raíz del disco, o, con --workdir, era un error. La fija Main (--flash-dir, o
+     *  ~/.basicplus/flash), la misma que la VM-C (fs_host.c), y la crea si no está, como una placa con su flash
+     *  formateada. null, sin flash: como antes. */
+    private java.nio.file.Path flashDir;
+    public void setFlashDir(java.nio.file.Path dir) {
+        this.flashDir = (dir == null) ? null : dir.toAbsolutePath().normalize();
+        if (flashDir != null) {
+            try { java.nio.file.Files.createDirectories(flashDir); }
+            catch (java.io.IOException | RuntimeException e) { /* si no se puede, lo dirá la primera escritura */ }
+        }
+    }
+    /** #808 — dónde está en el PC una ruta de la placa, o null si se sale de la flash (o no hay flash). */
+    java.nio.file.Path enFlash(String userPath) {
+        if (flashDir == null || userPath == null || !userPath.startsWith("/")) return null;
+        java.nio.file.Path r = flashDir.resolve(userPath.substring(1)).normalize();
+        return r.startsWith(flashDir) ? r : null;
+    }
+
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
             throwBpError(tc, CLASE_ES, "path demasiado largo");
+        if (flashDir != null && userPath != null && userPath.startsWith("/")) {   // #808: la placa, en su flash
+            java.nio.file.Path r = enFlash(userPath);
+            if (r == null) throwBpError(tc, CLASE_ES, "sandbox: path escapa de la flash: " + userPath);
+            return r;
+        }
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
             try {

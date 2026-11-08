@@ -60,6 +60,7 @@ public class Main {
         int listenPort = -1;    // -1 = no servidor de debug
         boolean waitClient = false;  // bloquear la VM hasta que conecte el IDE
         String workdir = null;       // sandbox del filesystem; null = sin sandbox
+        String flash = null;         // V8 #808: la flash de la VM del PC; null = la del usuario
         String cliStdlibDir = null;  // override de cfg.stdlibDir si != null
         String file = null;
         String runArgCli = null;   // V6/#412
@@ -141,6 +142,10 @@ public class Main {
                     }
                     if (a.startsWith("--workdir=")) {
                         workdir = a.substring("--workdir=".length());
+                        break;
+                    }
+                    if (a.startsWith("--flash-dir=")) {   // V8 #808: la flash de la VM del PC, una carpeta
+                        flash = a.substring("--flash-dir=".length());
                         break;
                     }
                     if ("--workdir".equals(a)) {
@@ -292,6 +297,10 @@ public class Main {
             System.err.println("[main] workdir = " + wd);
         }
         vm.setModuleManager(loader);
+        // V8 #808 — la flash de la VM del PC (Eduardo: «una carpeta que simule la flash, así que lo se guarde ahí no
+        // borre»): la de --flash-dir, o la del usuario, la misma que la VM-C. Las rutas de la placa ("/sys/x") van ahí.
+        vm.setFlashDir(java.nio.file.Paths.get(flash != null ? flash
+                : System.getProperty("user.home") + java.io.File.separator + ".basicplus" + java.io.File.separator + "flash"));
 
         // A1.4.b: si se pidió --listen, levantar el servidor de debug
         // ANTES de cargar el módulo. Con --wait-client la VM bloquea hasta
@@ -484,6 +493,8 @@ public class Main {
         out.println("  bpgenvm --listen <puerto>       arranca servidor de debug TCP+JSON");
         out.println("  bpgenvm --wait-client           con --listen, bloquea hasta que conecte el IDE");
         out.println("  bpgenvm --workdir <dir>         sandbox: la VM sólo ve ficheros bajo este dir");
+        out.println("  bpgenvm --flash-dir=<dir>       la flash de la placa: \"/sys/x\" es <dir>/sys/x (por defecto,");
+        out.println("                                  ~/.basicplus/flash, la misma que la VM-C)");
         out.println("  bpgenvm --stdlibDir <dir>       override de cfg.stdlibDir (gana sobre BpVM.cfg)");
         out.println("  bpgenvm -h | --help             muestra esta ayuda");
         out.println();

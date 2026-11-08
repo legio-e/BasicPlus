@@ -176,6 +176,7 @@ static int main_real(int argc, char** argv) {
     unsigned long stack_kb = 0;   /* --stack=N (KB); 0 = el reparto de siempre */
     size_t mem_size   = 512 * 1024;
     const char* basedir = NULL;   /* H19-F1: raíz de proyecto (paths relativos) */
+    const char* flash = NULL;     /* V8 #808: la flash (las rutas de la placa); sin --flash-dir, la del usuario */
     const char* libdir  = NULL;   /* V7/H2 (#493): el /lib del PC (--libdir=) */
     const char* fs_lfs_img = NULL;/* H2·B1.2: modo ORÁCULO — littlefs sobre imagen */
     const char* pack_files[PACKS_MAX_FILES]; int n_pack_files = 0;  /* H3 --pack= */
@@ -224,6 +225,9 @@ static int main_real(int argc, char** argv) {
         }
         else if (strncmp(a, "--basedir=", 10) == 0) {
             basedir = a + 10;        /* H19-F1: raíz de proyecto (paths relativos) */
+        }
+        else if (strncmp(a, "--flash-dir=", 12) == 0) {
+            flash = a + 12;          /* V8 #808: la flash de la VM del PC, una carpeta (el sim tiene --flash=N, el tamaño) */
         }
         else if (strncmp(a, "--fs=lfs:", 9) == 0) {
             fs_lfs_img = a + 9;      /* H2·B1.2: FS littlefs sobre <imagen> (oráculo) */
@@ -374,6 +378,14 @@ static int main_real(int argc, char** argv) {
         return 2;
     }
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
+    {   /* V8 #808 — la flash de la VM del PC (Eduardo: «una carpeta que simule la flash, así que lo se guarde ahí no
+         * borre»): la de --flash-dir, o la del usuario, la misma que la VM-Java. */
+        char def[512];
+        const char* casa = getenv("USERPROFILE");
+        if (!casa || !casa[0]) casa = getenv("HOME");
+        if (!flash && casa && casa[0]) { snprintf(def, sizeof def, "%s/.basicplus/flash", casa); flash = def; }
+        bpvm_fs_host_set_flash(flash);
+    }
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
     bpvm_wifi_register_host();     /* V8/H3 — la WiFi del PC: el módulo Air */

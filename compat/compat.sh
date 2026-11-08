@@ -110,6 +110,13 @@ PAR_REF_QUE="la pasada MOD9"   # de donde sale $PAR_REF, para el mensaje de un F
 RUN_ARG=""       # V8 #763: el argumento de ejecucion del sample en curso (su marca `// argumento:`), a las dos VMs
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+# V8 #808 (8-nov) — LA FLASH DE LA VM DEL PC: una carpeta, la «/» de la placa ("/sys/bluetooth.json" es
+# <flash>/sys/bluetooth.json); sin --flash-dir, la del usuario (~/.basicplus/flash). La red le da a cada ejecución
+# una NUEVA y vacía (run_vm): un sample no ve lo que dejó otro, ni la VM-C lo de la VM-Java, ni la red toca la del
+# usuario. Con su ruta de Windows (cygpath -m), la que entienden las dos VMs.
+FLASH_RED="$WORK/.flash"
+FLASH_ARG="--flash-dir=$FLASH_RED"
+command -v cygpath >/dev/null 2>&1 && FLASH_ARG="--flash-dir=$(cygpath -m "$FLASH_RED")"
 
 # --- Binarios V2 (capsula inmutable) ---
 V2_FE="$HERE/v2/bin/basicplus-frontend.jar"
@@ -194,12 +201,18 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   # V7/H9 (2-oct, resto de #481) — el CÓDIGO DE SALIDA de cada VM, a un fichero por VM (.rc.java / .rc.c): el
   # stdout va por `filt` y el código se perdía en la tubería. La paridad del corpus lo compara.
   # (cada llamada borra SÓLO el suyo: la paridad llama dos veces seguidas, Java y C, y lee los dos después)
+  # V8 #808 (8-nov) — y una flash NUEVA y vacía en cada ejecución (FLASH_RED, arriba), sólo para las VMs de ahora: las
+  # de V2 (gen) no conocen la opción.
+  local flash=()
+  if [ "$bin" = "$V3_JAVA" ] || [ "$bin" = "$V3_C" ]; then
+    rm -rf "${FLASH_RED:?}"; mkdir -p "$FLASH_RED"; flash=("$FLASH_ARG")
+  fi
   case "$bin" in
     *.jar) rm -f "$WORK/.rc.java"
-           ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
+           ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" ${flash[@]+"${flash[@]}"} "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
              echo "${PIPESTATUS[0]}" > "$WORK/.rc.java" ) ;;
     *)     rm -f "$WORK/.rc.c"
-           ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
+           ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" ${flash[@]+"${flash[@]}"} "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
              echo "${PIPESTATUS[0]}" > "$WORK/.rc.c" ) ;;
   esac
   # V8 #739 (2-nov) — y el aviso de una cadena que nace rota («MAL NACIDA»: no puede nacer ninguna; si nace, rojo).

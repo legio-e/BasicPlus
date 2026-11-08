@@ -327,6 +327,10 @@ void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd,
 /* Backend host (libc). Implementado en fs_host.c (host-only); el firmware
  * registra el suyo (fs_get/fs_put). */
 void bpvm_fs_register_host(void);
+/* V8 #808 — LA FLASH DE LA VM DEL PC, una carpeta: una ruta de la placa ("/sys/x") va dentro de ella; las demás, tal cual.
+ * NULL o "", sin flash (como antes). La fija test/main.c: --flash=<carpeta>, o %USERPROFILE%/.basicplus/flash. */
+void        bpvm_fs_host_set_flash(const char* dir);
+const char* bpvm_fs_host_flash(void);
 
 /* [V7/H2, #493] `/lib` EN EL HOST: monta en `prefix` (p.ej. "/lib") un backend
  * host de sólo lectura enraizado en `root`: `/lib/Str.mod` → `<root>/Str.mod`.

@@ -7387,6 +7387,41 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#810` — una ruta que se sale de la flash del PC (`/../x`): la VM-Java lanza «sandbox: path escapa de la flash», también en `fileExists`; la VM-C, como la placa, falla con el texto de cada operación, y `fileExists` da false (abierta el 8-nov, en `#808`)
+
+- **Lo medido** (8-nov, a mano, `writeFile`, `readFile`, `IO.mkdir` y `fileExists` con `/../x` y `/a/../../x`): la
+  VM-Java, «sandbox: path escapa de la flash: /../x», y `fileExists` lanza lo mismo; la VM-C, «writeFile('/../x'): error
+  de escritura», «readFile(…): no se pudo abrir», «mkdir(…): no se pudo crear», y `fileExists` da false. En la placa,
+  littlefs no deja subir más allá de la raíz (`LFS_ERR_INVAL`): lo de la VM-C. Ninguna de las dos sale de la carpeta.
+- **Lo que falta:** que la VM-Java dé lo de la placa: son 22 llamadas a `sandboxPath`, cada una con su texto. Y lo mismo
+  con `--workdir`, que la VM-C no tiene.
+
+#### 🔵 `#809` — la zona de packs de la VM del PC, en un fichero binario permanente que se cargue al arrancar (abierta el 8-nov, en H2; **para más adelante**)
+
+- **La idea, de Eduardo (8-nov):** *«Y para la zona de Pack un fichero binario permanente que se cargue al arrancar la
+  VM»*. Hoy la VM-C de consola y el micro simulado la tienen en la RAM: se rellena al arrancar con los `--pack=`, y lo
+  que se instale en ella se pierde al cerrar. La VM-Java, por mirar cómo lleva los packs.
+- **Cuándo** (*«la 2) lo puedes hacer mas adelante»*): no hace falta para H2.
+
+#### 🔵 `#808` — la VM del PC, con su flash: una carpeta que no se borra (abierta el 8-nov, en H2)
+
+- **Lo que pasa:** en el PC, una ruta absoluta de un programa (`/sys/bluetooth.json`) va, desde la consola, a la raíz
+  del disco (`C:\sys\…`, en las dos VMs: medido el 8-nov), y desde el IDE con la VM local, que trabaja en una carpeta
+  temporal que borra al acabar cada Run, a un error («sandbox: path escapa del workdir»). El micro simulado, en cambio,
+  tiene su flash persistente (una imagen de littlefs en `%USERPROFILE%\.bpide-sim`). H2 lo necesita: `connect`
+  recuerda los aparatos en `/sys/bluetooth.json`.
+- **La decisión, de Eduardo (8-nov):** *«En realidad las VM del PC deberían tener una carpeta que simule la flash, así
+  que lo se guarde ahí no borre»* (*«1) OK»*). La carpeta, por defecto `%USERPROFILE%\.basicplus\flash`, la misma para
+  las dos VMs, es la `/` de la placa: `/sys`, y `/app` con los programas que copia el IDE (`/app/<proyecto>`, como en
+  una placa). Una ruta absoluta va dentro de ella. Con `--flash-dir=<carpeta>`, otra: las pruebas de la red, cada una
+  la suya. (`--flash-dir` y no `--flash`, porque el micro simulado ya tiene `--flash=N`, el tamaño, y `--flash-file=F`.)
+- **Hecho en las dos VMs y en la red el 8-nov** (el commit de `#808`): `fs_host.c` (la VM-C) y `sandboxPath` (la
+  VM-Java) meten en la carpeta las rutas que empiezan por `/`; las dos la crean al arrancar, como una placa con su flash
+  formateada; un `..` que sube más allá de la raíz no sale de ella (la VM-C escribía fuera: medido), y falla, como en
+  littlefs (el texto, `#810`). `compat.sh` le da a cada ejecución de `run_vm` una carpeta nueva y vacía.
+- **Falta: el IDE**, que copie los programas a `<flash>/app/<proyecto>`, como en una placa, en vez de a la carpeta
+  temporal que borra.
+
 #### 🔵 `#807` — una referencia caducada a un array (u otro objeto) que se pasa a un builtin no da error (abierta el 7-nov; salió en `#805`)
 
 - **Lo que pasa:** medido con un `byte[]` en una property `owner` que se cambia: `fromBytes(v)` y `move(v, otro, …)` lo
