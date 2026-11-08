@@ -365,6 +365,52 @@ end clic
 **Primero en el PC, en las dos VMs** (la cascada): allí el teclado y el ratón son los del PC, y el Bluetooth tiene
 aparatos simulados, como el I2C y el SPI. Después, la S3, la C5 y la P4.
 
+**En el PC, lo decidido** (Eduardo, 8-nov: *«1) si 2) nada 3) solo con el teclado conectado»*). Lo que había: la GUI
+de la VM-Java es Swing (sus campos y botones ya responden al teclado y al ratón del PC); la de la VM-C y el micro
+simulado, LVGL en una ventana de SDL, con el ratón registrado y del teclado sólo F12 (la captura). Sin GUI, la consola:
+`input()` lee una línea, sólo en la VM-Java (26-ago: es para depurar), y tecla a tecla la VM-Java no puede sin una
+librería.
+1. **El teclado y el ratón del PC son los de la ventana de la GUI**, en las dos VMs: la de Swing y la de SDL, a la que
+   hay que añadirle el teclado. Así se prueba en el PC la GUI con teclado (el foco, Tab, Enter).
+2. **Sin GUI, en el PC no hay teclado**, como una placa sin teclado conectado. (Lo descartado: una ventanita para
+   las teclas, o la consola del IDE mandándolas a la VM, que también valdría de teclado remoto para la placa.)
+3. **Las teclas del PC, sólo con el teclado simulado conectado**: `scan()` encuentra «Teclado simulado» y «Ratón
+   simulado», y `connect()` los recuerda en el `/sys` del PC. Sin conectar, el programa no recibe teclas, como en la
+   placa: un programa que se olvida de conectar falla en el PC igual que fallaría allí. Recordado, la siguiente
+   ejecución ya lo tiene, como la placa al arrancar.
+4. **El ratón del PC sigue haciendo de táctil en la GUI**, siempre, como hoy: es la única forma de usarla en el PC.
+   Como ratón (la clase `Mice.Mouse`, sus eventos, su posición y la flecha), sólo con el ratón simulado conectado. Como
+   en una placa con táctil y un ratón Bluetooth: la táctil siempre; el ratón, cuando está conectado (Eduardo: *«OK»*).
+
+**En dos niveles** (Eduardo, 8-nov: *«A ver, en dos niveles. Un teclado a nivel de SO. Un teclado a nivel de programa
+( un objeto ) . El teclado a nivel de SO es único, con su buffer. El de programa puede ser mas de uno, y se relaciona con
+el del SO»*):
+- **El teclado del SO**: uno solo, en la VM y en el firmware, con su buffer. A él llegan las teclas de todos los
+  teclados conectados (uno Bluetooth, mañana uno USB; en el PC, la ventana de la GUI con el teclado simulado
+  conectado). Existe aunque el programa no cree ningún objeto. El ratón, igual: uno del SO, con su posición y sus
+  botones, que junta todos los ratones conectados.
+- **El del programa**: un objeto `Keyboards.Keyboard`, uno o varios. La relación (*«Si»*): **los eventos, para todos**
+  (cada tecla que entra en el buffer del SO se avisa a todos los objetos con `onKey`), y **preguntar lee el buffer del
+  SO** (`hasKey()` mira si hay una; `readKey()` la saca: con dos objetos, el primero que lee se la lleva, como dos
+  lectores de la misma consola).
+
+```basic
+var a: Keyboards.Keyboard := Keyboards.Keyboard()
+var b: Keyboards.Keyboard := Keyboards.Keyboard()
+a.onKey := this::teclaA
+b.onKey := this::teclaB
+// llega una «x» al buffer del SO → teclaA y teclaB la reciben, las dos
+// y si en vez de eventos se pregunta: a.readKey() da «x», y después b.hasKey() da false
+```
+
+**Cómo llegan los eventos: los entrega la VM.** Hoy un `raise` encola el evento y el manejador corre después, en el
+hilo que lo hizo; lo único que nace fuera de BP, el clic de la GUI, lo apunta la VM y lo reparte la bomba de la GUI
+(`Gui.run()`), en BP. El teclado necesita eventos también sin GUI. De las tres formas (que los entregue la VM; una
+bomba en BP, un hilo que pregunta cada pocos milisegundos y mantiene vivo el programa; o eventos sólo en la GUI), la
+primera: cada objeto se apunta en la VM al crearse, y cuando llega una tecla la VM encola, en el hilo que lo creó, una
+llamada a un método suyo (`__despacha`) que hace el `raise onKey` en BP. Usa la cola de eventos que ya existe y la
+búsqueda por nombre de la GUI; la lista de los apuntados no mantiene vivos los objetos.
+
 **Por detallar, al llegar a cada parte:**
 - el evento de una tecla: si avisa también al soltarla, y los códigos de las especiales;
 - los eventos del ratón (moverse, la rueda) y su forma de preguntar;
