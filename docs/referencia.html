@@ -2734,9 +2734,56 @@ wifi.turnOff()</code></pre>
 <p>
   <strong>Dónde.</strong> La P4 (con <code>radio=c6</code> en su ENV), la S3 y la C5. La C3 y la C6 no: no tienen PSRAM, y sólo
   por llevarla perderían entre 33 y 88&nbsp;KB de RAM. En la Pico 2 W, un pack, más adelante. En el <strong>PC</strong>,
-  <code>turnOn()</code> da siempre <code>true</code>, porque ya tiene red. <code>Air.Bluetooth</code> tiene la misma forma, y
-  todavía ninguna placa lo tiene: <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un
-  <code>RuntimeError</code>.
+  <code>turnOn()</code> da siempre <code>true</code>, porque ya tiene red.
+</p>
+
+<h4 id="stdlib-air-bt">El Bluetooth: <code>Air.Bluetooth</code> y <code>Air.BtDevice</code></h4>
+<p>
+  Encender y apagar, buscar, conectar y desconectar (V8). Un aparato se conecta por su dirección: la primera vez se
+  empareja y se recuerda en <code>/sys/bluetooth.json</code>; después vuelve solo, sin emparejar otra vez.
+</p>
+<pre><code><span class="kw">import</span> Air
+
+<span class="kw">var</span> bt: Air.Bluetooth := Air.Bluetooth()
+bt.turnOn()
+<span class="kw">var</span> vistos: List := bt.scan(10000)         // 10 s: los que están en modo de emparejar
+<span class="kw">var</span> d: Air.BtDevice := Air.BtDevice(vistos.get(0))
+<span class="kw">if</span> bt.connect(d) <span class="kw">then</span>                  // la primera vez empareja y lo recuerda
+  print d.getName() + " conectado"
+<span class="kw">endif</span>
+bt.disconnect(d)                             // esa conexión; el Bluetooth sigue, con los demás</code></pre>
+<table>
+  <tr><th>Método de <code>Air.Bluetooth</code></th><th>Qué hace</th></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Enciende y espera a que esté listo, hasta 5&nbsp;s; los recordados vuelven solos. En una placa sin Bluetooth, un <code>RuntimeError</code></td></tr>
+  <tr><td><code>turnOff()</code></td><td>Apaga: corta todas las conexiones</td></tr>
+  <tr><td><code>isOn(): boolean</code></td><td>¿Está encendido y listo?</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td><td>¿Tiene Bluetooth esta placa? Sin encender nada</td></tr>
+  <tr><td><code>scan(ms): List</code></td><td>Busca durante <code>ms</code> los aparatos en modo de emparejar: una <code>List</code> de <code>BtDevice</code>, sin los conectados (hasta 16)</td></tr>
+  <tr><td><code>connect(d): boolean</code></td><td>Conecta. La primera vez empareja y lo recuerda; después, por su dirección. <code>false</code> si no lo encuentra</td></tr>
+  <tr><td><code>disconnect(d)</code></td><td>Cierra esa conexión; sigue recordado, pero no vuelve solo hasta otro <code>connect</code> o el siguiente arranque</td></tr>
+  <tr><td><code>forget(d)</code></td><td>Lo olvida: la conexión, sus claves y su entrada en el fichero</td></tr>
+  <tr><td><code>listDevices(): List</code></td><td>Los recordados, en el orden en que se conectaron por primera vez</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>¿Hay algún recordado conectado?</td></tr>
+  <tr><td><code>isEnabled(): boolean</code> / <code>setEnabled(b)</code></td><td>Si se enciende solo al arrancar: lo dice el fichero (<code>"enabled"</code>)</td></tr>
+</table>
+<p>
+  <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
+  <code>getAddressType()</code> (<code>"public"</code> o <code>"random"</code>), <code>getKind()</code>
+  (<code>"keyboard"</code>, <code>"mouse"</code> o <code>"unknown"</code>: un teclado no lo dice en la búsqueda, sí al
+  conectarlo), <code>getRssi()</code> (la intensidad de la búsqueda, en dBm; 0 en los recordados) e
+  <code>isConnected()</code>.
+</p>
+<p>
+  <strong>El fichero.</strong> <code>/sys/bluetooth.json</code> lo escribe la clase: <code>enabled</code> y los aparatos,
+  por su dirección. La placa lo lee al arrancar: si dice <code>enabled</code>, enciende y espera a los recordados.
+  <strong>Al acabar el programa</strong>, si lo ha tocado, el Bluetooth vuelve a lo que diga el fichero.
+</p>
+<pre><code>{ "enabled": true,
+  "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
+<p>
+  <strong>Dónde.</strong> En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs, con dos aparatos de
+  prueba: «Teclado simulado» y «Ratón simulado». En las placas (la S3, la C5 y la P4), lo siguiente; de momento,
+  <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un <code>RuntimeError</code>.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

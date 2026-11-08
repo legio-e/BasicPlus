@@ -1,6 +1,6 @@
 // AirWifi.bp — V8/H3 (6-nov): el módulo Air, en el PC: encender y apagar la WiFi. En el PC, turnOn() da siempre true, porque el
-// PC ya tiene red, y lo mismo en las dos VMs. En una placa lo mismo, con su /sys/wifi.json. Y el Bluetooth, que todavía no
-// tiene ninguna placa, dice que no.
+// PC ya tiene red, y lo mismo en las dos VMs. En una placa lo mismo, con su /sys/wifi.json. (El Bluetooth, que el 6-nov
+// decía que no, desde el 8-nov tiene su prueba: AirBluetooth.bp, el del PC, simulado.)
 module AirWifi
   import Air
 
@@ -16,17 +16,6 @@ module AirWifi
     wifi.turnOff()
     print "apagar lo apagado: " + wifi.isConnected()
     print "y volver a encender: " + wifi.turnOn()
-
-    var bt: Air.Bluetooth := Air.Bluetooth()
-    print "bluetooth disponible: " + bt.isAvailable()
-    try
-      bt.turnOn()
-      print "no tenia que llegar aqui"
-    catch e: RuntimeError
-      print e.msg
-    endtry
-    bt.turnOff()
-    print "bluetooth conectado: " + bt.isConnected()
     print "fin"
   end main
 end AirWifi

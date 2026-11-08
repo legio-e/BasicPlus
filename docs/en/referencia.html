@@ -2371,8 +2371,56 @@ wifi.turnOff()</code></pre>
 </p>
 <p>
   Boards: the P4 (with <code>radio=c6</code> in its ENV), the S3 and the C5; not the C3 or the C6, which have no PSRAM. On the
-  <strong>PC</strong>, <code>turnOn()</code> always gives <code>true</code>. <code>Air.Bluetooth</code> has the same shape, and no board has it
-  yet: <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
+  <strong>PC</strong>, <code>turnOn()</code> always gives <code>true</code>.
+</p>
+
+<h4 id="stdlib-air-bt">Bluetooth: <code>Air.Bluetooth</code> and <code>Air.BtDevice</code></h4>
+<p>
+  Turn on and off, scan, connect and disconnect (V8). A device is connected by its address: the first time it is paired
+  and remembered in <code>/sys/bluetooth.json</code>; after that it comes back on its own, without pairing again.
+</p>
+<pre><code><span class="kw">import</span> Air
+
+<span class="kw">var</span> bt: Air.Bluetooth := Air.Bluetooth()
+bt.turnOn()
+<span class="kw">var</span> seen: List := bt.scan(10000)           // 10 s: the ones in pairing mode
+<span class="kw">var</span> d: Air.BtDevice := Air.BtDevice(seen.get(0))
+<span class="kw">if</span> bt.connect(d) <span class="kw">then</span>                  // the first time it pairs and remembers it
+  print d.getName() + " connected"
+<span class="kw">endif</span>
+bt.disconnect(d)                             // that connection; Bluetooth stays on, with the others</code></pre>
+<table>
+  <tr><th><code>Air.Bluetooth</code> method</th><th>What it does</th></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Turns on and waits until ready, up to 5&nbsp;s; remembered devices come back on their own. On a board without Bluetooth, a <code>RuntimeError</code></td></tr>
+  <tr><td><code>turnOff()</code></td><td>Turns off: closes every connection</td></tr>
+  <tr><td><code>isOn(): boolean</code></td><td>Is it on and ready?</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td><td>Does this board have Bluetooth? Without turning anything on</td></tr>
+  <tr><td><code>scan(ms): List</code></td><td>Looks for <code>ms</code> for devices in pairing mode: a <code>List</code> of <code>BtDevice</code>, without the connected ones (up to 16)</td></tr>
+  <tr><td><code>connect(d): boolean</code></td><td>Connects. The first time it pairs and remembers it; after that, by its address. <code>false</code> if it is not found</td></tr>
+  <tr><td><code>disconnect(d)</code></td><td>Closes that connection; it stays remembered, but does not come back on its own until another <code>connect</code> or the next boot</td></tr>
+  <tr><td><code>forget(d)</code></td><td>Forgets it: the connection, its keys and its entry in the file</td></tr>
+  <tr><td><code>listDevices(): List</code></td><td>The remembered ones, in the order they were first connected</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is any remembered device connected?</td></tr>
+  <tr><td><code>isEnabled(): boolean</code> / <code>setEnabled(b)</code></td><td>Whether it turns on by itself at boot: the file says so (<code>"enabled"</code>)</td></tr>
+</table>
+<p>
+  <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
+  <code>getAddressType()</code> (<code>"public"</code> or <code>"random"</code>), <code>getKind()</code>
+  (<code>"keyboard"</code>, <code>"mouse"</code> or <code>"unknown"</code>: a keyboard does not say so in the scan, it does
+  when connected), <code>getRssi()</code> (the scan's signal strength, in dBm; 0 for remembered ones) and
+  <code>isConnected()</code>.
+</p>
+<p>
+  <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>enabled</code> and the
+  devices, by address. The board reads it at boot: if it says <code>enabled</code>, it turns on and waits for the
+  remembered ones. <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
+</p>
+<pre><code>{ "enabled": true,
+  "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
+<p>
+  <strong>Where.</strong> On the <strong>PC</strong>, a simulated Bluetooth, the same in both VMs, with two test devices:
+  «Teclado simulado» (keyboard) and «Ratón simulado» (mouse). On the boards (the S3, the C5 and the P4), next; for now
+  <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
 </p>
 
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>

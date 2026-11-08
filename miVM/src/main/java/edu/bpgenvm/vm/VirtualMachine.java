@@ -350,6 +350,21 @@ public class VirtualMachine {
      */
     private boolean gcInProgress = false;
     private boolean wifiEncendida = false;   // V8/H3: el módulo Air, en el PC
+    // V8/H2 (8-nov): el Bluetooth del PC, simulado (Bluetooth.java), el espejo de bpvm_bt.c y bt_host.c
+    private Bluetooth bluetooth;
+    private Bluetooth bluetooth() {
+        if (bluetooth == null) bluetooth = new Bluetooth(this::leeDeLaPlaca);
+        return bluetooth;
+    }
+    /** Como una placa al arrancar: si /sys/bluetooth.json dice "enabled", los recordados (lo llama Main). */
+    public void arrancaBluetooth() { bluetooth().arranque(); }
+    /** Un fichero de la placa ("/sys/…"), dentro de la flash (#808); sin flash, la ruta tal cual. null si no está. */
+    private byte[] leeDeLaPlaca(String ruta) {
+        java.nio.file.Path r = enFlash(ruta);
+        if (r == null) r = java.nio.file.Paths.get(ruta);
+        try { return java.nio.file.Files.isRegularFile(r) ? java.nio.file.Files.readAllBytes(r) : null; }
+        catch (java.io.IOException | RuntimeException e) { return null; }
+    }
 
     /**
      * tc.ids cuyos Java workers están bloqueados en vmLock.wait() dentro
@@ -3401,6 +3416,7 @@ public class VirtualMachine {
         java.util.Arrays.fill(pinEstado, 0);   // V7/H4 (#479): los pines vuelven a libres
         busFinDeRun();                          // V7/H6.c G4.a1: y los buses del programa se sueltan
         Sonido.finDeRun();                      // V8/H4 (#708): y lo que suene se para (el volumen, a 85)
+        if (bluetooth != null) bluetooth.finDeRun();   // V8/H2: si el programa lo tocó, lo que diga /sys/bluetooth.json
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -6548,6 +6564,49 @@ public class VirtualMachine {
             case WIFI_GET_STATE:     pushTc(tc, wifiEncendida ? 3 : 0); break;
             case WIFI_HAS_IP:        pushTc(tc, wifiEncendida ? 1 : 0); break;
             case WIFI_IS_AVAILABLE:  pushTc(tc, 1); break;
+            // V8/H2 (8-nov) — el Bluetooth (el módulo Air): el del PC, simulado (Bluetooth.java), lo mismo que la VM-C
+            // (bpvm_bt.c y bt_host.c). Las esperas (a estar listo, a que acabe una búsqueda), en BP, con `sleep`.
+            case BT_IS_AVAILABLE: pushTc(tc, 1); break;
+            case BT_TURN_ON: {
+                String e = bluetooth().programaEnciende();
+                if (e != null) throwBpRuntimeError(tc, e);
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case BT_TURN_OFF: bluetooth().programaApaga(); pushTc(tc, 0); break;
+            case BT_GET_STATE: pushTc(tc, bluetooth().estado()); break;
+            case BT_SCAN: {
+                int ms = popTc(tc);
+                String e = bluetooth().buscar(ms);
+                if (e != null) throwBpRuntimeError(tc, e);
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case BT_FOUND_COUNT: pushTc(tc, bluetooth().encontrados()); break;
+            case BT_FOUND_RSSI: {
+                Bluetooth.Aparato a = bluetooth().encontrado(popTc(tc));
+                pushTc(tc, a != null ? a.rssi : 0);
+                break;
+            }
+            case BT_FOUND_NAME: case BT_FOUND_ADDRESS: case BT_FOUND_ADDRESS_TYPE: case BT_FOUND_KIND: {
+                Bluetooth.Aparato a = bluetooth().encontrado(popTc(tc));
+                String s = (a == null) ? "" : b == Builtin.BT_FOUND_NAME ? a.nombre : b == Builtin.BT_FOUND_ADDRESS ? a.dir
+                         : b == Builtin.BT_FOUND_ADDRESS_TYPE ? a.tipo : a.clase;
+                pushTcRef(tc, allocVmString(s));
+                break;
+            }
+            case BT_CONNECT: {
+                String tipo = readVmString(popTcRef(tc));   // el último argumento, arriba
+                String dir = readVmString(popTcRef(tc));
+                int r = bluetooth().conectar(dir, tipo);
+                if (r < 0) throwBpRuntimeError(tc, bluetooth().motivo());
+                pushTc(tc, r);
+                break;
+            }
+            case BT_DISCONNECT: bluetooth().desconectar(readVmString(popTcRef(tc))); pushTc(tc, 0); break;
+            case BT_FORGET:     bluetooth().olvidar(readVmString(popTcRef(tc)));     pushTc(tc, 0); break;
+            case BT_IS_CONNECTED: pushTc(tc, bluetooth().conectado(readVmString(popTcRef(tc))) ? 1 : 0); break;
+            case BT_KIND_OF: pushTcRef(tc, allocVmString(bluetooth().claseDe(readVmString(popTcRef(tc))))); break;
             // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
             case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {

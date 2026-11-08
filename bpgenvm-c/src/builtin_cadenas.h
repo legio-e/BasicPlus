@@ -19,7 +19,7 @@ typedef struct {
     uint8_t     nulo_vale;   /* 1: el null es "" (NULL_ES_VACIA); una referencia caducada no vale nunca */
 } bpvm_builtin_cadenas_t;
 
-static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[63] = {
+static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[68] = {
     { "", { 0, 0, 0 }, 0 },
     { "strlen",              {   8,   0,   0 }, 0 },   /* [0] strlen(s: string): integer */
     { "parseInt",            {   8,   0,   0 }, 0 },   /* [1] parseInt(s: string): integer */
@@ -83,6 +83,11 @@ static const bpvm_builtin_cadenas_t bpvm_builtin_cadenas[63] = {
     { "Overlay.load",        {   8,   0,   0 }, 0 },   /* [296] __overlayLoad(ruta: string) */
     { "Overlay.tryExe",      {   8,   0,   0 }, 0 },   /* [297] __overlayExe(arg: string) */
     { "throwError",          {   8,   0,   0 }, 0 },   /* [308] __throwError(tipo: integer, msg: string) */
+    { "btConnect",           {  16,   8,   0 }, 0 },   /* [320] __btConnect(address: string, addressType: string): boolean */
+    { "btDisconnect",        {   8,   0,   0 }, 0 },   /* [321] __btDisconnect(address: string) */
+    { "btForget",            {   8,   0,   0 }, 0 },   /* [322] __btForget(address: string) */
+    { "btIsConnected",       {   8,   0,   0 }, 0 },   /* [323] __btIsConnected(address: string): boolean */
+    { "btKindOf",            {   8,   0,   0 }, 0 },   /* [324] __btKindOf(address: string): string */
 };
 
 /* La fila de arriba de cada builtin, por su id (0: ningún parámetro string que mirar). */
@@ -106,7 +111,8 @@ static const uint8_t bpvm_builtin_cadena_de[BUILTIN__CUANTOS] = {
      0,  0,  0,  0,  0,  0,  0, 54,  0,  0,  0,  0,  0,  0,  0, 55,   /* 256.. */
      0,  0,  0,  0, 56,  0,  0,  0,  0,  0, 57,  0,  0, 58,  0, 59,   /* 272.. */
      0,  0,  0,  0,  0,  0,  0,  0, 60, 61,  0,  0,  0,  0,  0,  0,   /* 288.. */
-     0,  0,  0,  0, 62,   /* 304.. */
+     0,  0,  0,  0, 62,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   /* 304.. */
+    63, 64, 65, 66, 67,   /* 320.. */
 };
 
 #endif

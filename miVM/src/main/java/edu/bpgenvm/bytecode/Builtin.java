@@ -318,7 +318,23 @@ public enum Builtin {
     WIFI_GET_STATE("__wifiGetState"),   // [305] __wifiGetState(): integer
     WIFI_HAS_IP("__wifiHasIp"),   // [306] __wifiHasIp(): boolean
     WIFI_IS_AVAILABLE("__wifiIsAvailable"),   // [307] __wifiIsAvailable(): boolean
-    THROW_ERROR("__throwError", 8);   // [308] __throwError(tipo: integer, msg: string)
+    THROW_ERROR("__throwError", 8),   // [308] __throwError(tipo: integer, msg: string)
+    BT_IS_AVAILABLE("__btIsAvailable"),   // [309] __btIsAvailable(): boolean
+    BT_TURN_ON("__btTurnOn"),   // [310] __btTurnOn()
+    BT_TURN_OFF("__btTurnOff"),   // [311] __btTurnOff()
+    BT_GET_STATE("__btGetState"),   // [312] __btGetState(): integer
+    BT_SCAN("__btScan"),   // [313] __btScan(ms: integer)
+    BT_FOUND_COUNT("__btFoundCount"),   // [314] __btFoundCount(): integer
+    BT_FOUND_NAME("__btFoundName"),   // [315] __btFoundName(i: integer): string
+    BT_FOUND_ADDRESS("__btFoundAddress"),   // [316] __btFoundAddress(i: integer): string
+    BT_FOUND_ADDRESS_TYPE("__btFoundAddressType"),   // [317] __btFoundAddressType(i: integer): string
+    BT_FOUND_KIND("__btFoundKind"),   // [318] __btFoundKind(i: integer): string
+    BT_FOUND_RSSI("__btFoundRssi"),   // [319] __btFoundRssi(i: integer): integer
+    BT_CONNECT("__btConnect", 16, 8),   // [320] __btConnect(address: string, addressType: string): boolean
+    BT_DISCONNECT("__btDisconnect", 8),   // [321] __btDisconnect(address: string)
+    BT_FORGET("__btForget", 8),   // [322] __btForget(address: string)
+    BT_IS_CONNECTED("__btIsConnected", 8),   // [323] __btIsConnected(address: string): boolean
+    BT_KIND_OF("__btKindOf", 8);   // [324] __btKindOf(address: string): string
 
     public final String bpName;
     public final int id;

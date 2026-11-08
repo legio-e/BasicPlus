@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **309** (0–308). Cada builtin tiene:
+id—. Hoy son **325** (0–324). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -679,6 +679,19 @@ de paridad: el stdout, byte a byte).
 | 300 | `__overlayTrace` | `(): string` | `Overlay.getTrace()` |
 | 301 | `__className` | `(o: any): string` | `Overlay.getErrorClass()` |
 | 302 | `__overlayThreads` | `(): int` | `Overlay.tryExe(arg)`: cuántos hilos vivos hay, sin contar el que llama. Se mira antes y después: el programa no puede acabar dejando hilos |
+
+Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
+condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.
+`__overlayExe` abre un marco como el de `CALL_EXT` y salta al `__startup` del programa: su `HALT` vuelve, porque ahí `bp` no
+es el fondo de la pila, y deja el 0 de un builtin sin valor. `__overlayClose` saca sus globales de las raíces;
+`__overlayFree` recorre el heap y, si no queda nada suyo, lo suelta. Los textos, iguales en las dos VMs. Sin `public` en
+`Core`, y públicas en `Overlays`, porque una clase sólo alcanza lo público de su módulo. La prueba:
+`bpgenvm-c/tools/overlay_smoke.py`.
+
+## 303–307 — la WiFi  *(V8, H3, 6-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
 | 303 | `__wifiTurnOn` (y en `Air`) | `()` | `Air.Wifi.turnOn()`: da la orden y vuelve |
 | 304 | `__wifiTurnOff` | `()` | `Air.Wifi.turnOff()`: da la orden y vuelve |
 | 305 | `__wifiGetState` | `(): integer` | 0 off, 1 starting, 2 connecting, 3 connected, 4 noNetwork, 5 badKey |
@@ -708,13 +721,36 @@ de un método privado, `#752`) y la stdlib (`List`, con su `IndexError`); y una 
 (una división de 32 bits por cero, una conversión estrecha, el `this` null), por `call_builtin`: sin tocar la ABI del
 `.mdn`. Con una VM anterior, «builtin 308 no soportado», un `RuntimeError`, y sólo en el camino del error.
 
-Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
-condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.
-`__overlayExe` abre un marco como el de `CALL_EXT` y salta al `__startup` del programa: su `HALT` vuelve, porque ahí `bp` no
-es el fondo de la pila, y deja el 0 de un builtin sin valor. `__overlayClose` saca sus globales de las raíces;
-`__overlayFree` recorre el heap y, si no queda nada suyo, lo suelta. Los textos, iguales en las dos VMs. Sin `public` en
-`Core`, y públicas en `Overlays`, porque una clase sólo alcanza lo público de su módulo. La prueba:
-`bpgenvm-c/tools/overlay_smoke.py`.
+## 309–324 — el Bluetooth  *(V8, H2, 8-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 309 | `__btIsAvailable` (y en `Air`) | `(): boolean` | `Air.Bluetooth.isAvailable()` |
+| 310 | `__btTurnOn` | `()` | `Air.Bluetooth.turnOn()`: da la orden y vuelve; sin radio, lanza el motivo |
+| 311 | `__btTurnOff` | `()` | `Air.Bluetooth.turnOff()`: corta todas las conexiones |
+| 312 | `__btGetState` | `(): integer` | 0 off, 1 starting, 2 on, 3 scanning |
+| 313 | `__btScan` | `(ms: integer)` | `Air.Bluetooth.scan(ms)`: empieza a buscar y vuelve; durante `ms`, el estado es 3 |
+| 314 | `__btFoundCount` | `(): integer` | cuántos encontró la última búsqueda (hasta 16; los conectados no salen) |
+| 315 | `__btFoundName` | `(i: integer): string` | el nombre del `i` |
+| 316 | `__btFoundAddress` | `(i: integer): string` | su dirección, `"AA:BB:CC:DD:EE:FF"` |
+| 317 | `__btFoundAddressType` | `(i: integer): string` | `"public"` o `"random"`: sin él no se conecta |
+| 318 | `__btFoundKind` | `(i: integer): string` | `"keyboard"`, `"mouse"` o `"unknown"` (el teclado no lo dice en la búsqueda) |
+| 319 | `__btFoundRssi` | `(i: integer): integer` | su intensidad, en dBm |
+| 320 | `__btConnect` | `(address: string, addressType: string): boolean` | `Air.Bluetooth.connect(d)`: true si conecta; apagado, un `RuntimeError` |
+| 321 | `__btDisconnect` | `(address: string)` | `Air.Bluetooth.disconnect(d)`: cierra esa conexión |
+| 322 | `__btForget` | `(address: string)` | `Air.Bluetooth.forget(d)`: la conexión y sus claves |
+| 323 | `__btIsConnected` | `(address: string): boolean` | `Air.BtDevice.isConnected()` |
+| 324 | `__btKindOf` | `(address: string): string` | qué es uno conectado, el de sus informes; `""` si no lo está |
+
+El Bluetooth, para el módulo `Air` (`V8_IDEAS` §E1, «Lo que ve el programa»). Lo común está en la HAL BP (`bpvm_bt.c`):
+el estado, lo que encontró la última búsqueda, lo conectado (hasta 8) y, al encender, los recordados de
+`/sys/bluetooth.json`, que vuelven solos, por su dirección. El fichero lo escribe el módulo, con `Json`, y la VM sólo lo
+lee: al encender y al arrancar, si dice `"enabled"`. La radio, como tabla `'BT  '`; esperar a que esté listo o a que acabe
+la búsqueda lo hace el módulo, en BP y con `sleep`. En el PC, `bt_host.c` y, en la VM-Java, `Bluetooth.java`: una radio
+simulada, igual en las dos, con «Teclado simulado» (`02:00:00:00:00:01`) y «Ratón simulado» (`02:00:00:00:00:02`); el
+fichero, en la flash del PC (`#808`). Sin radio (de momento, las placas), `isAvailable` da false y `turnOn` lanza
+«Bluetooth: esta placa no lo tiene». El fin de RUN lo deja como diga el fichero, si el programa lo ha tocado. La prueba:
+`bpgenvm-c/samples/AirBluetooth.bp`.
 
 ---
 

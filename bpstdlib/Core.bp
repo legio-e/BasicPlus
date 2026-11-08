@@ -1855,6 +1855,56 @@ module Core
   public function __throwError(tipo: integer, msg: string)
     inline CALL_BUILTIN 308
   end __throwError
+  // V8/H2 (8-nov) — EL BLUETOOTH, para la clase Air.Bluetooth. Sin `public`, como la WiFi; los públicos, en Air.bp.
+  // Una dirección va como texto, "AA:BB:CC:DD:EE:FF", y su tipo, "public" o "random".
+  function __btIsAvailable(): boolean    // ¿tiene Bluetooth esta placa? Sin tocar nada
+    inline CALL_BUILTIN 309
+  end __btIsAvailable
+  function __btTurnOn()                  // enciende, y vuelve en seguida; espera solo a los aparatos recordados
+    inline CALL_BUILTIN 310
+  end __btTurnOn
+  function __btTurnOff()                 // apaga: corta todas las conexiones
+    inline CALL_BUILTIN 311
+  end __btTurnOff
+  function __btGetState(): integer       // 0 off, 1 starting, 2 on, 3 scanning
+    inline CALL_BUILTIN 312
+  end __btGetState
+  function __btScan(ms: integer)         // busca durante ms; vuelve en seguida (el estado, 3 mientras)
+    inline CALL_BUILTIN 313
+  end __btScan
+  function __btFoundCount(): integer     // los encontrados en la última búsqueda
+    inline CALL_BUILTIN 314
+  end __btFoundCount
+  function __btFoundName(i: integer): string
+    inline CALL_BUILTIN 315
+  end __btFoundName
+  function __btFoundAddress(i: integer): string
+    inline CALL_BUILTIN 316
+  end __btFoundAddress
+  function __btFoundAddressType(i: integer): string
+    inline CALL_BUILTIN 317
+  end __btFoundAddressType
+  function __btFoundKind(i: integer): string   // "keyboard", "mouse" o "unknown" (en la búsqueda no siempre se sabe)
+    inline CALL_BUILTIN 318
+  end __btFoundKind
+  function __btFoundRssi(i: integer): integer  // la intensidad, en dBm
+    inline CALL_BUILTIN 319
+  end __btFoundRssi
+  function __btConnect(address: string, addressType: string): boolean   // conecta; la primera vez, empareja
+    inline CALL_BUILTIN 320
+  end __btConnect
+  function __btDisconnect(address: string)    // cierra esa conexión
+    inline CALL_BUILTIN 321
+  end __btDisconnect
+  function __btForget(address: string)        // la cierra y borra sus claves
+    inline CALL_BUILTIN 322
+  end __btForget
+  function __btIsConnected(address: string): boolean
+    inline CALL_BUILTIN 323
+  end __btIsConnected
+  function __btKindOf(address: string): string   // el tipo de un aparato conectado (el seguro, de sus informes)
+    inline CALL_BUILTIN 324
+  end __btKindOf
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

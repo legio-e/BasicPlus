@@ -39,6 +39,8 @@
 // ============================================================
 module Air
   import Core
+  import Json   // V8/H2: lo recordado del Bluetooth, en /sys/bluetooth.json
+  import IO
 
   // Las primitivas. Públicas porque las clases sólo alcanzan lo público del módulo.
   public function __wifiTurnOn()
@@ -108,27 +110,291 @@ module Air
 
   end Wifi
 
-  // El Bluetooth, con la misma forma. Todavía no hay firmware debajo (V8, H2, parado): ninguna
-  // placa lo tiene, y se dice.
+  // ============================================================
+  // EL BLUETOOTH (V8/H2, 8-nov; V8_IDEAS §E1, «Lo que ve el programa»). Eduardo: «Funcionalidades,
+  // encender y apagar, scan, conectar y desconectar».
+  //
+  //   var bt: Air.Bluetooth := Air.Bluetooth()
+  //   bt.turnOn()
+  //   var vistos: List := bt.scan(10000)     // 10 s: los aparatos en modo de emparejar
+  //   var d: Air.BtDevice := vistos.get(0)
+  //   bt.connect(d)                          // la primera vez empareja y lo recuerda; después, por su dirección
+  //   bt.disconnect(d)                       // cierra esa conexión; el Bluetooth sigue, con los demás
+  //   bt.forget(d)                           // lo olvida, con sus claves
+  //   var guardados: List := bt.listDevices()
+  //   bt.turnOff()
+  //
+  // LO RECORDADO, en /sys/bluetooth.json: si arranca encendido ("enabled") y los aparatos, por su
+  // dirección. Lo escribe esta clase; la VM lo lee al encender (y la placa, al arrancar), y espera a los
+  // recordados: vuelven solos, sin emparejar otra vez.
+  //
+  //   { "enabled": true,
+  //     "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }
+  //
+  // EN EL PC, un Bluetooth simulado, igual en las dos VMs: la búsqueda encuentra «Teclado simulado» y
+  // «Ratón simulado»; con el teclado conectado, el teclado de la ventana de la GUI es el suyo.
+  // ============================================================
+  public function __btIsAvailable(): boolean
+    inline CALL_BUILTIN 309
+  end __btIsAvailable
+  public function __btTurnOn()
+    inline CALL_BUILTIN 310
+  end __btTurnOn
+  public function __btTurnOff()
+    inline CALL_BUILTIN 311
+  end __btTurnOff
+  public function __btGetState(): integer
+    inline CALL_BUILTIN 312
+  end __btGetState
+  public function __btScan(ms: integer)
+    inline CALL_BUILTIN 313
+  end __btScan
+  public function __btFoundCount(): integer
+    inline CALL_BUILTIN 314
+  end __btFoundCount
+  public function __btFoundName(i: integer): string
+    inline CALL_BUILTIN 315
+  end __btFoundName
+  public function __btFoundAddress(i: integer): string
+    inline CALL_BUILTIN 316
+  end __btFoundAddress
+  public function __btFoundAddressType(i: integer): string
+    inline CALL_BUILTIN 317
+  end __btFoundAddressType
+  public function __btFoundKind(i: integer): string
+    inline CALL_BUILTIN 318
+  end __btFoundKind
+  public function __btFoundRssi(i: integer): integer
+    inline CALL_BUILTIN 319
+  end __btFoundRssi
+  public function __btConnect(address: string, addressType: string): boolean
+    inline CALL_BUILTIN 320
+  end __btConnect
+  public function __btDisconnect(address: string)
+    inline CALL_BUILTIN 321
+  end __btDisconnect
+  public function __btForget(address: string)
+    inline CALL_BUILTIN 322
+  end __btForget
+  public function __btIsConnected(address: string): boolean
+    inline CALL_BUILTIN 323
+  end __btIsConnected
+  public function __btKindOf(address: string): string
+    inline CALL_BUILTIN 324
+  end __btKindOf
+
+  // Un aparato Bluetooth: el que da la búsqueda (con su intensidad) o uno recordado (con 0).
+  public class BtDevice
+    var name: string
+    var address: string
+    var addressType: string
+    var kind: string
+    var rssi: integer
+
+    public function BtDevice(name: string, address: string, addressType: string, kind: string, rssi: integer)
+      this.name := name
+      this.address := address
+      this.addressType := addressType
+      this.kind := kind
+      this.rssi := rssi
+    end BtDevice
+
+    public function getName(): string
+      return this.name
+    end getName
+
+    // "AA:BB:CC:DD:EE:FF"
+    public function getAddress(): string
+      return this.address
+    end getAddress
+
+    // "public" o "random": sin él no se puede conectar
+    public function getAddressType(): string
+      return this.addressType
+    end getAddressType
+
+    // "keyboard", "mouse" o "unknown": en la búsqueda no siempre se sabe (el teclado no lo dice); en los
+    // recordados, el seguro, el de sus informes al conectarlo
+    public function getKind(): string
+      return this.kind
+    end getKind
+
+    // La intensidad de la búsqueda, en dBm (0 en los recordados)
+    public function getRssi(): integer
+      return this.rssi
+    end getRssi
+
+    public function isConnected(): boolean
+      return __btIsConnected(this.address)
+    end isConnected
+  end BtDevice
+
   public class Bluetooth
 
     public function Bluetooth()
     end Bluetooth
 
+    // ¿Tiene Bluetooth esta placa? Sin encender nada.
     public function isAvailable(): boolean
-      return false
+      return __btIsAvailable()
     end isAvailable
 
+    // Enciende y espera a que esté listo, hasta 5 s; los aparatos recordados vuelven solos. true si lo
+    // está. En una placa sin Bluetooth, un RuntimeError.
     public function turnOn(): boolean
-      throw RuntimeError("Bluetooth: esta placa no lo tiene")
+      if not __btIsAvailable() then
+        throw RuntimeError("Bluetooth: esta placa no lo tiene")
+      endif
+      __btTurnOn()
+      var i: integer := 0
+      while i < 50 do
+        if __btGetState() >= 2 then
+          return true
+        endif
+        sleep(100)
+        i := i + 1
+      endwh
+      return false
     end turnOn
 
+    // Apaga: corta todas las conexiones. Al acabar el programa, vuelve a lo que diga el fichero.
     public function turnOff()
+      __btTurnOff()
     end turnOff
 
+    // ¿Está encendido y listo?
+    public function isOn(): boolean
+      return __btGetState() >= 2
+    end isOn
+
+    // ¿Hay algún aparato recordado conectado ahora?
     public function isConnected(): boolean
+      var l: List := this.listDevices()
+      var i: integer := 0
+      while i < l.length() do
+        var d: BtDevice := BtDevice(l.get(i))
+        if d.isConnected() then
+          return true
+        endif
+        i := i + 1
+      endwh
       return false
     end isConnected
+
+    // Busca durante ms los aparatos que están en modo de emparejar: una List de BtDevice.
+    public function scan(ms: integer): List
+      this.encendido("scan")
+      __btScan(ms)
+      while __btGetState() == 3 do
+        sleep(50)
+      endwh
+      var l: List := List()
+      var n: integer := __btFoundCount()
+      var i: integer := 0
+      while i < n do
+        l.add(BtDevice(__btFoundName(i), __btFoundAddress(i), __btFoundAddressType(i), __btFoundKind(i), __btFoundRssi(i)))
+        i := i + 1
+      endwh
+      return l
+    end scan
+
+    // Conecta. La primera vez empareja y lo recuerda en el fichero; después, por su dirección. true si
+    // conecta.
+    public function connect(d: BtDevice): boolean
+      this.encendido("connect")
+      if not __btConnect(d.getAddress(), d.getAddressType()) then
+        return false
+      endif
+      var raiz: Json.JsonObject := this.leer()
+      var aparatos: Json.JsonObject := this.aparatosDe(raiz)
+      var a: Json.JsonObject := Json.JsonObject()
+      a.put("name", Json.JsonString(d.getName()))
+      a.put("addressType", Json.JsonString(d.getAddressType()))
+      a.put("kind", Json.JsonString(__btKindOf(d.getAddress())))
+      aparatos.put(d.getAddress(), a)
+      raiz.put("devices", aparatos)
+      this.escribir(raiz)
+      return true
+    end connect
+
+    // Cierra la conexión con ese aparato; el Bluetooth sigue, con los demás. Sigue recordado, pero no
+    // vuelve solo hasta otro connect o el siguiente arranque.
+    public function disconnect(d: BtDevice)
+      __btDisconnect(d.getAddress())
+    end disconnect
+
+    // Lo olvida: la conexión, sus claves y su entrada en el fichero. Para volver a usarlo, emparejarlo.
+    public function forget(d: BtDevice)
+      __btForget(d.getAddress())
+      var raiz: Json.JsonObject := this.leer()
+      var aparatos: Json.JsonObject := this.aparatosDe(raiz)
+      var quedan: Json.JsonObject := Json.JsonObject()
+      var i: integer := 0
+      while i < aparatos.length() do
+        if aparatos.keyAt(i) != d.getAddress() then
+          quedan.put(aparatos.keyAt(i), aparatos.valueAt(i))
+        endif
+        i := i + 1
+      endwh
+      raiz.put("devices", quedan)
+      this.escribir(raiz)
+    end forget
+
+    // Los recordados, en el orden en que se conectaron por primera vez.
+    public function listDevices(): List
+      var l: List := List()
+      var aparatos: Json.JsonObject := this.aparatosDe(this.leer())
+      var i: integer := 0
+      while i < aparatos.length() do
+        var a: Json.JsonObject := aparatos.valueAt(i).asObject()
+        l.add(BtDevice(a.getStringOr("name", ""), aparatos.keyAt(i), a.getStringOr("addressType", "public"), a.getStringOr("kind", "unknown"), 0))
+        i := i + 1
+      endwh
+      return l
+    end listDevices
+
+    // ¿Arranca encendido? Lo dice el fichero ("enabled"); sin fichero, no.
+    public function isEnabled(): boolean
+      return this.leer().getBoolOr("enabled", false)
+    end isEnabled
+
+    // Que arranque encendido, o no: lo apunta en el fichero.
+    public function setEnabled(b: boolean)
+      var raiz: Json.JsonObject := this.leer()
+      raiz.put("enabled", Json.JsonBool(b))
+      this.escribir(raiz)
+    end setEnabled
+
+    function encendido(que: string)
+      if __btGetState() < 2 then
+        throw RuntimeError("Bluetooth." + que + ": está apagado (turnOn primero)")
+      endif
+    end encendido
+
+    function fichero(): string
+      return "/sys/bluetooth.json"
+    end fichero
+
+    function leer(): Json.JsonObject
+      if not fileExists(this.fichero()) then
+        return Json.JsonObject()
+      endif
+      return Json.readJsonFile(this.fichero()).asObject()
+    end leer
+
+    function aparatosDe(raiz: Json.JsonObject): Json.JsonObject
+      if raiz.has("devices") then
+        return raiz.getObject("devices")
+      endif
+      return Json.JsonObject()
+    end aparatosDe
+
+    function escribir(raiz: Json.JsonObject)
+      if not IO.dirExists("/sys") then
+        IO.mkdir("/sys")
+      endif
+      Json.writeJsonFile(this.fichero(), raiz)
+    end escribir
 
   end Bluetooth
 

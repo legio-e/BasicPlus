@@ -33,6 +33,7 @@
 #include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
 #include "bpvm_fs.h"     /* V7/H3 (#491) — el cursor */
 #include "bpvm_wifi.h"   /* V8/H3 — la WiFi, lo común de la HAL BP */
+#include "bpvm_bt.h"     /* V8/H2 — el Bluetooth, lo común de la HAL BP */
 #include "bpvm_red.h"
 #include "bpvm_sonido.h" /* V8/H4 (#708) — el sonido, lo común de la HAL BP */
 
@@ -2741,6 +2742,87 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_WIFI_IS_AVAILABLE:
         push_i32(vm, tc, bpvm_wifi_hay() ? 1 : 0);
         return BPVM_OK;
+
+    /* V8/H2 (8-nov) — EL BLUETOOTH (el módulo Air): lo común, en bpvm_bt.c; en el PC, la radio simulada de bt_host.c. La
+     * VM-Java hace lo mismo (Bluetooth.java). Las esperas (a estar listo, a que acabe una búsqueda), en BP, con `sleep`. */
+    case BUILTIN_BT_IS_AVAILABLE:
+        push_i32(vm, tc, bpvm_bt_hay() ? 1 : 0);
+        return BPVM_OK;
+    case BUILTIN_BT_TURN_ON: {
+        char det[128];
+        if (bpvm_bt_programa_enciende(det, sizeof det) != 0) return builtin_throw(vm, tc, det);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_TURN_OFF:
+        bpvm_bt_programa_apaga();
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    case BUILTIN_BT_GET_STATE:
+        push_i32(vm, tc, bpvm_bt_estado());
+        return BPVM_OK;
+    case BUILTIN_BT_SCAN: {
+        int32_t ms = pop_i32(vm, tc);
+        char det[128];
+        if (bpvm_bt_buscar((int) ms, det, sizeof det) != 0) return builtin_throw(vm, tc, det);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_FOUND_COUNT:
+        push_i32(vm, tc, bpvm_bt_encontrados());
+        return BPVM_OK;
+    case BUILTIN_BT_FOUND_RSSI: {
+        bpvm_bt_aparato_t a;
+        int32_t i = pop_i32(vm, tc);
+        push_i32(vm, tc, bpvm_bt_encontrado((int) i, &a) == 0 ? a.rssi : 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_FOUND_NAME: case BUILTIN_BT_FOUND_ADDRESS: case BUILTIN_BT_FOUND_ADDRESS_TYPE:
+    case BUILTIN_BT_FOUND_KIND: {
+        bpvm_bt_aparato_t a;
+        const char* s = "";   /* fuera de la lista, "" (la clase sólo pide los que hay) */
+        int32_t i = pop_i32(vm, tc);
+        if (bpvm_bt_encontrado((int) i, &a) == 0)
+            s = id == BUILTIN_BT_FOUND_NAME ? a.nombre : id == BUILTIN_BT_FOUND_ADDRESS ? a.dir
+              : id == BUILTIN_BT_FOUND_ADDRESS_TYPE ? a.tipo : a.clase;
+        uint32_t r = bpvm_heap_alloc_string(vm, s, (uint32_t) strlen(s));
+        if (r == 0u) return builtin_throw(vm, tc, "No space in heap");
+        bpref_push(vm, tc, bpref_regen(vm, r));
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_CONNECT: {
+        uint32_t tref = pop_ref(vm, tc);   /* addressType (el último argumento, arriba) */
+        uint32_t dref = pop_ref(vm, tc);   /* address */
+        char dir[BPVM_BT_DIR + 8], tipo[BPVM_BT_TIPO + 8], det[128];
+        (void) read_bp_string(vm, dref, dir, sizeof dir);
+        (void) read_bp_string(vm, tref, tipo, sizeof tipo);
+        int r = bpvm_bt_conectar(dir, tipo, det, sizeof det);
+        if (r < 0) return builtin_throw(vm, tc, det);
+        push_i32(vm, tc, r);
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_DISCONNECT: case BUILTIN_BT_FORGET: {
+        char dir[BPVM_BT_DIR + 8];
+        (void) read_bp_string(vm, pop_ref(vm, tc), dir, sizeof dir);
+        if (id == BUILTIN_BT_DISCONNECT) bpvm_bt_desconectar(dir); else bpvm_bt_olvidar(dir);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_IS_CONNECTED: {
+        char dir[BPVM_BT_DIR + 8];
+        (void) read_bp_string(vm, pop_ref(vm, tc), dir, sizeof dir);
+        push_i32(vm, tc, bpvm_bt_conectado(dir) ? 1 : 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_BT_KIND_OF: {
+        char dir[BPVM_BT_DIR + 8], clase[BPVM_BT_CLASE];
+        (void) read_bp_string(vm, pop_ref(vm, tc), dir, sizeof dir);
+        bpvm_bt_clase_de(dir, clase, sizeof clase);
+        uint32_t r = bpvm_heap_alloc_string(vm, clase, (uint32_t) strlen(clase));
+        if (r == 0u) return builtin_throw(vm, tc, "No space in heap");
+        bpref_push(vm, tc, bpref_regen(vm, r));
+        return BPVM_OK;
+    }
 
     case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
         uint32_t r = bpvm_heap_alloc_string(vm, BPVM_EOL, sizeof(BPVM_EOL) - 1u);

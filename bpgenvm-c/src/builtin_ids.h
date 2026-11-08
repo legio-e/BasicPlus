@@ -314,7 +314,23 @@ enum {
     BUILTIN_WIFI_HAS_IP                  = 306,   /* __wifiHasIp(): boolean */
     BUILTIN_WIFI_IS_AVAILABLE            = 307,   /* __wifiIsAvailable(): boolean */
     BUILTIN_THROW_ERROR                  = 308,   /* __throwError(tipo: integer, msg: string) */
-    BUILTIN__CUANTOS = 309
+    BUILTIN_BT_IS_AVAILABLE              = 309,   /* __btIsAvailable(): boolean */
+    BUILTIN_BT_TURN_ON                   = 310,   /* __btTurnOn() */
+    BUILTIN_BT_TURN_OFF                  = 311,   /* __btTurnOff() */
+    BUILTIN_BT_GET_STATE                 = 312,   /* __btGetState(): integer */
+    BUILTIN_BT_SCAN                      = 313,   /* __btScan(ms: integer) */
+    BUILTIN_BT_FOUND_COUNT               = 314,   /* __btFoundCount(): integer */
+    BUILTIN_BT_FOUND_NAME                = 315,   /* __btFoundName(i: integer): string */
+    BUILTIN_BT_FOUND_ADDRESS             = 316,   /* __btFoundAddress(i: integer): string */
+    BUILTIN_BT_FOUND_ADDRESS_TYPE        = 317,   /* __btFoundAddressType(i: integer): string */
+    BUILTIN_BT_FOUND_KIND                = 318,   /* __btFoundKind(i: integer): string */
+    BUILTIN_BT_FOUND_RSSI                = 319,   /* __btFoundRssi(i: integer): integer */
+    BUILTIN_BT_CONNECT                   = 320,   /* __btConnect(address: string, addressType: string): boolean */
+    BUILTIN_BT_DISCONNECT                = 321,   /* __btDisconnect(address: string) */
+    BUILTIN_BT_FORGET                    = 322,   /* __btForget(address: string) */
+    BUILTIN_BT_IS_CONNECTED              = 323,   /* __btIsConnected(address: string): boolean */
+    BUILTIN_BT_KIND_OF                   = 324,   /* __btKindOf(address: string): string */
+    BUILTIN__CUANTOS = 325
 };
 
 #endif

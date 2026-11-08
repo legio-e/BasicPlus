@@ -189,6 +189,13 @@ La Nucleo (384 KB de heap de BP) y la DK2 (768) van holgadas: las justas siguen 
   entró después, `_heap_start` baja 6.432 B en las dos. En la C6, su bloque de la VM puede volver a sus 128 KB (el
   tope) y el resto queda para el sistema; en la C3, lo que dé su bloque contiguo mayor: en la placa.
 
+## El Bluetooth en todas las imágenes (8-nov)
+
+Lo común del Bluetooth (`bpvm_bt.c`, V8/H2) entra en todas las imágenes, también en las que no tienen radio: **156 B
+de RAM fija** (medido en la Pico: 96 de datos, el texto del motivo, y 60 de `.bss`) y 3 KB de flash. Lo grande no está
+fijo: las listas de lo encontrado y lo conectado (~1,4 KB) se reservan al encender el Bluetooth la primera vez, en una
+placa con radio, y el búfer de `/sys/bluetooth.json` (1,5 KB), sólo mientras se lee.
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las

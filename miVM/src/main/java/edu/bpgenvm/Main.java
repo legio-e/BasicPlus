@@ -301,6 +301,7 @@ public class Main {
         // borre»): la de --flash-dir, o la del usuario, la misma que la VM-C. Las rutas de la placa ("/sys/x") van ahí.
         vm.setFlashDir(java.nio.file.Paths.get(flash != null ? flash
                 : System.getProperty("user.home") + java.io.File.separator + ".basicplus" + java.io.File.separator + "flash"));
+        vm.arrancaBluetooth();   // V8/H2: como una placa al arrancar (/sys/bluetooth.json, "enabled": los recordados)
 
         // A1.4.b: si se pidió --listen, levantar el servidor de debug
         // ANTES de cargar el módulo. Con --wait-client la VM bloquea hasta

@@ -48,7 +48,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_npack_carga.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_nativa.c \
           src/net.c src/net_host.c \
-          src/bpvm_sonido.c src/sonido_host.c           src/bpvm_wifi.c src/wifi_host.c src/bpvm_red.c src/json_min.c \
+          src/bpvm_sonido.c src/sonido_host.c           src/bpvm_wifi.c src/wifi_host.c src/bpvm_bt.c src/bt_host.c src/bpvm_red.c src/json_min.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
           third_party/littlefs/bd/lfs_filebd.c

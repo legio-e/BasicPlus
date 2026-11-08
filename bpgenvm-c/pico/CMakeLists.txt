@@ -109,6 +109,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_bus.c            # V7/H6.c G4.a1: los buses SPI/I2C, compartidos (la HAL BP)
     ${BPVM_C_ROOT}/src/bpvm_sonido.c         # V8/H4 (#708): el sonido, lo común de la HAL BP
     ${BPVM_C_ROOT}/src/bpvm_wifi.c           # V8/H3: la WiFi, el enlace, lo común de la HAL BP
+    ${BPVM_C_ROOT}/src/bpvm_bt.c             # V8/H2: el Bluetooth, lo común de la HAL BP
     ${BPVM_C_ROOT}/src/bpvm_red.c            # V8/H3: la IP de la placa, lo común
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
     ${BPVM_C_ROOT}/src/bpvm_npack_carga.c    # V7/H7 (Boot 2, fase 2): el cargador comun de los motores

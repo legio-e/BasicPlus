@@ -1,0 +1,93 @@
+// AirBluetooth.bp — V8/H2 (8-nov): el Bluetooth del PC, simulado, igual en las dos VMs: encender y apagar, buscar,
+// conectar (la primera vez lo recuerda en /sys/bluetooth.json), desconectar, olvidar y los recordados. En el PC, dos
+// aparatos de mentira: «Teclado simulado», que en la búsqueda no dice qué es (como uno de verdad), y «Ratón simulado».
+//
+// El fichero es el de la flash del PC (#808): en la red, una carpeta nueva por VM; en el PC de quien lo corra, la suya.
+// Por eso la prueba empieza y acaba limpiando: olvida lo recordado y lo deja apagado.
+module AirBluetooth
+  import Air
+
+  function limpia(bt: Air.Bluetooth)
+    var l: List := bt.listDevices()
+    var i: integer := 0
+    while i < l.length() do
+      bt.forget(Air.BtDevice(l.get(i)))
+      i := i + 1
+    endwh
+    bt.setEnabled(false)
+    bt.turnOff()
+  end limpia
+
+  function cuenta(que: string, l: List)
+    print que + ": " + l.length()
+    var i: integer := 0
+    while i < l.length() do
+      var d: Air.BtDevice := Air.BtDevice(l.get(i))
+      print "  " + d.getName() + " " + d.getAddress() + " " + d.getAddressType() + " " + d.getKind() + " " + d.getRssi() + " conectado=" + d.isConnected()
+      i := i + 1
+    endwh
+  end cuenta
+
+  public function main()
+    var bt: Air.Bluetooth := Air.Bluetooth()
+    limpia(bt)
+    print "disponible: " + bt.isAvailable()
+    print "encendido: " + bt.isOn()
+    try
+      bt.scan(100)
+      print "no tenia que llegar aqui"
+    catch e: RuntimeError
+      print e.msg
+    endtry
+    print "turnOn: " + bt.turnOn()
+    print "encendido: " + bt.isOn()
+    print "otra vez turnOn: " + bt.turnOn()
+
+    var vistos: List := bt.scan(300)
+    cuenta("vistos", vistos)
+    var teclado: Air.BtDevice := Air.BtDevice(vistos.get(0))
+    var raton: Air.BtDevice := Air.BtDevice(vistos.get(1))
+    print "connect teclado: " + bt.connect(teclado)
+    print "teclado conectado: " + teclado.isConnected()
+    print "algo conectado: " + bt.isConnected()
+    cuenta("recordados", bt.listDevices())
+    cuenta("vistos, con el teclado conectado", bt.scan(100))
+    print "connect raton: " + bt.connect(raton)
+    print "connect raton otra vez: " + bt.connect(raton)
+    cuenta("recordados", bt.listDevices())
+    print "el fichero: " + readFile("/sys/bluetooth.json")
+
+    var nadie: Air.BtDevice := Air.BtDevice("Nadie", "02:00:00:00:00:09", "random", "unknown", 0)
+    print "connect a uno que no esta: " + bt.connect(nadie)
+
+    bt.disconnect(teclado)
+    print "teclado, desconectado: " + teclado.isConnected()
+    print "raton, sigue: " + raton.isConnected()
+    cuenta("recordados", bt.listDevices())
+
+    bt.turnOff()
+    print "apagado: " + bt.isOn() + " algo conectado: " + bt.isConnected()
+    try
+      bt.connect(teclado)
+      print "no tenia que llegar aqui"
+    catch e: RuntimeError
+      print e.msg
+    endtry
+    print "turnOn: " + bt.turnOn()
+    print "los recordados vuelven solos: teclado=" + teclado.isConnected() + " raton=" + raton.isConnected()
+
+    bt.forget(raton)
+    print "raton, olvidado: " + raton.isConnected()
+    cuenta("recordados", bt.listDevices())
+
+    print "arranca encendido: " + bt.isEnabled()
+    bt.setEnabled(true)
+    print "arranca encendido: " + bt.isEnabled()
+    print "el fichero: " + readFile("/sys/bluetooth.json")
+
+    limpia(bt)
+    cuenta("recordados", bt.listDevices())
+    print "encendido: " + bt.isOn() + " arranca encendido: " + bt.isEnabled()
+    print "fin"
+  end main
+end AirBluetooth

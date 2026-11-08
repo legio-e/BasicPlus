@@ -420,6 +420,40 @@ búsqueda por nombre de la GUI; la lista de los apuntados no mantiene vivos los 
 - **el paso 4, el programa de configuración** (Eduardo: *«El punto 4 habrá que detallarlo»*): sus pantallas y cómo
   se lanza.
 
+### El paso 1, hecho (8-nov): el Bluetooth simulado del PC, en las dos VMs
+
+El orden de trabajo (Eduardo: *«OK»*): 1) el Bluetooth simulado del PC; 2) el teclado del SO y `Keyboards.Keyboard`;
+3) el ratón; 4) la GUI; 5) las placas (NimBLE en la S3, la C5 y la P4); 6) el programa de configuración.
+
+- **Lo común, en la HAL BP** (`bpvm_bt.c`, como `bpvm_wifi.c`): el estado (0 apagado, 1 encendiéndose, 2 encendido,
+  3 buscando), lo que encontró la última búsqueda (hasta 16, sin los conectados), lo conectado (hasta 8) y, al
+  encender, los recordados, que se conectan por su dirección. La radio, una tabla por nombre (`'BT  '`); la del PC,
+  `bt_host.c`, y en la VM-Java, `Bluetooth.java`, las dos con los mismos dos aparatos: «Teclado simulado»
+  (`02:00:00:00:00:01`, que en la búsqueda dice `unknown`, como uno de verdad, y al conectarlo, `keyboard`) y «Ratón
+  simulado» (`02:00:00:00:00:02`). Los builtins, del 309 al 324 (`BUILTINS.md`).
+- **El fichero, `/sys/bluetooth.json`**: lo escribe la clase, en BP y con `Json`; la VM sólo lo lee, al encender y al
+  arrancar. Los aparatos van en un objeto con la dirección de clave, no en una lista: `json_min`, el lector de la VM-C,
+  no lee listas.
+  ```
+  { "enabled": true,
+    "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }
+  ```
+- **Lo que he añadido a la lista de Eduardo**, para que él lo valide: `isOn()`; `isEnabled()` y `setEnabled(b)`, el
+  `"enabled"` del fichero (si arranca encendido; sin ellos, nadie podía activarlo); `turnOn()` da `true` cuando está
+  listo, como `Air.Wifi`, y espera hasta 5 s; `connect` de uno que no está da `false`, y con el Bluetooth apagado,
+  un `RuntimeError`, como `scan`. Y una regla: **`turnOn()` conecta todos los recordados**, también el que se
+  desconectó con `disconnect`; lo trato como un arranque de la radio.
+- **El fin de RUN**: si el programa lo tocó, vuelve a lo que diga el fichero, como la WiFi.
+- **La memoria, pensando en la C3 y la C6** (`MEMORIA.md`: van justas): `bpvm_bt.c` entra en todas las imágenes, y en
+  una placa sin radio gasta 156 B de RAM (medido en la Pico: 96 de datos y 60 de bss; la WiFi, 444) y 3 KB de flash. Las
+  listas (~1,4 KB) se reservan al encender la primera vez, y el búfer del fichero (1,5 KB), sólo mientras se lee, con
+  `bpvm_malloc_os`, como el sonido.
+- **Hizo falta `#808`**: el `/sys` del PC iba a la raíz del disco (`C:\sys`). Ahora las dos VMs del PC tienen una
+  carpeta que hace de flash (`~/.basicplus/flash`, o `--flash-dir=`), y la red le da a cada ejecución una nueva.
+- **La prueba**, `bpgenvm-c/samples/AirBluetooth.bp`, en la red: las dos VMs dicen lo mismo. Y a mano, el arranque:
+  con el fichero en `"enabled"`, la VM arranca encendida y con los recordados conectados.
+- **Lo que no tiene**: el micro simulado del IDE (`bpvm-sim`) es una placa, y sin radio: `isAvailable()` da `false`.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
