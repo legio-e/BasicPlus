@@ -579,6 +579,77 @@ function event tecla(t: Keyboards.Keyboard, k: integer, c: string)
 end tecla
 ```
 
+### El paso 3: el ratón, `Mice.Mouse` (9-nov)
+
+**Lo que ve el programa** (lo propuse el 9-nov, y Eduardo, a los cinco puntos: *«OK»*):
+
+```basic
+import Mice
+var ra: Mice.Mouse := Mice.Mouse()
+ra.onPress := pant::pulsado
+ra.onMove := pant::movido
+ra.onWheel := pant::rueda
+
+function event pulsado(r: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
+  if b == Mice.Button.LEFT then
+    print "clic en " + x + ", " + y
+  endif
+end pulsado
+
+function event movido(r: Mice.Mouse, x: integer, y: integer)
+  if r.isPressed(Mice.Button.LEFT) then
+    print "arrastrando por " + x + ", " + y
+  endif
+end movido
+
+function event rueda(r: Mice.Mouse, d: integer)   // +1 hacia arriba, -1 hacia abajo, por cada muesca
+```
+
+Preguntando, desde cualquier hilo, el ratón del SO tal como está: `getX()`, `getY()` e `isPressed(b)`; y además
+`isConnected()` y `close()`.
+
+1. **Tres eventos**: al apretar un botón (`onPress`), al moverse (`onMove`) y la rueda (`onWheel`). Al soltar, nada,
+   como en el teclado: más adelante, con el tiempo de las teclas. Para arrastrar, `onMove` con `isPressed`.
+2. **`onPress`, y no el `onClick` del ejemplo del 8-nov**: el `onClick` de un `Gui.Button` salta al soltar.
+3. **Los botones, el enum `Mice.Button`**: `LEFT`, `RIGHT`, `MIDDLE`, `BACK` y `FORWARD`, con los valores de los bits del
+   informe de un ratón HID (1, 2, 4, 8 y 16). El botón va solo, así que se compara directamente
+   (`b == Mice.Button.LEFT`); la tecla no, porque lleva pegados los modificadores.
+4. **Al moverse, sólo la última posición**: un ratón Bluetooth manda unos 100 informes por segundo. Si entre dos turnos
+   pasa por (10,10), (12,11) y (15,13), el programa recibe un solo `onMove`, con (15,13). Los botones y la rueda no se
+   pierden: van en orden, como las teclas.
+5. **La rueda horizontal, de momento no.**
+
+**Lo que ya estaba decidido** (8-nov): el ratón va con una pantalla (sin pantalla se conecta, pero no hace nada); uno del
+SO, que junta todos los ratones conectados, y los del programa; en el PC, el de la ventana de la GUI, sólo con «Ratón
+simulado» conectado, y sigue haciendo de táctil en la GUI. Sin GUI, en el PC no hay ratón.
+
+**El plan para programarlo** (lo interno es mío):
+- **El ratón del SO, en la HAL BP** (`bpvm_raton.c`; en la VM-Java, `Raton.java`), con su cerrojo: la posición y los
+  botones tal como están (lo que dan `getX`, `getY` e `isPressed`) y los avisos de los botones y de la rueda que faltan
+  por repartir (16), cada uno con el punto donde pasó. Moverse no deja aviso: cada ratón del programa recuerda la última
+  posición que se le avisó, y si la del SO es otra, le toca un `onMove`.
+- **Los ratones del programa** (8 a la vez), como los teclados: `__msOpen(this)` apunta la referencia entera, el hilo que
+  lo crea y la ranura de su `__despacha`.
+- **El reparto**, después del de las teclas y con sus reglas (uno en la cola por ratón; con la cola llena, en el turno
+  siguiente; quien se queda atrás pierde los avisos más viejos). Con un aviso pendiente, si el ratón del programa no
+  está en su punto, primero un `onMove` hasta allí (así el programa ve llegar el ratón adonde se aprieta), y después el
+  aviso; sin avisos, un `onMove` a la posición del SO, si ha cambiado. `__despacha(tipo, dato, x, y)` hace el `raise`.
+- **Los builtins, del 332 al 338**: `__msOpen`, `__msClose`, `__msGetX`, `__msGetY`, `__msGetButtons`,
+  `__msInject(x, y, botones, rueda)` (para las pruebas: como un informe, con el punto en vez del desplazamiento) y
+  `__msIsConnected`.
+- **En el PC**: en la VM-C y el micro simulado, los eventos de ratón de SDL (moverse, los botones y la rueda), con el punto
+  pasado a la pantalla tal como se ve: la ventana no gira con la pantalla, y se hace la cuenta que hace LVGL con la
+  táctil. En la VM-Java, un vigilante de los eventos de ratón de AWT sobre la ventana de Swing. Arrastrando fuera de la
+  ventana, el punto se queda en el borde. El guion de la ventana SDL, con `mueve`, `arrastra` y `rueda`.
+- **El módulo `Mice`**, en el pack de la stdlib, no en las imágenes.
+- **La prueba de la red**, `Raton.bp`, sin ventana y con `__msInject`: los eventos, su orden, el punto de un clic aunque
+  el ratón ya se haya ido, la rueda, dos ratones y `close()`. Lo que depende del reparto (cuántos `onMove` llegan) no
+  se imprime: sólo que llega la última posición, y en orden.
+- **Un límite, a la vista**: `isPressed` dice cómo está el botón ahora. Si el programa va lento, el `onMove` del final
+  de un arrastre puede llegarle con el botón ya suelto. Lo resuelve el evento al soltar, cuando llegue.
+- **Para la placa (el paso 5)**: el ratón manda desplazamientos, que se suman y se limitan a la pantalla; y la posición
+  de partida, el centro.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
