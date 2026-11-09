@@ -1,0 +1,291 @@
+// Keyboards.bp — V8/H2, paso 2 (9-nov): EL TECLADO, para los programas (V8_IDEAS §E1, «El paso 2»). El módulo en
+// plural y la clase en singular (Eduardo: «Los módulos en plural la clase en singular»).
+//
+// UNA TECLA es un int32 (Eduardo: «la parte baja el código de la tecla y la parte alta los bits de estado»): abajo, el
+// código del estándar HID, el que manda un teclado Bluetooth o USB, con nombre en el enum Key; arriba, Ctrl, Shift, Alt,
+// Windows y AltGr (el byte de modificadores del estándar HID) y los bloqueos. Para no mirar bits: getCode, isShift,
+// isCtrl, isAlt, isAltGr, isWin, isFn, isCapsLock, isNumLock, isScrollLock; e isKey, para comparar con una tecla (un
+// enum no se compara con un entero). Su carácter va aparte: "a", "Ñ"... o "" en una especial (Enter, las flechas).
+//
+//   var tk: Keyboards.Keyboard := Keyboards.Keyboard()
+//   tk.onKey := pant::tecla                    // un aviso por pulsación, en el hilo que creó el teclado
+//
+//   function event tecla(t: Keyboards.Keyboard, k: integer, c: string)
+//     if Keyboards.isKey(k, Keyboards.Key.ENTER) then
+//       print "Enter"
+//     elseif Keyboards.isCtrl(k) and Keyboards.isKey(k, Keyboards.Key.C) then
+//       print "Ctrl+C"
+//     elseif c != "" then
+//       print "tecla: " + c
+//     endif
+//   end tecla
+//
+// O preguntando, desde cualquier hilo: hasKey() y readKey(), que da el int32 (el primero que lee se la lleva), y
+// getChar(), el carácter de la última leída.
+//
+// LOS DOS NIVELES (Eduardo, 8-nov): el teclado del SO, único y con su búfer, y los de los programas, uno o varios: cada
+// tecla se avisa a todos, y preguntar lee el búfer del SO. Los eventos van al hilo que creó el teclado, que tiene que
+// estar corriendo (un bucle con sleep, por ejemplo). En un programa con GUI, el teclado lo crea la propia GUI, en su
+// hilo (el paso 4). Una tecla que se mantiene no repite; los modificadores solos (Shift, Ctrl...) no son teclas.
+//
+// EN EL PC, las teclas de la ventana de la GUI, sólo con un teclado conectado: «Teclado simulado», de Air.Bluetooth. Sin
+// GUI, en el PC no hay teclado. El carácter, el del sistema; en las placas, el de las tablas de BasicPlus (el paso 5).
+module Keyboards
+  import Core
+
+  // Los códigos del estándar HID (USB HID Usage Tables, la página del teclado). END_KEY, porque `end` es palabra reservada.
+  public enum Key
+    A := 4
+    B := 5
+    C := 6
+    D := 7
+    E := 8
+    F := 9
+    G := 10
+    H := 11
+    I := 12
+    J := 13
+    K := 14
+    L := 15
+    M := 16
+    N := 17
+    O := 18
+    P := 19
+    Q := 20
+    R := 21
+    S := 22
+    T := 23
+    U := 24
+    V := 25
+    W := 26
+    X := 27
+    Y := 28
+    Z := 29
+    D1 := 30
+    D2 := 31
+    D3 := 32
+    D4 := 33
+    D5 := 34
+    D6 := 35
+    D7 := 36
+    D8 := 37
+    D9 := 38
+    D0 := 39
+    ENTER := 40
+    ESCAPE := 41
+    BACKSPACE := 42
+    TAB := 43
+    SPACE := 44
+    MINUS := 45
+    EQUAL := 46
+    LEFT_BRACKET := 47
+    RIGHT_BRACKET := 48
+    BACKSLASH := 49
+    NON_US_HASH := 50
+    SEMICOLON := 51
+    QUOTE := 52
+    GRAVE := 53
+    COMMA := 54
+    PERIOD := 55
+    SLASH := 56
+    CAPS_LOCK := 57
+    F1 := 58
+    F2 := 59
+    F3 := 60
+    F4 := 61
+    F5 := 62
+    F6 := 63
+    F7 := 64
+    F8 := 65
+    F9 := 66
+    F10 := 67
+    F11 := 68
+    F12 := 69
+    PRINT_SCREEN := 70
+    SCROLL_LOCK := 71
+    PAUSE := 72
+    INSERT := 73
+    HOME := 74
+    PAGE_UP := 75
+    DELETE := 76
+    END_KEY := 77
+    PAGE_DOWN := 78
+    RIGHT := 79
+    LEFT := 80
+    DOWN := 81
+    UP := 82
+    NUM_LOCK := 83
+    KP_DIVIDE := 84
+    KP_MULTIPLY := 85
+    KP_MINUS := 86
+    KP_PLUS := 87
+    KP_ENTER := 88
+    KP_1 := 89
+    KP_2 := 90
+    KP_3 := 91
+    KP_4 := 92
+    KP_5 := 93
+    KP_6 := 94
+    KP_7 := 95
+    KP_8 := 96
+    KP_9 := 97
+    KP_0 := 98
+    KP_PERIOD := 99
+    NON_US_BACKSLASH := 100
+    MENU := 101
+    POWER := 102
+    KP_EQUAL := 103
+    F13 := 104
+    F14 := 105
+    F15 := 106
+    F16 := 107
+    F17 := 108
+    F18 := 109
+    F19 := 110
+    F20 := 111
+    F21 := 112
+    F22 := 113
+    F23 := 114
+    F24 := 115
+    LEFT_CTRL := 224
+    LEFT_SHIFT := 225
+    LEFT_ALT := 226
+    LEFT_WIN := 227
+    RIGHT_CTRL := 228
+    RIGHT_SHIFT := 229
+    ALTGR := 230
+    RIGHT_WIN := 231
+  end Key
+
+  // ---- Lo que lleva el int32 de una tecla ----
+
+  // El código de la tecla (el estándar HID): lo de abajo.
+  public function getCode(k: integer): integer
+    return k & 65535
+  end getCode
+
+  // ¿Es esa tecla? Keyboards.isKey(k, Keyboards.Key.ENTER)
+  public function isKey(k: integer, key: Key): boolean
+    return (k & 65535) == integer(key)
+  end isKey
+
+  // Los bits de estado: el byte de modificadores del estándar HID (16 Ctrl izquierdo, 17 Shift izquierdo, 18 Alt, 19
+  // Windows izquierdo, 20 Ctrl derecho, 21 Shift derecho, 22 AltGr, 23 Windows derecho) y los bloqueos (24 Bloq Mayús,
+  // 25 Bloq Num, 26 Bloq Despl) y Fn (27; casi ningún teclado lo manda: lo resuelve el propio teclado).
+  public function isCtrl(k: integer): boolean
+    return (k & ((1 shl 16) | (1 shl 20))) != 0
+  end isCtrl
+
+  public function isShift(k: integer): boolean
+    return (k & ((1 shl 17) | (1 shl 21))) != 0
+  end isShift
+
+  // El Alt de la izquierda; el de la derecha es AltGr.
+  public function isAlt(k: integer): boolean
+    return (k & (1 shl 18)) != 0
+  end isAlt
+
+  public function isAltGr(k: integer): boolean
+    return (k & (1 shl 22)) != 0
+  end isAltGr
+
+  public function isWin(k: integer): boolean
+    return (k & ((1 shl 19) | (1 shl 23))) != 0
+  end isWin
+
+  public function isCapsLock(k: integer): boolean
+    return (k & (1 shl 24)) != 0
+  end isCapsLock
+
+  public function isNumLock(k: integer): boolean
+    return (k & (1 shl 25)) != 0
+  end isNumLock
+
+  public function isScrollLock(k: integer): boolean
+    return (k & (1 shl 26)) != 0
+  end isScrollLock
+
+  public function isFn(k: integer): boolean
+    return (k & (1 shl 27)) != 0
+  end isFn
+
+  // ---- Los builtins del teclado del SO (V8/H2, paso 2: del 325 al 331, BUILTINS.md) ----
+  public function __kbOpen(t: Object)   // Object y no any: `any` no sale en la interfaz de un módulo
+    inline CALL_BUILTIN 325
+  end __kbOpen
+  public function __kbClose(t: Object)
+    inline CALL_BUILTIN 326
+  end __kbClose
+  public function __kbHasKey(): boolean
+    inline CALL_BUILTIN 327
+  end __kbHasKey
+  public function __kbReadKey(): integer
+    inline CALL_BUILTIN 328
+  end __kbReadKey
+  public function __kbReadChar(): integer
+    inline CALL_BUILTIN 329
+  end __kbReadChar
+  // Para las pruebas: mete una tecla como si llegara de un teclado de verdad (sin mirar si hay uno conectado).
+  public function __kbInject(k: integer, cp: integer)
+    inline CALL_BUILTIN 330
+  end __kbInject
+  public function __kbIsConnected(): boolean
+    inline CALL_BUILTIN 331
+  end __kbIsConnected
+
+  // ---- El teclado del programa ----
+  public class Keyboard
+    var ultimo: string
+
+    // Un aviso por pulsación: el teclado, el int32 de la tecla y su carácter ("" en una especial).
+    event onKey(t: Keyboard, k: integer, c: string)
+
+    // Se apunta en la VM: desde ahora, cada tecla le llega como evento, en el hilo que lo crea.
+    public function Keyboard()
+      this.ultimo := ""
+      __kbOpen(this)
+    end Keyboard
+
+    // ¿Hay alguna tecla esperando en el búfer del SO?
+    public function hasKey(): boolean
+      return __kbHasKey()
+    end hasKey
+
+    // La siguiente tecla del búfer del SO, el int32 (0 si no hay); el primero que lee se la lleva.
+    public function readKey(): integer
+      var k: integer := __kbReadKey()
+      this.ultimo := this.caracter(__kbReadChar())
+      return k
+    end readKey
+
+    // El carácter de la última que leyó readKey ("" si era una especial).
+    public function getChar(): string
+      return this.ultimo
+    end getChar
+
+    // ¿Hay un teclado conectado? (En el PC, «Teclado simulado», de Air.Bluetooth.)
+    public function isConnected(): boolean
+      return __kbIsConnected()
+    end isConnected
+
+    // Deja de recibir eventos (readKey sigue valiendo).
+    public function close()
+      __kbClose(this)
+    end close
+
+    // Lo llama la VM, con cada tecla nueva, en el hilo que creó el teclado: no es para los programas.
+    public function __despacha(k: integer, cp: integer)
+      raise onKey(this, k, this.caracter(cp))
+    end __despacha
+
+    function caracter(cp: integer): string
+      if cp <= 0 or cp > 1114111 or (cp >= 55296 and cp <= 57343) then
+        return ""
+      endif
+      var sb: StringBuilder := StringBuilder()
+      sb.appendChar(cp)
+      return sb.toString()
+    end caracter
+  end Keyboard
+
+end Keyboards

@@ -73,6 +73,20 @@ public final class GuiBackend {
     }
 
     private JFrame frame;
+
+    /** V8/H2, paso 2 (9-nov) — las teclas de la ventana, al teclado del SO de la VM (Teclado.java). La VM pone a quien
+     *  se las da, y ese mira si hay un teclado conectado (en el PC, el simulado del Bluetooth): sin él, no teclea. El
+     *  código es el del estándar HID y el estado, los bits del teclado del SO (TeclasSwing). */
+    public interface TecladoPC {
+        void pulsada(int codigo, int estado);
+        void texto(int cp, int estado);
+        void soltada(int codigo);
+    }
+    private volatile TecladoPC tecladoPC;
+    private final TeclasSwing teclas = new TeclasSwing();
+    private java.awt.KeyEventDispatcher despachador;   // el de la ventana abierta; se quita al cerrarla
+    public void setTecladoPC(TecladoPC t) { this.tecladoPC = t; }
+
     private int screenHandle = 0;
     private int screenW = 480, screenH = 320;     // tamaño por defecto (configurable)
     private int rotation = 0;                     // 0/90/180/270 (Gui.setRotation)
@@ -761,6 +775,18 @@ public final class GuiBackend {
                         events.offer(new int[]{EVENT_CLOSE, 0});
                     }
                 });
+                // V8/H2, paso 2 — las teclas de ESTA ventana, al teclado del SO, sin quitárselas a Swing (devuelve false)
+                final JFrame esta = frame;
+                despachador = ev -> {
+                    TecladoPC t = tecladoPC;
+                    java.awt.Component c = ev.getComponent();
+                    if (t != null && (c == esta || javax.swing.SwingUtilities.getWindowAncestor(c) == esta)) teclas.evento(ev, t);
+                    return false;
+                };
+                java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(despachador);
+                frame.addWindowFocusListener(new java.awt.event.WindowAdapter() {
+                    @Override public void windowLostFocus(java.awt.event.WindowEvent e) { teclas.olvida(); }
+                });
                 frame.setVisible(true);
             });
         } catch (Exception e) {
@@ -781,6 +807,9 @@ public final class GuiBackend {
         final JFrame f = frame;
         if (f == null) return;
         frame = null;
+        final java.awt.KeyEventDispatcher d = despachador;   // V8/H2, paso 2: sus teclas, ya no
+        despachador = null;
+        if (d != null) java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(d);
         try { SwingUtilities.invokeAndWait(f::dispose); }
         catch (Exception ignore) { /* si el EDT ya no esta, no hay nada que cerrar */ }
     }

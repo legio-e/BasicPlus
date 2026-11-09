@@ -22,6 +22,7 @@
 #include "bpvm_platform.h"
 #include "bpvm_bus.h"     /* V7/H12, 2b: el árbitro de los buses, creado con un solo hilo vivo */
 #include "bpvm_spi.h"     /* y la memoria de la fachada SPI */
+#include "bpvm_teclado.h" /* V8/H2, paso 2: el reparto de las teclas, entre turno y turno */
 #include <limits.h>
 #include <stdio.h>
 
@@ -402,6 +403,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         const int de_viaje = tc->al_run0;
         tc->al_run0 = 0;
         if (id >= 0 && id < 2) q->cuantos[id]++;
+        bpvm_teclado_reparte(vm);   /* V8/H2, paso 2: las teclas nuevas, como eventos de cada teclado (en la cola de siempre) */
         bpvm_event_drain_one(vm, tc);
         bpvm_destruir_inyecta(vm, tc);   /* V7 #668: y lo pendiente de destruir, como un evento más */
         q->con_hilo++;

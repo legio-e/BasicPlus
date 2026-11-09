@@ -334,7 +334,14 @@ public enum Builtin {
     BT_DISCONNECT("__btDisconnect", 8),   // [321] __btDisconnect(address: string)
     BT_FORGET("__btForget", 8),   // [322] __btForget(address: string)
     BT_IS_CONNECTED("__btIsConnected", 8),   // [323] __btIsConnected(address: string): boolean
-    BT_KIND_OF("__btKindOf", 8);   // [324] __btKindOf(address: string): string
+    BT_KIND_OF("__btKindOf", 8),   // [324] __btKindOf(address: string): string
+    KB_OPEN("__kbOpen"),   // [325] __kbOpen(t: any)
+    KB_CLOSE("__kbClose"),   // [326] __kbClose(t: any)
+    KB_HAS_KEY("__kbHasKey"),   // [327] __kbHasKey(): boolean
+    KB_READ_KEY("__kbReadKey"),   // [328] __kbReadKey(): integer
+    KB_READ_CHAR("__kbReadChar"),   // [329] __kbReadChar(): integer
+    KB_INJECT("__kbInject"),   // [330] __kbInject(k: integer, cp: integer)
+    KB_IS_CONNECTED("__kbIsConnected");   // [331] __kbIsConnected(): boolean
 
     public final String bpName;
     public final int id;

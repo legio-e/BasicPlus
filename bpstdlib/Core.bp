@@ -1905,6 +1905,29 @@ module Core
   function __btKindOf(address: string): string   // el tipo de un aparato conectado (el seguro, de sus informes)
     inline CALL_BUILTIN 324
   end __btKindOf
+  // V8/H2, paso 2 (9-nov) — EL TECLADO DEL SO, para Keyboards.Keyboard (V8_IDEAS §E1, «El paso 2»). Una tecla, un int32:
+  // abajo el código HID y arriba los bits de estado; su carácter, aparte, como código Unicode (0 en una especial).
+  function __kbOpen(t: any)          // apunta un Keyboard: sus eventos, al hilo que lo crea (no lo mantiene vivo)
+    inline CALL_BUILTIN 325
+  end __kbOpen
+  function __kbClose(t: any)         // lo borra: deja de recibir eventos
+    inline CALL_BUILTIN 326
+  end __kbClose
+  function __kbHasKey(): boolean     // ¿hay alguna en el búfer del SO?
+    inline CALL_BUILTIN 327
+  end __kbHasKey
+  function __kbReadKey(): integer    // la saca del búfer (0 si no hay); su carácter se queda para este hilo
+    inline CALL_BUILTIN 328
+  end __kbReadKey
+  function __kbReadChar(): integer   // el carácter de la última que leyó este hilo (0 si ninguno)
+    inline CALL_BUILTIN 329
+  end __kbReadChar
+  function __kbInject(k: integer, cp: integer)   // para las pruebas: entra como una tecla de verdad
+    inline CALL_BUILTIN 330
+  end __kbInject
+  function __kbIsConnected(): boolean   // ¿hay un teclado conectado?
+    inline CALL_BUILTIN 331
+  end __kbIsConnected
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

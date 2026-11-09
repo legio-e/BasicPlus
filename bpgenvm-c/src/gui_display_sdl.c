@@ -21,6 +21,7 @@
 #include "lvgl.h"
 #include "bpvm_gui.h"
 #include "bpvm_gui_host.h"   /* V7 #646: los verbos de la ventana, sólo del PC */
+#include "bpvm_teclado.h"    /* V8/H2, paso 2: las teclas de la ventana, al teclado del SO */
 #include "crc32.h"
 
 static volatile int g_window_closed = 0;
@@ -56,6 +57,9 @@ static int      g_shot_env_read  = 0;
  *
  *   wait <ms>       espera
  *   click <x> <y>   clic izquierdo en coordenadas de PANTALLA
+ *   teclea <texto>  V8/H2, paso 2: el texto, tecla a tecla (pulsar, su carácter, soltar), como un teclado de EE. UU.:
+ *                   las letras, los números y el espacio con su tecla; lo demás de ASCII, sólo su carácter
+ *   tecla <código>  una tecla por su código HID, sin carácter (Enter es 40, Escape 41, la flecha arriba 82)
  *   shot            captura PNG (bp_shot_NNNN.png)
  *   quit            cierra la ventana (termina el programa)
  *
@@ -95,6 +99,60 @@ static void mouse_event(uint32_t type, int x, int y) {
         e.button.clicks = 1;
     }
     SDL_PushEvent(&e);
+}
+
+/* V8/H2, paso 2 — una tecla del guion, como la manda SDL: pulsarla, su carácter (si lo da) y soltarla. Entra por el mismo
+ * vigilante que las de verdad (lvgl_watch), y de ahí al teclado del SO, si hay un teclado conectado. */
+static void guion_tecla(int sc, unsigned mod, const char* texto) {
+    SDL_Event e;
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = SDL_KEYDOWN;
+    e.key.windowID = g_win_id;
+    e.key.state = SDL_PRESSED;
+    e.key.keysym.scancode = (SDL_Scancode) sc;
+    e.key.keysym.sym = SDL_GetKeyFromScancode((SDL_Scancode) sc);
+    e.key.keysym.mod = (Uint16) mod;
+    SDL_PushEvent(&e);
+    if (texto && *texto) {
+        SDL_memset(&e, 0, sizeof(e));
+        e.type = SDL_TEXTINPUT;
+        e.text.windowID = g_win_id;
+        snprintf(e.text.text, sizeof(e.text.text), "%s", texto);
+        SDL_PushEvent(&e);
+    }
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = SDL_KEYUP;
+    e.key.windowID = g_win_id;
+    e.key.state = SDL_RELEASED;
+    e.key.keysym.scancode = (SDL_Scancode) sc;
+    e.key.keysym.sym = SDL_GetKeyFromScancode((SDL_Scancode) sc);
+    e.key.keysym.mod = (Uint16) mod;
+    SDL_PushEvent(&e);
+}
+
+static void guion_teclea(const char* s) {
+    for (; *s; s++) {
+        unsigned char c = (unsigned char) *s;
+        char t[2];
+        int sc = 0;
+        unsigned mod = 0;
+        if (c >= 0x80) continue;   /* sólo ASCII */
+        t[0] = (char) c; t[1] = '\0';
+        if (c >= 'a' && c <= 'z') sc = 4 + (c - 'a');
+        else if (c >= 'A' && c <= 'Z') { sc = 4 + (c - 'A'); mod = KMOD_LSHIFT; }
+        else if (c >= '1' && c <= '9') sc = 30 + (c - '1');
+        else if (c == '0') sc = 39;
+        else if (c == ' ') sc = 44;
+        if (sc != 0) { guion_tecla(sc, mod, t); continue; }
+        {   /* sin tecla en el guion: sólo su carácter, como uno que compone el sistema */
+            SDL_Event e;
+            SDL_memset(&e, 0, sizeof(e));
+            e.type = SDL_TEXTINPUT;
+            e.text.windowID = g_win_id;
+            snprintf(e.text.text, sizeof(e.text.text), "%s", t);
+            SDL_PushEvent(&e);
+        }
+    }
 }
 
 static void script_load(void) {
@@ -144,6 +202,12 @@ static void script_step(void) {
                                                 * lv_timer_handler, y press+release
                                                 * en la misma pasada se pierde. */
         printf("[gui] guion: click %d,%d" BPVM_EOL, x, y); fflush(stdout);
+    } else if (strncmp(line, "teclea ", 7) == 0) {   /* V8/H2, paso 2 */
+        guion_teclea(line + 7);
+        printf("[gui] guion: teclea '%s'" BPVM_EOL, line + 7); fflush(stdout);
+    } else if (sscanf(line, "tecla %d", &x) == 1) {
+        guion_tecla(x, 0, NULL);
+        printf("[gui] guion: tecla %d" BPVM_EOL, x); fflush(stdout);
     } else if (strcmp(line, "shot") == 0) {
         g_shot_requested = 1;
     } else if (strcmp(line, "quit") == 0) {
@@ -151,6 +215,42 @@ static void script_step(void) {
     } else {
         printf("[gui] guion: comando no reconocido: '%s'" BPVM_EOL, line); fflush(stdout);
     }
+}
+
+/* V8/H2, paso 2 (9-nov) — el estado de SDL, en los bits del teclado del SO: el byte de modificadores del estándar HID y
+ * los bloqueos (bpvm_teclado.h). El código de la tecla ya lo es: el `scancode` de SDL sigue el estándar HID. */
+static uint32_t estado_sdl(unsigned m) {
+    uint32_t e = 0;
+    if (m & KMOD_LCTRL)  e |= BPVM_TECLA_CTRL_IZQ;
+    if (m & KMOD_LSHIFT) e |= BPVM_TECLA_SHIFT_IZQ;
+    if (m & KMOD_LALT)   e |= BPVM_TECLA_ALT;
+    if (m & KMOD_LGUI)   e |= BPVM_TECLA_WIN_IZQ;
+    if (m & KMOD_RCTRL)  e |= BPVM_TECLA_CTRL_DER;
+    if (m & KMOD_RSHIFT) e |= BPVM_TECLA_SHIFT_DER;
+    if (m & (KMOD_RALT | KMOD_MODE)) e |= BPVM_TECLA_ALTGR;
+    if (m & KMOD_RGUI)   e |= BPVM_TECLA_WIN_DER;
+    if (m & KMOD_CAPS)   e |= BPVM_TECLA_BLOQ_MAYUS;
+    if (m & KMOD_NUM)    e |= BPVM_TECLA_BLOQ_NUM;
+    if (m & 0x8000u)     e |= BPVM_TECLA_BLOQ_DESPL;   /* KMOD_SCROLL, desde SDL 2.0.18 */
+    return e;
+}
+
+/* El siguiente carácter de un texto UTF-8 (lo que da SDL_TEXTINPUT), como código Unicode; avanza `*s`. */
+static int32_t sig_utf8(const unsigned char** s) {
+    const unsigned char* p = *s;
+    int32_t cp;
+    int n, i;
+    if (p[0] < 0x80u)                 { cp = p[0];         n = 1; }
+    else if ((p[0] & 0xE0u) == 0xC0u) { cp = p[0] & 0x1F; n = 2; }
+    else if ((p[0] & 0xF0u) == 0xE0u) { cp = p[0] & 0x0F; n = 3; }
+    else if ((p[0] & 0xF8u) == 0xF0u) { cp = p[0] & 0x07; n = 4; }
+    else { *s = p + 1; return 0xFFFD; }
+    for (i = 1; i < n; i++) {
+        if ((p[i] & 0xC0u) != 0x80u) { *s = p + i; return 0xFFFD; }
+        cp = (cp << 6) | (p[i] & 0x3F);
+    }
+    *s = p + n;
+    return cp;
 }
 
 /* Watch de eventos SDL: marca el cierre de ventana SIN consumir el evento (LVGL
@@ -165,6 +265,17 @@ static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
      * desde el hilo de eventos SDL. */
     if (e->type == SDL_KEYDOWN && e->key.keysym.sym == SDLK_F12)
         g_shot_requested = 1;
+    /* V8/H2, paso 2 — las teclas de la ventana, al teclado del SO (él mira que haya un teclado conectado): la pulsación,
+     * sin las repeticiones; su carácter llega aparte, en SDL_TEXTINPUT; y al soltarla, por si no dio ninguno. */
+    if (e->type == SDL_KEYDOWN && !e->key.repeat)
+        bpvm_teclado_pc_pulsada((int32_t) e->key.keysym.scancode, estado_sdl((unsigned) e->key.keysym.mod));
+    else if (e->type == SDL_KEYUP)
+        bpvm_teclado_pc_soltada((int32_t) e->key.keysym.scancode);
+    else if (e->type == SDL_TEXTINPUT) {
+        const unsigned char* s = (const unsigned char*) e->text.text;
+        uint32_t est = estado_sdl((unsigned) SDL_GetModState());
+        while (*s) bpvm_teclado_pc_texto(sig_utf8(&s), est);
+    }
     return 1;   /* 1 = no filtrar (el evento sigue su curso) */
 }
 

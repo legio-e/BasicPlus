@@ -2424,6 +2424,57 @@ bt.disconnect(d)                             // that connection; Bluetooth stays
   <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
 </p>
 
+<h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (the keyboard)</h3>
+<p>
+  The keyboard (<code>import Keyboards</code>; V8). A key is a 32-bit number: the low part is the key code from the HID
+  standard (what a Bluetooth or USB keyboard sends), named in the <code>Keyboards.Key</code> enum; the high part is the
+  state: Ctrl, Shift, Alt, AltGr, Windows and the locks. Its character comes separately: <code>"a"</code>,
+  <code>"Ñ"</code>… or <code>""</code> for a special key (Enter, the arrows).
+</p>
+<pre><code><span class="kw">import</span> Keyboards
+
+<span class="kw">var</span> tk: Keyboards.Keyboard := Keyboards.Keyboard()
+tk.onKey := screen::key                  // one notice per press, on the thread that created the keyboard
+
+<span class="kw">function</span> <span class="kw">event</span> key(t: Keyboards.Keyboard, k: integer, c: string)
+  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.ENTER) <span class="kw">then</span>
+    <span class="kw">print</span> "Enter"
+  <span class="kw">elseif</span> Keyboards.isCtrl(k) <span class="kw">and</span> Keyboards.isKey(k, Keyboards.Key.C) <span class="kw">then</span>
+    <span class="kw">print</span> "Ctrl+C"
+  <span class="kw">elseif</span> c != "" <span class="kw">then</span>
+    <span class="kw">print</span> "key: " + c
+  <span class="kw">endif</span>
+<span class="kw">end</span> key</code></pre>
+<table>
+  <tr><th><code>Keyboards.Keyboard</code></th><th>What it does</th></tr>
+  <tr><td><code>Keyboard()</code></td><td>A program keyboard: from now on, every key reaches it through <code>onKey</code>, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: every key goes to all of them</td></tr>
+  <tr><td><code>onKey(t, k, c)</code></td><td>The event: the keyboard, the key (the 32-bit number) and its character. One notice per press: a key held down does not repeat, and the modifiers on their own (Shift, Ctrl…) are not keys</td></tr>
+  <tr><td><code>hasKey(): boolean</code></td><td>Is any key waiting? From any thread</td></tr>
+  <tr><td><code>readKey(): integer</code></td><td>The next key (0 if none). There is one buffer, the system's: whoever reads first takes it</td></tr>
+  <tr><td><code>getChar(): string</code></td><td>The character of the last key read by <code>readKey</code></td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is a keyboard connected?</td></tr>
+  <tr><td><code>close()</code></td><td>Stops receiving events (<code>readKey</code> still works)</td></tr>
+</table>
+<p>
+  <strong>What a key carries</strong>, without looking at bits: <code>Keyboards.getCode(k)</code> (the code),
+  <code>isKey(k, Keyboards.Key.X)</code>, <code>isShift(k)</code>, <code>isCtrl(k)</code>, <code>isAlt(k)</code> (the
+  left one), <code>isAltGr(k)</code>, <code>isWin(k)</code>, <code>isCapsLock(k)</code>, <code>isNumLock(k)</code>,
+  <code>isScrollLock(k)</code> and <code>isFn(k)</code>. The bits, in case you need them: 16 left Ctrl, 17 left Shift,
+  18 Alt, 19 left Windows, 20 right Ctrl, 21 right Shift, 22 AltGr, 23 right Windows, 24 Caps Lock, 25 Num Lock, 26
+  Scroll Lock and 27 Fn. The enum keys: <code>A</code>…<code>Z</code>, <code>D0</code>…<code>D9</code>,
+  <code>ENTER</code>, <code>ESCAPE</code>, <code>BACKSPACE</code>, <code>TAB</code>, <code>SPACE</code>,
+  <code>F1</code>…<code>F24</code>, <code>UP</code>, <code>DOWN</code>, <code>LEFT</code>, <code>RIGHT</code>,
+  <code>HOME</code>, <code>END_KEY</code> (<code>end</code> is a reserved word), <code>PAGE_UP</code>,
+  <code>PAGE_DOWN</code>, <code>INSERT</code>, <code>DELETE</code>, the keypad ones (<code>KP_0</code>…) and the rest of
+  the standard.
+</p>
+<p>
+  <strong>Where.</strong> On the <strong>PC</strong>, the keys of the GUI window, only with a keyboard connected: the
+  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Without a GUI there is
+  no keyboard on the PC. The character is the system's (the PC keyboard layout). On the boards, next, with a Bluetooth
+  keyboard; and in a program with a GUI, the GUI itself will take the keyboard to its widgets.
+</p>
+
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>
 <p>
   The graphical interface (screen and widget tree, the full catalog, color and fonts,

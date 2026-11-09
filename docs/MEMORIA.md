@@ -196,6 +196,9 @@ de RAM fija** (medido en la Pico: 96 de datos, el texto del motivo, y 60 de `.bs
 fijo: las listas de lo encontrado y lo conectado (~1,4 KB) se reservan al encender el Bluetooth la primera vez, en una
 placa con radio, y el búfer de `/sys/bluetooth.json` (1,5 KB), sólo mientras se lee.
 
+Y el teclado del SO (`bpvm_teclado.c`, V8/H2, paso 2, 9-nov), igual: **12 B de RAM fija** (medido en la Pico) y 1,5 KB
+de flash; su estado (~0,7 KB: el búfer, los avisos y los teclados apuntados), la primera vez que se usa.
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las

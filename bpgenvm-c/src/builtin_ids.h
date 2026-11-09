@@ -330,7 +330,14 @@ enum {
     BUILTIN_BT_FORGET                    = 322,   /* __btForget(address: string) */
     BUILTIN_BT_IS_CONNECTED              = 323,   /* __btIsConnected(address: string): boolean */
     BUILTIN_BT_KIND_OF                   = 324,   /* __btKindOf(address: string): string */
-    BUILTIN__CUANTOS = 325
+    BUILTIN_KB_OPEN                      = 325,   /* __kbOpen(t: any) */
+    BUILTIN_KB_CLOSE                     = 326,   /* __kbClose(t: any) */
+    BUILTIN_KB_HAS_KEY                   = 327,   /* __kbHasKey(): boolean */
+    BUILTIN_KB_READ_KEY                  = 328,   /* __kbReadKey(): integer */
+    BUILTIN_KB_READ_CHAR                 = 329,   /* __kbReadChar(): integer */
+    BUILTIN_KB_INJECT                    = 330,   /* __kbInject(k: integer, cp: integer) */
+    BUILTIN_KB_IS_CONNECTED              = 331,   /* __kbIsConnected(): boolean */
+    BUILTIN__CUANTOS = 332
 };
 
 #endif

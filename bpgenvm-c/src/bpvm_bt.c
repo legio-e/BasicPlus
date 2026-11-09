@@ -324,6 +324,16 @@ int bpvm_bt_conectado(const char* dir) {
     return r;
 }
 
+/* V8/H2, paso 2 — ¿hay un teclado conectado? En el PC, sin él, la ventana de la GUI no teclea (V8_IDEAS §E1). */
+int bpvm_bt_hay_teclado(void) {
+    int i, r = 0;
+    if (!s_listo) return 0;
+    coge();
+    for (i = 0; i < s_ncon; i++) if (strcmp(s_l->con[i].clase, "keyboard") == 0) { r = 1; break; }
+    suelta();
+    return r;
+}
+
 void bpvm_bt_clase_de(const char* dir, char* out, size_t n) {
     int i;
     if (n) out[0] = '\0';

@@ -200,6 +200,7 @@
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
     <li class="sub"><a href="#stdlib-sound">14.18 Sound</a></li>
     <li class="sub"><a href="#stdlib-air">14.19 Air</a></li>
+    <li class="sub"><a href="#stdlib-keyboards">14.20 Keyboards</a></li>
     <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 Qué es un pack, y qué no</a></li>
@@ -2785,6 +2786,57 @@ bt.disconnect(d)                             // esa conexión; el Bluetooth sigu
   <strong>Dónde.</strong> En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs y en el micro simulado
   del IDE, con dos aparatos de prueba: «Teclado simulado» y «Ratón simulado». En las placas (la S3, la C5 y la P4), lo siguiente; de momento,
   <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un <code>RuntimeError</code>.
+</p>
+
+<h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (el teclado)</h3>
+<p>
+  El teclado (<code>import Keyboards</code>; V8). Una tecla es un número de 32 bits: abajo, el código de la tecla, el del
+  estándar HID (el que manda un teclado Bluetooth o USB), con nombre en el enum <code>Keyboards.Key</code>; arriba, el
+  estado: Ctrl, Shift, Alt, AltGr, Windows y los bloqueos. Su carácter va aparte: <code>"a"</code>, <code>"Ñ"</code>…
+  o <code>""</code> en una tecla especial (Enter, las flechas).
+</p>
+<pre><code><span class="kw">import</span> Keyboards
+
+<span class="kw">var</span> tk: Keyboards.Keyboard := Keyboards.Keyboard()
+tk.onKey := pant::tecla                  // un aviso por pulsación, en el hilo que creó el teclado
+
+<span class="kw">function</span> <span class="kw">event</span> tecla(t: Keyboards.Keyboard, k: integer, c: string)
+  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.ENTER) <span class="kw">then</span>
+    <span class="kw">print</span> "Enter"
+  <span class="kw">elseif</span> Keyboards.isCtrl(k) <span class="kw">and</span> Keyboards.isKey(k, Keyboards.Key.C) <span class="kw">then</span>
+    <span class="kw">print</span> "Ctrl+C"
+  <span class="kw">elseif</span> c != "" <span class="kw">then</span>
+    <span class="kw">print</span> "tecla: " + c
+  <span class="kw">endif</span>
+<span class="kw">end</span> tecla</code></pre>
+<table>
+  <tr><th><code>Keyboards.Keyboard</code></th><th>Qué hace</th></tr>
+  <tr><td><code>Keyboard()</code></td><td>Un teclado del programa: desde ahora, cada tecla le llega con <code>onKey</code>, en el hilo que lo crea, que tiene que estar corriendo (un bucle con <code>sleep</code>, por ejemplo). Puede haber varios: cada tecla, a todos</td></tr>
+  <tr><td><code>onKey(t, k, c)</code></td><td>El evento: el teclado, la tecla (el número de 32 bits) y su carácter. Un aviso por pulsación: una tecla que se mantiene no repite, y los modificadores solos (Shift, Ctrl…) no son teclas</td></tr>
+  <tr><td><code>hasKey(): boolean</code></td><td>¿Hay alguna tecla esperando? Desde cualquier hilo</td></tr>
+  <tr><td><code>readKey(): integer</code></td><td>La siguiente tecla (0 si no hay). El búfer es uno, el del sistema: el primero que lee se la lleva</td></tr>
+  <tr><td><code>getChar(): string</code></td><td>El carácter de la última que leyó <code>readKey</code></td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>¿Hay un teclado conectado?</td></tr>
+  <tr><td><code>close()</code></td><td>Deja de recibir eventos (<code>readKey</code> sigue valiendo)</td></tr>
+</table>
+<p>
+  <strong>Lo que lleva una tecla</strong>, sin mirar bits: <code>Keyboards.getCode(k)</code> (el código),
+  <code>isKey(k, Keyboards.Key.X)</code>, <code>isShift(k)</code>, <code>isCtrl(k)</code>, <code>isAlt(k)</code> (el de
+  la izquierda), <code>isAltGr(k)</code>, <code>isWin(k)</code>, <code>isCapsLock(k)</code>, <code>isNumLock(k)</code>,
+  <code>isScrollLock(k)</code> e <code>isFn(k)</code>. Los bits, por si hacen falta: 16 Ctrl izquierdo, 17 Shift
+  izquierdo, 18 Alt, 19 Windows izquierdo, 20 Ctrl derecho, 21 Shift derecho, 22 AltGr, 23 Windows derecho, 24 Bloq
+  Mayús, 25 Bloq Num, 26 Bloq Despl y 27 Fn. Las teclas del enum, con su nombre en inglés: <code>A</code>…<code>Z</code>,
+  <code>D0</code>…<code>D9</code>, <code>ENTER</code>, <code>ESCAPE</code>, <code>BACKSPACE</code>, <code>TAB</code>,
+  <code>SPACE</code>, <code>F1</code>…<code>F24</code>, <code>UP</code>, <code>DOWN</code>, <code>LEFT</code>,
+  <code>RIGHT</code>, <code>HOME</code>, <code>END_KEY</code> (<code>end</code> es palabra reservada),
+  <code>PAGE_UP</code>, <code>PAGE_DOWN</code>, <code>INSERT</code>, <code>DELETE</code>, las del teclado numérico
+  (<code>KP_0</code>…) y las demás del estándar.
+</p>
+<p>
+  <strong>Dónde.</strong> En el <strong>PC</strong>, las teclas de la ventana de la GUI, sólo con un teclado conectado: el
+  simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Sin GUI, en el PC no hay
+  teclado. El carácter es el del sistema (la distribución del teclado del PC). En las placas, lo siguiente, con un teclado
+  Bluetooth; y en un programa con GUI, la propia GUI llevará el teclado a sus widgets.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

@@ -1,0 +1,120 @@
+dbg 3
+module Keyboards
+source C:\lenguajes\pm\bpstdlib\Keyboards.bp
+lines
+0 0
+24 0
+35 0
+38 251
+52 0
+55 256
+60 257
+76 258
+89 0
+92 263
+111 0
+114 268
+128 0
+131 273
+142 0
+145 278
+183 0
+186 282
+254 283
+269 285
+275 286
+286 287
+306 0
+317 245
+325 246
+336 0
+366 0
+380 0
+397 0
+416 0
+433 0
+450 0
+464 0
+482 0
+485 164
+504 0
+507 169
+529 0
+532 176
+563 0
+566 180
+597 0
+600 185
+623 0
+626 189
+649 0
+652 193
+683 0
+686 197
+709 0
+712 201
+735 0
+738 205
+761 0
+764 209
+vars
+func Keyboard.hasKey 35
+this -20 8 0 ?
+func Keyboard.readKey 52
+this -20 8 0 ?
+k 4 4 0 integer
+func Keyboard.getChar 89
+this -20 8 0 ?
+func Keyboard.isConnected 111
+this -20 8 0 ?
+func Keyboard.close 128
+this -20 8 0 ?
+func Keyboard.__despacha 142
+this -28 8 0 ?
+k -20 4 0 integer
+cp -16 4 0 integer
+func Keyboard.caracter 183
+this -24 8 0 ?
+cp -16 4 0 integer
+sb 8 8 0 ?
+func Keyboard.__init 306
+this -20 8 0 ?
+func __cls_init_Keyboard() 366
+this -20 8 0 ?
+func __cls_m_Keyboard#hasKey()z 380
+this -20 8 0 ?
+func __cls_m_Keyboard#getChar()s 397
+this -20 8 0 ?
+func __cls_m_Keyboard#isConnected()z 416
+this -20 8 0 ?
+func __cls_m_Keyboard#readKey()i 433
+this -20 8 0 ?
+func __cls_m_Keyboard#close()V 450
+this -20 8 0 ?
+func __cls_m_Keyboard#__despacha(ii)V 464
+this -28 8 0 ?
+k -20 4 0 integer
+cp -16 4 0 integer
+func getCode 482
+k -16 4 0 integer
+func isKey 504
+k -20 4 0 integer
+key -16 4 0 integer
+func isCtrl 529
+k -16 4 0 integer
+func isShift 563
+k -16 4 0 integer
+func isAlt 597
+k -16 4 0 integer
+func isAltGr 623
+k -16 4 0 integer
+func isWin 649
+k -16 4 0 integer
+func isCapsLock 683
+k -16 4 0 integer
+func isNumLock 709
+k -16 4 0 integer
+func isScrollLock 735
+k -16 4 0 integer
+func isFn 761
+k -16 4 0 integer

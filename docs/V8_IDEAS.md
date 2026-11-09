@@ -543,6 +543,30 @@ necesita su propia entrada, con el suyo.
 - **Por mirar al programar:** que el reparto no cambie lo que ya hacen las dos VMs cuando no hay teclados (la red); y
   la pila de un `__despacha` en un hilo pequeño.
 
+### El paso 2, hecho (9-nov): el teclado del SO y `Keyboards.Keyboard`, en las dos VMs
+
+Lo del plan, y como salió:
+- **`bpvm_teclado.c` y `Teclado.java`**, con el reparto en el planificador de las dos VMs (antes de sacar el evento del
+  turno) y la limpieza al acabar el programa. La ranura de `__despacha`, por su nombre: la búsqueda de `__guiSlotOf`
+  (la de MOD9 y la de los marcadores de antes) sale de la GUI a una función común (`slot_por_nombre`), porque el
+  teclado también va en las placas sin pantalla; en la VM-Java ya lo estaba (`slotOfMarker`).
+- **El módulo `Keyboards`** (en el pack de la stdlib, el 34): el enum `Key`, las funciones de los bits e `isKey`, y la
+  clase `Keyboard`. Dos detalles del lenguaje: la tecla Fin se llama `END_KEY`, porque las palabras reservadas no
+  distinguen mayúsculas y `END` es `end`; y los alias de `__kbOpen` y `__kbClose` llevan `Object`, porque `any` no sale
+  en la interfaz de un módulo que no sea `Core`.
+- **Los modificadores solos no son teclas** (pulsar Shift no avisa): un teclado HID los manda como bits, no como
+  teclas, y así el PC hace lo mismo que la placa.
+- **En el PC, las teclas de la ventana**: en la VM-C y el micro simulado, SDL (su `scancode` ya es el código HID);
+  en la VM-Java, Swing (`TeclasSwing`: la tabla de los `VK_`, el lado de cada modificador y el teclado numérico como lo
+  manda un teclado HID). Sólo con un teclado conectado (`bpvm_bt_hay_teclado`).
+- **La memoria:** en una placa sin teclado, 12 B de RAM fija (medido en la Pico) y 1,5 KB de flash; el estado
+  (~0,7 KB), la primera vez que se usa.
+- **Las pruebas:** `Teclado.bp` en la red, sin ventana (con `__kbInject`): las dos VMs dicen lo mismo. Y a mano, el
+  camino de las ventanas, con «Hola 1» y Enter, con y sin «Teclado simulado»: en la VM-C, con dos órdenes nuevas del
+  guion de la ventana SDL (`teclea <texto>` y `tecla <código>`, de `BPVM_GUI_SCRIPT`); en la VM-Java, un arnés que le
+  da el foco a la ventana de Swing y le mete los eventos en su cola. Las dos dan lo mismo: los siete códigos HID, sus
+  caracteres y el Shift de la H; sin el teclado conectado, ninguna.
+
 ```basic
 function event tecla(t: Keyboards.Keyboard, k: integer, c: string)
   if Keyboards.isKey(k, Keyboards.Key.ENTER) then

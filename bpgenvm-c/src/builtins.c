@@ -34,6 +34,7 @@
 #include "bpvm_fs.h"     /* V7/H3 (#491) — el cursor */
 #include "bpvm_wifi.h"   /* V8/H3 — la WiFi, lo común de la HAL BP */
 #include "bpvm_bt.h"     /* V8/H2 — el Bluetooth, lo común de la HAL BP */
+#include "bpvm_teclado.h"   /* V8/H2, paso 2 — el teclado del SO */
 #include "bpvm_red.h"
 #include "bpvm_sonido.h" /* V8/H4 (#708) — el sonido, lo común de la HAL BP */
 
@@ -512,6 +513,26 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
         while (out > 0 && (vm->memory[base + out] & 0xC0u) == 0x80u) out--;
     if (out < dst_size) dst[out] = '\0';
     return out;
+}
+
+/* V8/H2, paso 2 (9-nov) — LA RANURA DE UN MÉTODO, POR SU NOMBRE, en ejecución: lo de #324 (__guiSlotOf), fuera de la GUI
+ * para que lo use también el teclado, en las placas sin pantalla (__kbOpen busca el __despacha de su Keyboard). Una clase
+ * MOD9 lo dice en su subtabla CLASES; las de antes, en los marcadores `Clase#metodo#slot` de los símbolos. -1 si no está:
+ * «no hay método con ese nombre» no es un error aquí; lo decide quien pregunta. */
+static int slot_por_nombre(bpvm_t* vm, uint32_t class_ptr, const char* nm) {
+    size_t nlen = strlen(nm);
+    int s9 = bpvm_link_slot_por_nombre(vm, class_ptr, nm);
+    if (s9 >= 0) return s9;
+    for (int i = 0; i < vm->symbol_count; i++) {
+        if (vm->symbols[i].abs_addr != class_ptr) continue;
+        /* Formato: <Clase>#<metodo>#<slot>. Se busca "#<metodo>#" y se lee el número que va detrás. */
+        const char* s = bpvm_symbol_name(vm, i);
+        const char* h = strchr(s, '#');
+        if (h == NULL) continue;
+        if (strncmp(h + 1, nm, nlen) != 0 || h[1 + nlen] != '#') continue;
+        return atoi(h + 2 + nlen);
+    }
+    return -1;
 }
 
 /* #456 - LEER UN PATH DE BP. Igual que read_bp_string, pero AVISA si no cupo en
@@ -1954,23 +1975,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         read_bp_string(vm, name_ref, nm, sizeof(nm));
         uint32_t oa = ref_addr(vm, obj);
         uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + oa);
-        size_t nlen = strlen(nm);
-        {   /* V7/H2 (#523) — una clase MOD9 no tiene marcadores: su subtabla CLASES si. */
-            int s9 = bpvm_link_slot_por_nombre(vm, class_ptr, nm);
-            if (s9 >= 0) { push_i32(vm, tc, s9); return BPVM_OK; }
-        }
-        for (int i = 0; i < vm->symbol_count; i++) {
-            if (vm->symbols[i].abs_addr != class_ptr) continue;
-            /* Formato: <Clase>#<metodo>#<slot>. Se busca "#<metodo>#" y se lee
-             * el numero que va detras. */
-            const char* s = bpvm_symbol_name(vm, i);
-            const char* h = strchr(s, '#');
-            if (h == NULL) continue;
-            if (strncmp(h + 1, nm, nlen) != 0 || h[1 + nlen] != '#') continue;
-            push_i32(vm, tc, atoi(h + 2 + nlen));
-            return BPVM_OK;
-        }
-        push_i32(vm, tc, -1);
+        /* V7/H2 (#523): una clase MOD9 no tiene marcadores, su subtabla CLASES sí; V8/H2: los dos, en slot_por_nombre */
+        push_i32(vm, tc, slot_por_nombre(vm, class_ptr, nm));
         return BPVM_OK;
     }
     case BUILTIN_GUI_DUMP_TREE: {
@@ -2823,6 +2829,38 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_push(vm, tc, bpref_regen(vm, r));
         return BPVM_OK;
     }
+
+    /* V8/H2, paso 2 (9-nov) — EL TECLADO DEL SO (bpvm_teclado.c), para Keyboards.Keyboard; en la VM-Java, Teclado.java. Un
+     * teclado se apunta con su referencia entera (la generación dice si sigue vivo), el hilo que lo crea y la ranura de su
+     * __despacha, por su nombre; los eventos los reparte el planificador (bpvm_teclado_reparte). */
+    case BUILTIN_KB_OPEN: {
+        bpref_t t = bpref_pop(vm, tc);
+        if (bpref_is_null(t)) return builtin_throw_nula(vm, tc, "referencia nula: Keyboard de un objeto null");
+        uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, t));
+        int slot = slot_por_nombre(vm, class_ptr, "__despacha");
+        if (slot < 0) return builtin_throw(vm, tc, "Keyboards: la clase no tiene __despacha");
+        if (!bpvm_teclado_apunta(vm, t.v, tc->id, slot))
+            return builtin_throw(vm, tc, "Keyboards: no caben mas teclados (8 a la vez)");
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_KB_CLOSE: {
+        bpref_t t = bpref_pop(vm, tc);
+        bpvm_teclado_borra(t.v);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_KB_HAS_KEY:      push_i32(vm, tc, bpvm_teclado_hay() ? 1 : 0); return BPVM_OK;
+    case BUILTIN_KB_READ_KEY:     push_i32(vm, tc, bpvm_teclado_lee((int) tc->id)); return BPVM_OK;
+    case BUILTIN_KB_READ_CHAR:    push_i32(vm, tc, bpvm_teclado_caracter((int) tc->id)); return BPVM_OK;
+    case BUILTIN_KB_INJECT: {
+        int32_t cp = pop_i32(vm, tc);   /* el último argumento, arriba */
+        int32_t k  = pop_i32(vm, tc);
+        bpvm_teclado_pon(k, cp);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_KB_IS_CONNECTED: push_i32(vm, tc, bpvm_bt_hay_teclado() ? 1 : 0); return BPVM_OK;
 
     case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
         uint32_t r = bpvm_heap_alloc_string(vm, BPVM_EOL, sizeof(BPVM_EOL) - 1u);

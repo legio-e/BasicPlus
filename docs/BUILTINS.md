@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **325** (0–324). Cada builtin tiene:
+id—. Hoy son **332** (0–331). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -752,6 +752,30 @@ radio simulada, igual en las tres, con «Teclado simulado» (`02:00:00:00:00:01`
 (`02:00:00:00:00:02`); el fichero, en la flash del PC (`#808`) o en la del micro simulado. Sin radio (de momento, las placas), `isAvailable` da false y `turnOn` lanza
 «Bluetooth: esta placa no lo tiene». El fin de RUN lo deja como diga el fichero, si el programa lo ha tocado. La prueba:
 `bpgenvm-c/samples/AirBluetooth.bp`.
+
+## 325–331 — el teclado  *(V8, H2, paso 2, 9-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 325 | `__kbOpen` (y en `Keyboards`) | `(t: any)` | `Keyboards.Keyboard()`: lo apunta; sus eventos, al hilo que lo crea |
+| 326 | `__kbClose` | `(t: any)` | `Keyboard.close()`: deja de recibir eventos |
+| 327 | `__kbHasKey` | `(): boolean` | `Keyboard.hasKey()`: ¿hay alguna en el búfer del SO? |
+| 328 | `__kbReadKey` | `(): integer` | `Keyboard.readKey()`: la saca (0 si no hay); su carácter se queda para el hilo |
+| 329 | `__kbReadChar` | `(): integer` | el carácter de la última que leyó ese hilo, como código Unicode (0 si ninguno) |
+| 330 | `__kbInject` | `(k: integer, cp: integer)` | para las pruebas: entra como una tecla de verdad (sin mirar si hay teclado conectado) |
+| 331 | `__kbIsConnected` | `(): boolean` | `Keyboard.isConnected()`: ¿hay un teclado conectado? |
+
+El teclado, para el módulo `Keyboards` (`V8_IDEAS` §E1, «El paso 2»). Una tecla es un int32 (abajo, el código del
+estándar HID; arriba, el byte de modificadores del estándar HID y los bloqueos) y su carácter, como código Unicode (0 en
+una especial). Lo común está en la HAL BP (`bpvm_teclado.c`; en la VM-Java, `Teclado.java`): el búfer del SO, que lee
+`readKey` (32; el primero que lee se la lleva), y los teclados del programa, apuntados con su referencia entera (la
+generación dice si siguen vivos; no los mantiene vivos), el hilo que los crea y la ranura de su `__despacha`, por su
+nombre (la búsqueda de `__guiSlotOf`, ahora también fuera de la GUI). Entre turno y turno, donde se reparten los eventos,
+el planificador le pasa a cada teclado cada tecla nueva como un evento de la cola de siempre, en su hilo: su
+`__despacha(k, cp)`, que hace el `raise onKey`. Uno en la cola por teclado como mucho: la cola es de todos, y un hilo que
+espera no la debe llenar. En el PC, las teclas de la ventana de la GUI (SDL en la VM-C y el micro simulado; Swing en la
+VM-Java), sólo con un teclado conectado (`bpvm_bt_hay_teclado`: en el PC, el simulado); el guion de la ventana SDL
+(`BPVM_GUI_SCRIPT`) las sabe meter: `teclea <texto>` y `tecla <código>`. La prueba: `bpgenvm-c/samples/Teclado.bp`.
 
 ---
 

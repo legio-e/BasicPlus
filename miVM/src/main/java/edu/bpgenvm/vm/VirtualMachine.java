@@ -352,9 +352,15 @@ public class VirtualMachine {
     private boolean wifiEncendida = false;   // V8/H3: el módulo Air, en el PC
     // V8/H2 (8-nov): el Bluetooth del PC, simulado (Bluetooth.java), el espejo de bpvm_bt.c y bt_host.c
     private Bluetooth bluetooth;
-    private Bluetooth bluetooth() {
+    private synchronized Bluetooth bluetooth() {   // synchronized: también la llama el EDT (las teclas de la ventana)
         if (bluetooth == null) bluetooth = new Bluetooth(this::leeDeLaPlaca);
         return bluetooth;
+    }
+    // V8/H2, paso 2 (9-nov): el teclado del SO (Teclado.java), el espejo de bpvm_teclado.c; el reparto, repartirTeclas
+    private Teclado teclado;
+    private synchronized Teclado teclado() {
+        if (teclado == null) teclado = new Teclado();
+        return teclado;
     }
     /** Como una placa al arrancar: si /sys/bluetooth.json dice "autoStart", los recordados (lo llama Main). */
     public void arrancaBluetooth() { bluetooth().arranque(); }
@@ -477,6 +483,14 @@ public class VirtualMachine {
     // Backend grafico (V3 GUI, H3). Sin estado hasta el primer __gui*; la
     // ventana Swing se abre en __guiRun. Inofensivo si el programa no usa GUI.
     private final GuiBackend gui = new GuiBackend();
+    {   // V8/H2, paso 2 — las teclas de la ventana de Swing, al teclado del SO, sólo con un teclado conectado (en el PC, el
+        // simulado del Bluetooth): lo mismo que bpvm_teclado_pc_* en la VM-C, con las de SDL
+        gui.setTecladoPC(new GuiBackend.TecladoPC() {
+            @Override public void pulsada(int codigo, int estado) { if (bluetooth().hayTeclado()) teclado().pcPulsada(codigo, estado); }
+            @Override public void texto(int cp, int estado)       { if (bluetooth().hayTeclado()) teclado().pcTexto(cp, estado); }
+            @Override public void soltada(int codigo)             { teclado().pcSoltada(codigo); }
+        });
+    }
 
     // H3.4 — cache de la entrada de la funcion BP Gui.__guiDispatch (resuelta
     // por nombre la 1a vez). -2 = sin resolver; -1 = no encontrada (Gui no cargado).
@@ -3417,6 +3431,7 @@ public class VirtualMachine {
         busFinDeRun();                          // V7/H6.c G4.a1: y los buses del programa se sueltan
         Sonido.finDeRun();                      // V8/H4 (#708): y lo que suene se para (el volumen, a 85)
         if (bluetooth != null) bluetooth.finDeRun();   // V8/H2: si el programa lo tocó, lo que diga /sys/bluetooth.json
+        if (teclado != null) teclado.finDeRun();       // V8/H2, paso 2: y del teclado del SO, lo del programa
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -3483,6 +3498,7 @@ public class VirtualMachine {
                         // le inyectamos el frame del handler antes de darle CPU.
                         // Dentro del vmLock y con el tc ya asignado a este worker:
                         // nadie más lo está ejecutando, su estado es el bueno.
+                        repartirTeclas();   // V8/H2, paso 2: las teclas nuevas, como eventos de cada teclado
                         drainOneEvent(tc);
                         inyectaDestruccion(tc);   // V7 #668: y lo pendiente de destruir, como un evento más
                     }
@@ -6611,6 +6627,31 @@ public class VirtualMachine {
             case BT_FORGET:     bluetooth().olvidar(readVmString(popTcRef(tc)));     pushTc(tc, 0); break;
             case BT_IS_CONNECTED: pushTc(tc, bluetooth().conectado(readVmString(popTcRef(tc))) ? 1 : 0); break;
             case BT_KIND_OF: pushTcRef(tc, allocVmString(bluetooth().claseDe(readVmString(popTcRef(tc))))); break;
+            // V8/H2, paso 2 (9-nov) — EL TECLADO DEL SO (Teclado.java), para Keyboards.Keyboard; lo mismo que la VM-C
+            // (bpvm_teclado.c). Un teclado se apunta con su referencia entera (la generación dice si sigue vivo), el hilo
+            // que lo crea y la ranura de su __despacha, por su nombre; los eventos los reparte repartirTeclas.
+            case KB_OPEN: {
+                long t = popTcRef(tc);
+                if ((int) t == 0) throwBpError(tc, CLASE_NULA, "referencia nula: Keyboard de un objeto null");
+                int classPtr = readInt32(refDeref(t));
+                int slot = moduleManager.slotOfMarker(classPtr, "__despacha");
+                if (slot < 0) throwBpRuntimeError(tc, "Keyboards: la clase no tiene __despacha");
+                if (!teclado().apunta(t, tc.id, slot)) throwBpRuntimeError(tc, "Keyboards: no caben mas teclados (8 a la vez)");
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case KB_CLOSE:        teclado().borra(popTcRef(tc)); pushTc(tc, 0); break;   // void
+            case KB_HAS_KEY:      pushTc(tc, teclado().hay() ? 1 : 0); break;
+            case KB_READ_KEY:     pushTc(tc, teclado().lee(tc.id)); break;
+            case KB_READ_CHAR:    pushTc(tc, teclado().caracter(tc.id)); break;
+            case KB_INJECT: {
+                int cp = popTc(tc);   // el último argumento, arriba
+                int k = popTc(tc);
+                teclado().pon(k, cp);
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case KB_IS_CONNECTED: pushTc(tc, bluetooth().hayTeclado() ? 1 : 0); break;
             // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
             case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {
@@ -9021,6 +9062,35 @@ public class VirtualMachine {
     // ============================================================
     // H5.c — Drenaje de la cola de eventos (espejo de events.c)
     // ============================================================
+
+    /**
+     * V8/H2, paso 2 (9-nov) — EL REPARTO DE LAS TECLAS (espejo de bpvm_teclado_reparte): a cada teclado apuntado, vivo
+     * y con su hilo, la siguiente tecla que le toca, como un evento de la cola de siempre para su hilo: su __despacha
+     * (k, cp), que hace el `raise onKey`. Uno en la cola por teclado como mucho (la cola es de todos, 16, y un hilo que
+     * espera no la debe llenar); quien se queda atrás pierde las más viejas; con la cola llena, en el turno siguiente.
+     * Lo llama el scheduler ENTRE QUANTA, dentro del vmLock, donde saca los eventos. El mismo orden que la VM-C.
+     */
+    private void repartirTeclas() {
+        Teclado t = teclado;
+        if (t == null) return;   // nadie ha usado el teclado
+        synchronized (t) {
+            for (Teclado.Apuntado a : t.ap) {
+                if (!a.enUso || a.sig == t.avisosFin) continue;                     // libre, o al día
+                if (!refViva(a.ref)) { a.enUso = false; continue; }                  // el teclado ya no existe
+                ThreadContext h = null;
+                for (ThreadContext x : threads) if (x.id == a.tid) { h = x; break; }
+                if (h == null || h.getStatus() == ThreadStatus.TERMINATED) { a.enUso = false; continue; }   // ni su hilo
+                if (t.avisosFin - a.sig > Teclado.AVISOS) a.sig = t.avisosFin - Teclado.AVISOS;   // atrás: pierde las viejas
+                boolean enCola = false;
+                for (PendingEvent e : eventQueue) if (e.recv == a.ref && e.dest == a.slot) { enCola = true; break; }
+                if (enCola) continue;
+                if (eventQueue.size() >= EVENT_QUEUE_CAP) break;                    // llena: en el turno siguiente
+                int i = (int) (a.sig % Teclado.AVISOS);
+                eventQueue.addLast(new PendingEvent(a.ref, a.slot, a.tid, 0, new long[]{t.avisosK[i], t.avisosCp[i]}));
+                a.sig++;
+            }
+        }
+    }
 
     /**
      * Saca UN evento para {@code tc} y le monta el frame del handler. Lo llama

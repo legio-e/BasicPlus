@@ -71,6 +71,7 @@ void bpvm_bt_desconectar(const char* dir);
 void bpvm_bt_olvidar(const char* dir);
 int  bpvm_bt_conectado(const char* dir);
 void bpvm_bt_clase_de(const char* dir, char* out, size_t n);   /* "" si no está conectado */
+int  bpvm_bt_hay_teclado(void);   /* V8/H2, paso 2: ¿hay un teclado conectado? (en el PC, la puerta de las teclas de la ventana) */
 
 /* El arranque y el fin de un RUN, como la WiFi: al arrancar, si el fichero dice "autoStart", se enciende y espera a los
  * recordados (si alguno no está o no conecta, no es un error); al acabar un programa que lo tocó, vuelve a lo que diga el
