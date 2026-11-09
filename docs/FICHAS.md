@@ -7387,6 +7387,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#812` — el caso G de `run_tarea_smoke` está en el filo: 200 RUN de un programa vacío tardan 1,17–1,23 s con la tarea `run`, con el tope en ~1,22 (el doble de `--run-viejo` más 0,3), y el 4-oct un RUN eran 1,2 ms (abierta el 9-nov, en la red del paso 3 de H2)
+
+- **Lo medido** (9-nov, por la noche): la red del paso 3 salió con el sim en ROJO por este caso (1,41 s contra 0,47);
+  solo, 1,20, 1,16 y 1,23 s (el último, ROJO). **No es el ratón:** el sim de `HEAD` (sin él, de `git archive`) y el
+  nuevo, alternados cuatro veces cada uno, dan lo mismo: 1,17–1,20 s y 1,18–1,23 s, con `--run-viejo` en 0,45–0,47. La
+  red de la tarde del mismo día pasó.
+- **Lo raro:** el caso se escribió el 4-oct con un RUN vacío en 1,2 ms con la tarea `run` (saboteado, 18); hoy son
+  ~5,9 ms, y ~2,3 con `--run-viejo`. Por acotar si es la máquina (había un juego abierto; el temporizador de Windows) o
+  un cambio de después del 4-oct. El sim del 5-oct que queda en `build/` no vale de referencia: no carga los `.mod` de
+  hoy.
+
 #### ✅ `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2 · **CERRADA el 8-nov**, el commit de `#811`; Eduardo: *«si»*, arreglarlo ya)
 
 - **Lo medido** (8-nov): con la ventana de Swing, un arnés (`ClicSwing`, en el scratchpad) pulsa el botón con
