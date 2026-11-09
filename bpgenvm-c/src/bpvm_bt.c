@@ -334,6 +334,16 @@ int bpvm_bt_hay_teclado(void) {
     return r;
 }
 
+/* V8/H2, paso 3 — ¿hay un ratón conectado? En el PC, sin él, el ratón de la ventana no llega a Mice (V8_IDEAS §E1). */
+int bpvm_bt_hay_raton(void) {
+    int i, r = 0;
+    if (!s_listo) return 0;
+    coge();
+    for (i = 0; i < s_ncon; i++) if (strcmp(s_l->con[i].clase, "mouse") == 0) { r = 1; break; }
+    suelta();
+    return r;
+}
+
 void bpvm_bt_clase_de(const char* dir, char* out, size_t n) {
     int i;
     if (n) out[0] = '\0';

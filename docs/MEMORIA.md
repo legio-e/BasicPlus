@@ -197,7 +197,9 @@ fijo: las listas de lo encontrado y lo conectado (~1,4 KB) se reservan al encend
 placa con radio, y el búfer de `/sys/bluetooth.json` (1,5 KB), sólo mientras se lee.
 
 Y el teclado del SO (`bpvm_teclado.c`, V8/H2, paso 2, 9-nov), igual: **12 B de RAM fija** (medido en la Pico) y 1,5 KB
-de flash; su estado (~0,7 KB: el búfer, los avisos y los teclados apuntados), la primera vez que se usa.
+de flash; su estado (~0,7 KB: el búfer, los avisos y los teclados apuntados), la primera vez que se usa. Y el ratón del
+SO (`bpvm_raton.c`, el paso 3, el mismo día), lo mismo: **12 B de RAM fija** (medido en la Pico) y 1,2 KB de flash; su
+estado (528 B: la posición, los avisos de los botones y la rueda, y los ratones apuntados), la primera vez que se usa.
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

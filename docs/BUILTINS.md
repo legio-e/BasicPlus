@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **332** (0–331). Cada builtin tiene:
+id—. Hoy son **339** (0–338). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -776,6 +776,31 @@ el planificador le pasa a cada teclado cada tecla nueva como un evento de la col
 espera no la debe llenar. En el PC, las teclas de la ventana de la GUI (SDL en la VM-C y el micro simulado; Swing en la
 VM-Java), sólo con un teclado conectado (`bpvm_bt_hay_teclado`: en el PC, el simulado); el guion de la ventana SDL
 (`BPVM_GUI_SCRIPT`) las sabe meter: `teclea <texto>` y `tecla <código>`. La prueba: `bpgenvm-c/samples/Teclado.bp`.
+
+## 332–338 — el ratón  *(V8, H2, paso 3, 9-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 332 | `__msOpen` (y en `Mice`) | `(t: any)` | `Mice.Mouse()`: lo apunta; sus eventos, al hilo que lo crea |
+| 333 | `__msClose` | `(t: any)` | `Mouse.close()`: deja de recibir eventos |
+| 334 | `__msGetX` | `(): integer` | `Mouse.getX()`: la posición del ratón del SO, tal como está |
+| 335 | `__msGetY` | `(): integer` | `Mouse.getY()` |
+| 336 | `__msGetButtons` | `(): integer` | los botones apretados, tal como están, con los bits del informe HID (`Mouse.isPressed`) |
+| 337 | `__msInject` | `(x: integer, y: integer, botones: integer, rueda: integer)` | para las pruebas: como un informe de un ratón de verdad, con el punto en vez del desplazamiento (sin mirar si hay ratón conectado) |
+| 338 | `__msIsConnected` | `(): boolean` | `Mouse.isConnected()`: ¿hay un ratón conectado? |
+
+El ratón, para el módulo `Mice` (`V8_IDEAS` §E1, «El paso 3»). Su posición son los puntos de la pantalla, como los de la
+GUI; los botones, los bits del informe de un ratón HID (1 izquierdo, 2 derecho, 4 central, 8 atrás, 16 adelante: los
+valores de `Mice.Button`). Lo común está en la HAL BP (`bpvm_raton.c`; en la VM-Java, `Raton.java`): la posición y los
+botones tal como están, y los avisos de los botones que se aprietan y de la rueda, con el punto donde pasó (16; quien se
+queda atrás pierde los más viejos). Moverse no deja aviso: cada ratón del programa recuerda la última posición que se le
+avisó, y le toca un `onMove` si la del SO es otra (sólo la última). El reparto, después del de las teclas y con sus
+reglas, encola en el hilo de cada ratón su `__despacha(tipo, dato, x, y)` (1 apretar, con el bit; 2 moverse; 3 la rueda,
+con las muescas): con un aviso pendiente, primero un `onMove` hasta su punto, si no está allí. Soltar no avisa, de
+momento. En el PC, el ratón de la ventana de la GUI (SDL en la VM-C y el micro simulado, con el punto pasado a la
+pantalla tal como se ve, como hace LVGL con la táctil; Swing en la VM-Java), sólo con un ratón conectado
+(`bpvm_bt_hay_raton`: en el PC, el simulado); el guion de la ventana SDL lo sabe mover: `mueve <x> <y>`,
+`pulsa <x> <y> [b]`, `suelta <x> <y> [b]` y `rueda <d>`. La prueba: `bpgenvm-c/samples/Raton.bp`.
 
 ---
 

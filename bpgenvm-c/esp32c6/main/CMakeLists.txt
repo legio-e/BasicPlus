@@ -74,6 +74,7 @@ idf_component_register(
         "../../src/bpvm_wifi.c"        # V8/H3: la WiFi, el enlace, lo común de la HAL BP
         "../../src/bpvm_bt.c"          # V8/H2: el Bluetooth, lo común de la HAL BP
         "../../src/bpvm_teclado.c"     # V8/H2, paso 2: el teclado del SO, lo común de la HAL BP
+        "../../src/bpvm_raton.c"     # V8/H2, paso 3: el ratón del SO, lo común de la HAL BP
         "../../src/bpvm_red.c"         # V8/H3: la IP de la placa, lo común
         "../../src/bpvm_npack.c"       # V5/I: escalera de validacion del pack nativo
         "../../src/bpvm_npack_carga.c"  # V7/H7 (Boot 2, fase 2): el cargador comun

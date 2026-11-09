@@ -2475,6 +2475,54 @@ tk.onKey := screen::key                  // one notice per press, on the thread 
   keyboard; and in a program with a GUI, the GUI itself will take the keyboard to its widgets.
 </p>
 
+<h3 id="stdlib-mice">14.21 <code>Mice</code> (the mouse)</h3>
+<p>
+  The mouse (<code>import Mice</code>; V8). It goes with a screen: its position is in the points of that screen, like
+  the GUI's (<code>(0,0)</code> at the top left; with the screen rotated, as it is seen). Without a screen it can be
+  connected, but it does nothing. The buttons, named in the <code>Mice.Button</code> enum: <code>LEFT</code>,
+  <code>RIGHT</code>, <code>MIDDLE</code>, and <code>BACK</code> and <code>FORWARD</code>, the two side buttons many mice
+  have.
+</p>
+<pre><code><span class="kw">import</span> Mice
+
+<span class="kw">var</span> mo: Mice.Mouse := Mice.Mouse()
+mo.onPress := screen::pressed            // on the thread that created the mouse
+mo.onMove := screen::moved
+mo.onWheel := screen::wheel
+
+<span class="kw">function</span> <span class="kw">event</span> pressed(m: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
+  <span class="kw">if</span> b == Mice.Button.LEFT <span class="kw">then</span>
+    <span class="kw">print</span> "click at " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> pressed
+
+<span class="kw">function</span> <span class="kw">event</span> moved(m: Mice.Mouse, x: integer, y: integer)
+  <span class="kw">if</span> m.isPressed(Mice.Button.LEFT) <span class="kw">then</span>
+    <span class="kw">print</span> "dragging at " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> moved
+
+<span class="kw">function</span> <span class="kw">event</span> wheel(m: Mice.Mouse, d: integer)   // +1 up, -1 down, per notch
+<span class="kw">end</span> wheel</code></pre>
+<table>
+  <tr><th><code>Mice.Mouse</code></th><th>What it does</th></tr>
+  <tr><td><code>Mouse()</code></td><td>A program mouse: from now on, what the mouse does reaches it as events, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: each one gets every event</td></tr>
+  <tr><td><code>onPress(m, b, x, y)</code></td><td>When a button is pressed: the mouse, the button and the point where it was pressed. The <code>onMove</code> to that point comes first. There is no event on release, for now</td></tr>
+  <tr><td><code>onMove(m, x, y)</code></td><td>When it moves, with <strong>only the last position</strong>: if between two turns the mouse goes through several points, the program gets the last one (a Bluetooth mouse sends about 100 reports a second). The buttons and the wheel are never lost: they come in order</td></tr>
+  <tr><td><code>onWheel(m, d)</code></td><td>The wheel: the notches, +1 up and -1 down</td></tr>
+  <tr><td><code>getX(): integer</code>, <code>getY(): integer</code></td><td>The position, as it is now. From any thread</td></tr>
+  <tr><td><code>isPressed(b: Mice.Button): boolean</code></td><td>Is that button pressed, now? That is why, if the program is slow, the <code>onMove</code> at the end of a drag may reach it with the button already released</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is a mouse connected?</td></tr>
+  <tr><td><code>close()</code></td><td>Stops receiving events (<code>getX</code>, <code>getY</code> and <code>isPressed</code> still work)</td></tr>
+</table>
+<p>
+  <strong>Where.</strong> On the <strong>PC</strong>, the mouse of the GUI window, only with a mouse connected: the
+  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». As a touch screen, the
+  window stays the same: the GUI buttons and fields respond to the PC mouse, connected or not. Without a GUI there is no
+  mouse on the PC. On the boards, next, with a Bluetooth mouse; and in a program with a GUI, the GUI itself will take the
+  mouse to its widgets, with an arrow.
+</p>
+
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>
 <p>
   The graphical interface (screen and widget tree, the full catalog, color and fonts,

@@ -87,6 +87,17 @@ public final class GuiBackend {
     private java.awt.KeyEventDispatcher despachador;   // el de la ventana abierta; se quita al cerrarla
     public void setTecladoPC(TecladoPC t) { this.tecladoPC = t; }
 
+    /** V8/H2, paso 3 (9-nov) — el ratón de la ventana, al ratón del SO de la VM (Raton.java): el punto en la pantalla, los
+     *  botones con los bits del informe HID y la rueda en muescas (RatonSwing). La VM mira si hay un ratón conectado (en
+     *  el PC, el simulado del Bluetooth): sin él, no llega. Como táctil, la ventana sigue igual: esto sólo mira. */
+    public interface RatonPC {
+        void raton(int x, int y, int botones, int rueda);
+    }
+    private volatile RatonPC ratonPC;
+    private final RatonSwing ratonSw = new RatonSwing();
+    private java.awt.event.AWTEventListener vigiaRaton;   // el de la ventana abierta; se quita al cerrarla
+    public void setRatonPC(RatonPC r) { this.ratonPC = r; }
+
     private int screenHandle = 0;
     private int screenW = 480, screenH = 320;     // tamaño por defecto (configurable)
     private int rotation = 0;                     // 0/90/180/270 (Gui.setRotation)
@@ -784,8 +795,21 @@ public final class GuiBackend {
                     return false;
                 };
                 java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(despachador);
+                // V8/H2, paso 3 — y su ratón, al ratón del SO: un vigía de los eventos de ratón de AWT (no se los quita a
+                // nadie: los botones y los campos siguen respondiendo, como la táctil)
+                final javax.swing.JComponent pantalla = root.comp;
+                vigiaRaton = ev -> {
+                    RatonPC r = ratonPC;
+                    if (r == null || !(ev instanceof java.awt.event.MouseEvent)) return;
+                    java.awt.event.MouseEvent me = (java.awt.event.MouseEvent) ev;
+                    java.awt.Component c = me.getComponent();
+                    if (c == esta || javax.swing.SwingUtilities.getWindowAncestor(c) == esta)
+                        ratonSw.evento(me, pantalla, screenW, screenH, r);
+                };
+                java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(vigiaRaton, java.awt.AWTEvent.MOUSE_EVENT_MASK
+                        | java.awt.AWTEvent.MOUSE_MOTION_EVENT_MASK | java.awt.AWTEvent.MOUSE_WHEEL_EVENT_MASK);
                 frame.addWindowFocusListener(new java.awt.event.WindowAdapter() {
-                    @Override public void windowLostFocus(java.awt.event.WindowEvent e) { teclas.olvida(); }
+                    @Override public void windowLostFocus(java.awt.event.WindowEvent e) { teclas.olvida(); ratonSw.olvida(); }
                 });
                 frame.setVisible(true);
             });
@@ -810,6 +834,9 @@ public final class GuiBackend {
         final java.awt.KeyEventDispatcher d = despachador;   // V8/H2, paso 2: sus teclas, ya no
         despachador = null;
         if (d != null) java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(d);
+        final java.awt.event.AWTEventListener v = vigiaRaton;   // V8/H2, paso 3: ni su ratón
+        vigiaRaton = null;
+        if (v != null) java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(v);
         try { SwingUtilities.invokeAndWait(f::dispose); }
         catch (Exception ignore) { /* si el EDT ya no esta, no hay nada que cerrar */ }
     }

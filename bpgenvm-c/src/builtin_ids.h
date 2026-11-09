@@ -337,7 +337,14 @@ enum {
     BUILTIN_KB_READ_CHAR                 = 329,   /* __kbReadChar(): integer */
     BUILTIN_KB_INJECT                    = 330,   /* __kbInject(k: integer, cp: integer) */
     BUILTIN_KB_IS_CONNECTED              = 331,   /* __kbIsConnected(): boolean */
-    BUILTIN__CUANTOS = 332
+    BUILTIN_MS_OPEN                      = 332,   /* __msOpen(t: any) */
+    BUILTIN_MS_CLOSE                     = 333,   /* __msClose(t: any) */
+    BUILTIN_MS_GET_X                     = 334,   /* __msGetX(): integer */
+    BUILTIN_MS_GET_Y                     = 335,   /* __msGetY(): integer */
+    BUILTIN_MS_GET_BUTTONS               = 336,   /* __msGetButtons(): integer */
+    BUILTIN_MS_INJECT                    = 337,   /* __msInject(x: integer, y: integer, botones: integer, rueda: integer) */
+    BUILTIN_MS_IS_CONNECTED              = 338,   /* __msIsConnected(): boolean */
+    BUILTIN__CUANTOS = 339
 };
 
 #endif

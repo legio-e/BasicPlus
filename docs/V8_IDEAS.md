@@ -650,6 +650,27 @@ simulado» conectado, y sigue haciendo de táctil en la GUI. Sin GUI, en el PC n
 - **Para la placa (el paso 5)**: el ratón manda desplazamientos, que se suman y se limitan a la pantalla; y la posición
   de partida, el centro.
 
+### El paso 3, hecho (9-nov): el ratón del SO y `Mice.Mouse`, en las dos VMs
+
+Lo del plan, y como salió:
+- **`bpvm_raton.c` y `Raton.java`**, con el reparto en el planificador de las dos VMs, después del de las teclas, y la
+  limpieza al acabar el programa: fuera sus ratones y los avisos; la posición y los botones se quedan, porque son del
+  ratón.
+- **El módulo `Mice`** (en el pack de la stdlib, el 35): el enum `Button` y la clase `Mouse`. Del bit del informe al
+  enum, en BP y con un `if`: un entero no se convierte en un enum.
+- **En el PC**: en la VM-C y el micro simulado, los eventos de ratón de SDL, con el punto pasado a la pantalla tal como se
+  ve (girada, con la cuenta de LVGL); en la VM-Java, un vigía de los eventos de ratón de AWT sobre la ventana
+  (`RatonSwing`). Sólo con un ratón conectado (`bpvm_bt_hay_raton`). Lo que SDL fabrica de una pantalla táctil no cuenta
+  como ratón.
+- **La memoria:** en una placa sin ratón, 12 B de RAM fija (medido en la Pico) y 1,2 KB de flash; el estado (528 B), la
+  primera vez que se usa.
+- **Las pruebas:** `Raton.bp` en la red, sin ventana (con `__msInject`): las dos VMs dicen lo mismo. Y a mano, el camino
+  de las ventanas, con un guion (moverse, apretar, arrastrar, soltar, el botón derecho y la rueda), con y sin «Ratón
+  simulado» y con la pantalla girada: en la VM-C, con cuatro órdenes nuevas del guion de la ventana SDL (`mueve`, `pulsa`,
+  `suelta` y `rueda`); en la VM-Java, un arnés que mete los eventos en la cola de AWT. Las dos dan lo mismo, y sin el
+  ratón conectado, nada. Girada, la VM-C da los puntos tal como se ven; la VM-Java no gira el dibujo, cambia el aspecto
+  de la ventana, así que sus puntos ya son los de la pantalla.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

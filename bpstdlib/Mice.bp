@@ -1,0 +1,142 @@
+// Mice.bp — V8/H2, paso 3 (9-nov): EL RATÓN, para los programas (V8_IDEAS §E1, «El paso 3»). El módulo en plural y la
+// clase en singular (Eduardo: «Los módulos en plural la clase en singular»).
+//
+// EL RATÓN VA CON UNA PANTALLA (Eduardo, 8-nov): su posición son los puntos de esa pantalla, como los de la GUI ((0,0)
+// arriba a la izquierda; con la pantalla girada, tal como se ve). Sin pantalla se puede conectar, pero no hace nada.
+//
+//   var ra: Mice.Mouse := Mice.Mouse()
+//   ra.onPress := pant::pulsado                // en el hilo que creó el ratón
+//   ra.onMove := pant::movido
+//   ra.onWheel := pant::rueda
+//
+//   function event pulsado(r: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
+//     if b == Mice.Button.LEFT then
+//       print "clic en " + x + ", " + y
+//     endif
+//   end pulsado
+//
+//   function event movido(r: Mice.Mouse, x: integer, y: integer)
+//     if r.isPressed(Mice.Button.LEFT) then
+//       print "arrastrando por " + x + ", " + y
+//     endif
+//   end movido
+//
+//   function event rueda(r: Mice.Mouse, d: integer)   // +1 hacia arriba, -1 hacia abajo, por cada muesca
+//
+// LOS EVENTOS: onPress, al apretar un botón, con el punto donde se apretó (al soltar, nada, de momento: como el teclado);
+// onMove, al moverse, con SÓLO LA ÚLTIMA POSICIÓN (un ratón Bluetooth manda unos 100 informes por segundo: si entre dos
+// turnos pasa por varios puntos, el programa recibe el último); y onWheel, la rueda. Los botones y la rueda no se pierden:
+// van en orden, como las teclas, y antes de un onPress llega el onMove hasta su punto. Van al hilo que creó el ratón, que
+// tiene que estar corriendo (un bucle con sleep, por ejemplo).
+//
+// PREGUNTANDO, desde cualquier hilo, el ratón del SO tal como está ahora: getX(), getY() e isPressed(b). Por eso, si el
+// programa va lento, el onMove del final de un arrastre puede llegar con el botón ya suelto.
+//
+// LOS DOS NIVELES (Eduardo, 8-nov): el ratón del SO, uno, que junta todos los ratones conectados, y los de los programas,
+// uno o varios: cada uno recibe todos los eventos.
+//
+// EN EL PC, el ratón de la ventana de la GUI, sólo con un ratón conectado: «Ratón simulado», de Air.Bluetooth (como
+// táctil, la ventana sigue igual). Sin GUI, en el PC no hay ratón.
+module Mice
+  import Core
+
+  // Los botones, con los bits del informe de un ratón HID: BACK y FORWARD son los dos laterales que traen muchos ratones.
+  public enum Button
+    LEFT := 1
+    RIGHT := 2
+    MIDDLE := 4
+    BACK := 8
+    FORWARD := 16
+  end Button
+
+  // ---- Los builtins del ratón del SO (V8/H2, paso 3: del 332 al 338, BUILTINS.md) ----
+  public function __msOpen(t: Object)   // Object y no any: `any` no sale en la interfaz de un módulo
+    inline CALL_BUILTIN 332
+  end __msOpen
+  public function __msClose(t: Object)
+    inline CALL_BUILTIN 333
+  end __msClose
+  public function __msGetX(): integer
+    inline CALL_BUILTIN 334
+  end __msGetX
+  public function __msGetY(): integer
+    inline CALL_BUILTIN 335
+  end __msGetY
+  public function __msGetButtons(): integer
+    inline CALL_BUILTIN 336
+  end __msGetButtons
+  // Para las pruebas: como un informe de un ratón de verdad, con el punto en vez del desplazamiento (sin mirar si hay
+  // uno conectado): la posición, los botones apretados (los bits de Button) y la rueda, en muescas.
+  public function __msInject(x: integer, y: integer, botones: integer, rueda: integer)
+    inline CALL_BUILTIN 337
+  end __msInject
+  public function __msIsConnected(): boolean
+    inline CALL_BUILTIN 338
+  end __msIsConnected
+
+  // ---- El ratón del programa ----
+  public class Mouse
+    // Al apretar un botón: el ratón, el botón y el punto donde se apretó.
+    event onPress(r: Mouse, b: Button, x: integer, y: integer)
+    // Al moverse: la última posición.
+    event onMove(r: Mouse, x: integer, y: integer)
+    // La rueda: +1 hacia arriba, -1 hacia abajo, por cada muesca.
+    event onWheel(r: Mouse, d: integer)
+
+    // Se apunta en la VM: desde ahora, lo que haga el ratón le llega como evento, en el hilo que lo crea.
+    public function Mouse()
+      __msOpen(this)
+    end Mouse
+
+    // La posición del ratón, tal como está: los puntos de la pantalla.
+    public function getX(): integer
+      return __msGetX()
+    end getX
+
+    public function getY(): integer
+      return __msGetY()
+    end getY
+
+    // ¿Está apretado ese botón, ahora?
+    public function isPressed(b: Button): boolean
+      return (__msGetButtons() & integer(b)) != 0
+    end isPressed
+
+    // ¿Hay un ratón conectado? (En el PC, «Ratón simulado», de Air.Bluetooth.)
+    public function isConnected(): boolean
+      return __msIsConnected()
+    end isConnected
+
+    // Deja de recibir eventos (getX, getY e isPressed siguen valiendo).
+    public function close()
+      __msClose(this)
+    end close
+
+    // Lo llama la VM, con cada cosa nueva, en el hilo que creó el ratón: no es para los programas. El tipo: 1 un botón
+    // que se aprieta (dato, su bit), 2 moverse y 3 la rueda (dato, las muescas).
+    public function __despacha(tipo: integer, dato: integer, x: integer, y: integer)
+      if tipo == 1 then
+        raise onPress(this, this.boton(dato), x, y)
+      elseif tipo == 2 then
+        raise onMove(this, x, y)
+      elseif tipo == 3 then
+        raise onWheel(this, dato)
+      endif
+    end __despacha
+
+    // Del bit al enum: un entero no se convierte en un enum.
+    function boton(b: integer): Button
+      if b == 2 then
+        return Button.RIGHT
+      elseif b == 4 then
+        return Button.MIDDLE
+      elseif b == 8 then
+        return Button.BACK
+      elseif b == 16 then
+        return Button.FORWARD
+      endif
+      return Button.LEFT
+    end boton
+  end Mouse
+
+end Mice

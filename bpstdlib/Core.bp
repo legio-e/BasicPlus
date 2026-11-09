@@ -1928,6 +1928,29 @@ module Core
   function __kbIsConnected(): boolean   // ¿hay un teclado conectado?
     inline CALL_BUILTIN 331
   end __kbIsConnected
+  // V8/H2, paso 3 (9-nov) — EL RATÓN DEL SO, para Mice.Mouse (V8_IDEAS §E1, «El paso 3»): la posición en los puntos de la
+  // pantalla y los botones, con los bits del informe HID (1 izquierdo, 2 derecho, 4 central, 8 atrás, 16 adelante).
+  function __msOpen(t: any)          // apunta un Mouse: sus eventos, al hilo que lo crea (no lo mantiene vivo)
+    inline CALL_BUILTIN 332
+  end __msOpen
+  function __msClose(t: any)         // lo borra: deja de recibir eventos
+    inline CALL_BUILTIN 333
+  end __msClose
+  function __msGetX(): integer       // la posición del ratón del SO, tal como está
+    inline CALL_BUILTIN 334
+  end __msGetX
+  function __msGetY(): integer
+    inline CALL_BUILTIN 335
+  end __msGetY
+  function __msGetButtons(): integer   // los botones apretados, tal como están (los bits HID)
+    inline CALL_BUILTIN 336
+  end __msGetButtons
+  function __msInject(x: integer, y: integer, botones: integer, rueda: integer)   // para las pruebas: como un informe, con el punto
+    inline CALL_BUILTIN 337
+  end __msInject
+  function __msIsConnected(): boolean   // ¿hay un ratón conectado?
+    inline CALL_BUILTIN 338
+  end __msIsConnected
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

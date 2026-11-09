@@ -22,10 +22,17 @@
 #include "bpvm_gui.h"
 #include "bpvm_gui_host.h"   /* V7 #646: los verbos de la ventana, sólo del PC */
 #include "bpvm_teclado.h"    /* V8/H2, paso 2: las teclas de la ventana, al teclado del SO */
+#include "bpvm_raton.h"      /* V8/H2, paso 3: y su ratón, al ratón del SO */
 #include "crc32.h"
 
 static volatile int g_window_closed = 0;
 static volatile int g_shot_requested = 0;   /* F12 → captura de pantalla (docs) */
+
+/* V8/H2, paso 3 — el ratón de la ventana: su tamaño (el del panel: la ventana no gira con la pantalla), el giro de la
+ * pantalla (Gui.setRotation) y los botones de la ventana, como quedan (los bits HID), para el ratón del SO. */
+static int      g_ven_w = 0, g_ven_h = 0;
+static int      g_giro  = 0;
+static uint32_t g_raton_botones = 0;
 
 /* V7/H12, LVGL con dos runs — LA VENTANA, SIEMPRE DESDE EL HILO QUE LA CREÓ. LVGL lee los eventos de SDL dentro de
  * lv_timer_handler, y en Windows la cola de mensajes es del hilo que creó la ventana: bombeada desde otro, deja de
@@ -60,6 +67,12 @@ static int      g_shot_env_read  = 0;
  *   teclea <texto>  V8/H2, paso 2: el texto, tecla a tecla (pulsar, su carácter, soltar), como un teclado de EE. UU.:
  *                   las letras, los números y el espacio con su tecla; lo demás de ASCII, sólo su carácter
  *   tecla <código>  una tecla por su código HID, sin carácter (Enter es 40, Escape 41, la flecha arriba 82)
+ *   mueve <x> <y>   V8/H2, paso 3: el ratón, a ese punto de la ventana (con los botones que tenga apretados el guion)
+ *   pulsa <x> <y> [b]   aprieta un botón ahí, sin soltarlo: b, el número de SDL (1 izquierdo, el de por defecto; 2
+ *                   central; 3 derecho; 4 y 5, los laterales). Para que LVGL lo vea como un arrastre, un `wait` antes de
+ *                   moverlo: LVGL lee el ratón una vez por pasada
+ *   suelta <x> <y> [b]  lo suelta ahí
+ *   rueda <d>       la rueda, d muescas (+ hacia arriba), donde esté el ratón
  *   shot            captura PNG (bp_shot_NNNN.png)
  *   quit            cierra la ventana (termina el programa)
  *
@@ -155,6 +168,30 @@ static void guion_teclea(const char* s) {
     }
 }
 
+/* V8/H2, paso 3 — el ratón del guion, como lo manda SDL: entra por el mismo vigilante que el de verdad (lvgl_watch), y
+ * de ahí al ratón del SO, si hay un ratón conectado; LVGL, como táctil, lo ve igual que el clic. `g_guion_botones`, los
+ * que tiene apretados el guion (la máscara de SDL), para los movimientos. */
+static uint32_t g_guion_botones = 0;
+
+static void guion_raton(uint32_t type, int x, int y, int boton) {
+    SDL_Event e;
+    SDL_memset(&e, 0, sizeof(e));
+    e.type = type;
+    if (type == SDL_MOUSEMOTION) {
+        e.motion.windowID = g_win_id; e.motion.x = x; e.motion.y = y;
+        e.motion.state = g_guion_botones;
+    } else if (type == SDL_MOUSEWHEEL) {
+        e.wheel.windowID = g_win_id; e.wheel.y = boton;   /* aquí, las muescas */
+        e.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    } else {
+        e.button.windowID = g_win_id; e.button.x = x; e.button.y = y;
+        e.button.button = (Uint8) boton;
+        e.button.state  = (type == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
+        e.button.clicks = 1;
+    }
+    SDL_PushEvent(&e);
+}
+
 static void script_load(void) {
     const char* path = getenv("BPVM_GUI_SCRIPT");
     if (!path || !*path) return;
@@ -208,6 +245,24 @@ static void script_step(void) {
     } else if (sscanf(line, "tecla %d", &x) == 1) {
         guion_tecla(x, 0, NULL);
         printf("[gui] guion: tecla %d" BPVM_EOL, x); fflush(stdout);
+    } else if (sscanf(line, "mueve %d %d", &x, &y) == 2) {   /* V8/H2, paso 3: el ratón */
+        guion_raton(SDL_MOUSEMOTION, x, y, 0);
+        printf("[gui] guion: mueve %d,%d" BPVM_EOL, x, y); fflush(stdout);
+    } else if (strncmp(line, "pulsa ", 6) == 0 || strncmp(line, "suelta ", 7) == 0) {
+        int pulsa = line[0] == 'p', b = SDL_BUTTON_LEFT;
+        int n = sscanf(line + (pulsa ? 6 : 7), "%d %d %d", &x, &y, &b);
+        if (n < 2 || b < 1 || b > 5) {
+            printf("[gui] guion: comando no reconocido: '%s'" BPVM_EOL, line); fflush(stdout);
+        } else {
+            guion_raton(SDL_MOUSEMOTION, x, y, 0);   /* llegar ahí, con los botones de antes */
+            if (pulsa) g_guion_botones |= SDL_BUTTON((uint32_t) b);
+            else       g_guion_botones &= ~SDL_BUTTON((uint32_t) b);
+            guion_raton(pulsa ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP, x, y, b);
+            printf("[gui] guion: %s %d,%d (%d)" BPVM_EOL, pulsa ? "pulsa" : "suelta", x, y, b); fflush(stdout);
+        }
+    } else if (sscanf(line, "rueda %d", &x) == 1) {
+        guion_raton(SDL_MOUSEWHEEL, 0, 0, x);
+        printf("[gui] guion: rueda %d" BPVM_EOL, x); fflush(stdout);
     } else if (strcmp(line, "shot") == 0) {
         g_shot_requested = 1;
     } else if (strcmp(line, "quit") == 0) {
@@ -253,6 +308,43 @@ static int32_t sig_utf8(const unsigned char** s) {
     return cp;
 }
 
+/* V8/H2, paso 3 — los botones de SDL, en los bits del informe HID (BPVM_RATON_*): el número de un botón, y la máscara de
+ * los que están apretados. */
+static uint32_t boton_hid(int b) {
+    switch (b) {
+        case SDL_BUTTON_LEFT:   return BPVM_RATON_IZQ;
+        case SDL_BUTTON_RIGHT:  return BPVM_RATON_DER;
+        case SDL_BUTTON_MIDDLE: return BPVM_RATON_CENTRAL;
+        case SDL_BUTTON_X1:     return BPVM_RATON_ATRAS;
+        case SDL_BUTTON_X2:     return BPVM_RATON_ADELANTE;
+        default:                return 0;
+    }
+}
+static uint32_t botones_hid(uint32_t m) {
+    uint32_t b = 0;
+    if (m & SDL_BUTTON_LMASK)  b |= BPVM_RATON_IZQ;
+    if (m & SDL_BUTTON_RMASK)  b |= BPVM_RATON_DER;
+    if (m & SDL_BUTTON_MMASK)  b |= BPVM_RATON_CENTRAL;
+    if (m & SDL_BUTTON_X1MASK) b |= BPVM_RATON_ATRAS;
+    if (m & SDL_BUTTON_X2MASK) b |= BPVM_RATON_ADELANTE;
+    return b;
+}
+
+/* El punto de la ventana, en la pantalla tal como se ve, y dentro de ella. La ventana no gira con la pantalla (el driver
+ * de SDL de LVGL gira el dibujo en su flush), así que se hace la cuenta que hace LVGL con la táctil
+ * (indev_pointer_proc, lv_indev.c), con el tamaño de la ventana, que es el del panel. Arrastrando fuera, el borde. */
+static void en_pantalla(int wx, int wy, int32_t* x, int32_t* y) {
+    const int w = g_ven_w, h = g_ven_h;
+    if (wx < 0) wx = 0;
+    if (wx >= w) wx = w - 1;
+    if (wy < 0) wy = 0;
+    if (wy >= h) wy = h - 1;
+    if (g_giro == 180 || g_giro == 270) { wx = w - wx - 1; wy = h - wy - 1; }
+    if (g_giro == 90 || g_giro == 270) { int t = wy; wy = wx; wx = h - t - 1; }
+    *x = wx;
+    *y = wy;
+}
+
 /* Watch de eventos SDL: marca el cierre de ventana SIN consumir el evento (LVGL
  * sigue recibiendo el ratón). Evita depender de internals de lv_sdl. */
 static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
@@ -275,6 +367,27 @@ static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
         const unsigned char* s = (const unsigned char*) e->text.text;
         uint32_t est = estado_sdl((unsigned) SDL_GetModState());
         while (*s) bpvm_teclado_pc_texto(sig_utf8(&s), est);
+    }
+    /* V8/H2, paso 3 — el ratón de la ventana, al ratón del SO (él mira que haya un ratón conectado): moverse, los botones
+     * y la rueda, con el punto en la pantalla. Como táctil, LVGL lo sigue viendo igual. Lo que SDL fabrica de una
+     * pantalla táctil no es un ratón. */
+    if (g_ven_w > 0 && g_ven_h > 0) {
+        int32_t x, y;
+        if (e->type == SDL_MOUSEMOTION && e->motion.which != SDL_TOUCH_MOUSEID) {
+            g_raton_botones = botones_hid(e->motion.state);
+            en_pantalla(e->motion.x, e->motion.y, &x, &y);
+            bpvm_raton_pc(x, y, g_raton_botones, 0);
+        } else if ((e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP)
+                   && e->button.which != SDL_TOUCH_MOUSEID) {
+            if (e->type == SDL_MOUSEBUTTONDOWN) g_raton_botones |= boton_hid(e->button.button);
+            else                                g_raton_botones &= ~boton_hid(e->button.button);
+            en_pantalla(e->button.x, e->button.y, &x, &y);
+            bpvm_raton_pc(x, y, g_raton_botones, 0);
+        } else if (e->type == SDL_MOUSEWHEEL && e->wheel.which != SDL_TOUCH_MOUSEID) {
+            int32_t d = e->wheel.y;   /* + hacia arriba, como el informe HID */
+            if (e->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) d = -d;
+            if (d != 0) bpvm_raton_pc(bpvm_raton_x(), bpvm_raton_y(), g_raton_botones, d);   /* donde esté */
+        }
     }
     return 1;   /* 1 = no filtrar (el evento sigue su curso) */
 }
@@ -459,6 +572,8 @@ void bpvm_gui_disp_init(int w, int h) {
     lv_display_t* d = lv_sdl_window_create(w, h);
     lv_sdl_window_set_title(d, g_title);
     lv_sdl_mouse_create();
+    g_ven_w = w;   /* V8/H2, paso 3: para el ratón del SO, el punto en la pantalla */
+    g_ven_h = h;
     SDL_AddEventWatch(lvgl_watch, NULL);
     /* windowID de la ventana que acaba de crear LVGL: hace falta para inyectar
      * eventos de ratón sintéticos (BPVM_GUI_SCRIPT). lv_sdl_mouse_handler filtra
@@ -545,8 +660,9 @@ void bpvm_gui_disp_set_rotation(int deg)
         case 90:  lv_display_set_rotation(d, LV_DISPLAY_ROTATION_90);  break;
         case 180: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_180); break;
         case 270: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_270); break;
-        default:  break;
+        default:  return;
     }
+    g_giro = deg;   /* V8/H2, paso 3: el ratón del SO, en la pantalla tal como se ve */
 }
 
 #endif /* BPVM_LVGL */

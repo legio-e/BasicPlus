@@ -1,0 +1,80 @@
+dbg 3
+module Mice
+source C:\lenguajes\pm\bpstdlib\Mice.bp
+lines
+0 0
+24 0
+35 0
+38 93
+52 0
+55 97
+69 0
+72 102
+91 0
+94 107
+108 0
+111 112
+122 0
+125 118
+134 119
+185 121
+227 123
+261 0
+264 129
+273 130
+295 132
+321 134
+351 136
+368 138
+380 0
+383 88
+394 0
+424 0
+438 0
+457 0
+474 0
+491 0
+508 0
+522 0
+vars
+func Mouse.getX 35
+this -20 8 0 ?
+func Mouse.getY 52
+this -20 8 0 ?
+func Mouse.isPressed 69
+this -24 8 0 ?
+b -16 4 0 integer
+func Mouse.isConnected 91
+this -20 8 0 ?
+func Mouse.close 108
+this -20 8 0 ?
+func Mouse.__despacha 122
+this -36 8 0 ?
+tipo -28 4 0 integer
+dato -24 4 0 integer
+x -20 4 0 integer
+y -16 4 0 integer
+func Mouse.boton 261
+this -24 8 0 ?
+b -16 4 0 integer
+func Mouse.__init 380
+this -20 8 0 ?
+func __cls_init_Mouse() 424
+this -20 8 0 ?
+func __cls_m_Mouse#isPressed(EMice/Button;)z 438
+this -24 8 0 ?
+b -16 4 0 integer
+func __cls_m_Mouse#getX()i 457
+this -20 8 0 ?
+func __cls_m_Mouse#getY()i 474
+this -20 8 0 ?
+func __cls_m_Mouse#isConnected()z 491
+this -20 8 0 ?
+func __cls_m_Mouse#close()V 508
+this -20 8 0 ?
+func __cls_m_Mouse#__despacha(iiii)V 522
+this -36 8 0 ?
+tipo -28 4 0 integer
+dato -24 4 0 integer
+x -20 4 0 integer
+y -16 4 0 integer

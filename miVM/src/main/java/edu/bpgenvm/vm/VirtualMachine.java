@@ -362,6 +362,12 @@ public class VirtualMachine {
         if (teclado == null) teclado = new Teclado();
         return teclado;
     }
+    // V8/H2, paso 3 (9-nov): el ratón del SO (Raton.java), el espejo de bpvm_raton.c; el reparto, repartirRaton
+    private Raton raton;
+    private synchronized Raton raton() {
+        if (raton == null) raton = new Raton();
+        return raton;
+    }
     /** Como una placa al arrancar: si /sys/bluetooth.json dice "autoStart", los recordados (lo llama Main). */
     public void arrancaBluetooth() { bluetooth().arranque(); }
     /** Un fichero de la placa ("/sys/…"), dentro de la flash (#808); sin flash, la ruta tal cual. null si no está. */
@@ -490,6 +496,9 @@ public class VirtualMachine {
             @Override public void texto(int cp, int estado)       { if (bluetooth().hayTeclado()) teclado().pcTexto(cp, estado); }
             @Override public void soltada(int codigo)             { teclado().pcSoltada(codigo); }
         });
+        // V8/H2, paso 3 — y su ratón, al ratón del SO, sólo con un ratón conectado (en el PC, el simulado): lo mismo que
+        // bpvm_raton_pc en la VM-C, con el de SDL
+        gui.setRatonPC((x, y, botones, rueda) -> { if (bluetooth().hayRaton()) raton().pon(x, y, botones, rueda); });
     }
 
     // H3.4 — cache de la entrada de la funcion BP Gui.__guiDispatch (resuelta
@@ -3432,6 +3441,7 @@ public class VirtualMachine {
         Sonido.finDeRun();                      // V8/H4 (#708): y lo que suene se para (el volumen, a 85)
         if (bluetooth != null) bluetooth.finDeRun();   // V8/H2: si el programa lo tocó, lo que diga /sys/bluetooth.json
         if (teclado != null) teclado.finDeRun();       // V8/H2, paso 2: y del teclado del SO, lo del programa
+        if (raton != null) raton.finDeRun();           // V8/H2, paso 3: y del ratón del SO
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -3499,6 +3509,7 @@ public class VirtualMachine {
                         // Dentro del vmLock y con el tc ya asignado a este worker:
                         // nadie más lo está ejecutando, su estado es el bueno.
                         repartirTeclas();   // V8/H2, paso 2: las teclas nuevas, como eventos de cada teclado
+                        repartirRaton();    // V8/H2, paso 3: y lo del ratón, como eventos de cada ratón
                         drainOneEvent(tc);
                         inyectaDestruccion(tc);   // V7 #668: y lo pendiente de destruir, como un evento más
                     }
@@ -6652,6 +6663,32 @@ public class VirtualMachine {
                 break;
             }
             case KB_IS_CONNECTED: pushTc(tc, bluetooth().hayTeclado() ? 1 : 0); break;
+            // V8/H2, paso 3 (9-nov) — EL RATÓN DEL SO (Raton.java), para Mice.Mouse; lo mismo que la VM-C (bpvm_raton.c).
+            // Un ratón se apunta como un teclado; los eventos los reparte repartirRaton. Preguntando, tal como está.
+            case MS_OPEN: {
+                long t = popTcRef(tc);
+                if ((int) t == 0) throwBpError(tc, CLASE_NULA, "referencia nula: Mouse de un objeto null");
+                int classPtr = readInt32(refDeref(t));
+                int slot = moduleManager.slotOfMarker(classPtr, "__despacha");
+                if (slot < 0) throwBpRuntimeError(tc, "Mice: la clase no tiene __despacha");
+                if (!raton().apunta(t, tc.id, slot)) throwBpRuntimeError(tc, "Mice: no caben mas ratones (8 a la vez)");
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case MS_CLOSE:       raton().borra(popTcRef(tc)); pushTc(tc, 0); break;   // void
+            case MS_GET_X:       pushTc(tc, raton().x()); break;
+            case MS_GET_Y:       pushTc(tc, raton().y()); break;
+            case MS_GET_BUTTONS: pushTc(tc, raton().botones()); break;
+            case MS_INJECT: {
+                int rueda = popTc(tc);   // el último argumento, arriba
+                int botones = popTc(tc);
+                int y = popTc(tc);
+                int x = popTc(tc);
+                raton().pon(x, y, botones, rueda);
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case MS_IS_CONNECTED: pushTc(tc, bluetooth().hayRaton() ? 1 : 0); break;
             // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
             case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {
@@ -9088,6 +9125,52 @@ public class VirtualMachine {
                 int i = (int) (a.sig % Teclado.AVISOS);
                 eventQueue.addLast(new PendingEvent(a.ref, a.slot, a.tid, 0, new long[]{t.avisosK[i], t.avisosCp[i]}));
                 a.sig++;
+            }
+        }
+    }
+
+    /**
+     * V8/H2, paso 3 (9-nov) — EL REPARTO DEL RATÓN (espejo de bpvm_raton_reparte), después del de las teclas y con sus
+     * reglas: uno en la cola por ratón como mucho; quien se queda atrás pierde los avisos más viejos; con la cola llena,
+     * en el turno siguiente. A cada ratón apuntado, vivo y con su hilo, un __despacha(tipo, dato, x, y): con un aviso
+     * pendiente (un botón que se aprieta o la rueda), si el ratón del programa no está en su punto, primero un MUEVE hasta
+     * allí (el programa ve llegar el ratón adonde se aprieta), y después el aviso; sin avisos, un MUEVE a la posición del
+     * SO, si ha cambiado (sólo la última). El mismo orden que la VM-C.
+     */
+    private void repartirRaton() {
+        Raton r = raton;
+        if (r == null) return;   // nadie ha usado el ratón
+        synchronized (r) {
+            for (Raton.Apuntado a : r.ap) {
+                if (!a.enUso) continue;
+                boolean pend = a.sig != r.avisosFin;
+                if (!pend && a.ux == r.x && a.uy == r.y) continue;                 // al día
+                if (!refViva(a.ref)) { a.enUso = false; continue; }                  // el ratón ya no existe
+                ThreadContext h = null;
+                for (ThreadContext x : threads) if (x.id == a.tid) { h = x; break; }
+                if (h == null || h.getStatus() == ThreadStatus.TERMINATED) { a.enUso = false; continue; }   // ni su hilo
+                if (r.avisosFin - a.sig > Raton.AVISOS) a.sig = r.avisosFin - Raton.AVISOS;   // atrás: pierde los viejos
+                boolean enCola = false;
+                for (PendingEvent e : eventQueue) if (e.recv == a.ref && e.dest == a.slot) { enCola = true; break; }
+                if (enCola) continue;
+                if (eventQueue.size() >= EVENT_QUEUE_CAP) break;                    // llena: en el turno siguiente
+                long[] args;
+                if (pend) {
+                    int i = (int) (a.sig % Raton.AVISOS);
+                    if (a.ux != r.avX[i] || a.uy != r.avY[i]) {                      // primero, llegar adonde pasó
+                        args = new long[]{Raton.MUEVE, 0, r.avX[i], r.avY[i]};
+                        a.ux = r.avX[i];
+                        a.uy = r.avY[i];
+                    } else {
+                        args = new long[]{r.avTipo[i], r.avDato[i], r.avX[i], r.avY[i]};
+                        a.sig++;
+                    }
+                } else {
+                    args = new long[]{Raton.MUEVE, 0, r.x, r.y};
+                    a.ux = r.x;
+                    a.uy = r.y;
+                }
+                eventQueue.addLast(new PendingEvent(a.ref, a.slot, a.tid, 0, args));
             }
         }
     }

@@ -341,7 +341,14 @@ public enum Builtin {
     KB_READ_KEY("__kbReadKey"),   // [328] __kbReadKey(): integer
     KB_READ_CHAR("__kbReadChar"),   // [329] __kbReadChar(): integer
     KB_INJECT("__kbInject"),   // [330] __kbInject(k: integer, cp: integer)
-    KB_IS_CONNECTED("__kbIsConnected");   // [331] __kbIsConnected(): boolean
+    KB_IS_CONNECTED("__kbIsConnected"),   // [331] __kbIsConnected(): boolean
+    MS_OPEN("__msOpen"),   // [332] __msOpen(t: any)
+    MS_CLOSE("__msClose"),   // [333] __msClose(t: any)
+    MS_GET_X("__msGetX"),   // [334] __msGetX(): integer
+    MS_GET_Y("__msGetY"),   // [335] __msGetY(): integer
+    MS_GET_BUTTONS("__msGetButtons"),   // [336] __msGetButtons(): integer
+    MS_INJECT("__msInject"),   // [337] __msInject(x: integer, y: integer, botones: integer, rueda: integer)
+    MS_IS_CONNECTED("__msIsConnected");   // [338] __msIsConnected(): boolean
 
     public final String bpName;
     public final int id;

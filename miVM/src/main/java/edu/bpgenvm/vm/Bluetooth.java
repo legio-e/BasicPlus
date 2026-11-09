@@ -114,6 +114,8 @@ final class Bluetooth {
     synchronized String claseDe(String dir) { String c = conectados.get(dir); return c == null ? "" : c; }
     /** V8/H2, paso 2 — ¿hay un teclado conectado? En el PC, sin él, la ventana de la GUI no teclea (bpvm_bt_hay_teclado). */
     synchronized boolean hayTeclado() { return conectados.containsValue("keyboard"); }
+    /** V8/H2, paso 3 — ¿hay un ratón conectado? En el PC, sin él, el ratón de la ventana no llega a Mice (bpvm_bt_hay_raton). */
+    synchronized boolean hayRaton() { return conectados.containsValue("mouse"); }
     String motivo() { return motivo; }
 
     /** Como una placa al arrancar: si el fichero dice "autoStart", se enciende y espera a los recordados. */

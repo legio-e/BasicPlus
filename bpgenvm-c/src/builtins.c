@@ -35,6 +35,7 @@
 #include "bpvm_wifi.h"   /* V8/H3 — la WiFi, lo común de la HAL BP */
 #include "bpvm_bt.h"     /* V8/H2 — el Bluetooth, lo común de la HAL BP */
 #include "bpvm_teclado.h"   /* V8/H2, paso 2 — el teclado del SO */
+#include "bpvm_raton.h"     /* V8/H2, paso 3 — el ratón del SO */
 #include "bpvm_red.h"
 #include "bpvm_sonido.h" /* V8/H4 (#708) — el sonido, lo común de la HAL BP */
 
@@ -2861,6 +2862,39 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_KB_IS_CONNECTED: push_i32(vm, tc, bpvm_bt_hay_teclado() ? 1 : 0); return BPVM_OK;
+
+    /* V8/H2, paso 3 (9-nov) — EL RATÓN DEL SO (bpvm_raton.c), para Mice.Mouse; en la VM-Java, Raton.java. Un ratón se
+     * apunta como un teclado; los eventos los reparte el planificador (bpvm_raton_reparte). Preguntando, tal como está. */
+    case BUILTIN_MS_OPEN: {
+        bpref_t t = bpref_pop(vm, tc);
+        if (bpref_is_null(t)) return builtin_throw_nula(vm, tc, "referencia nula: Mouse de un objeto null");
+        uint32_t class_ptr = (uint32_t) bpvm_read_i32_be(vm->memory + bpref_deref(vm, t));
+        int slot = slot_por_nombre(vm, class_ptr, "__despacha");
+        if (slot < 0) return builtin_throw(vm, tc, "Mice: la clase no tiene __despacha");
+        if (!bpvm_raton_apunta(vm, t.v, tc->id, slot))
+            return builtin_throw(vm, tc, "Mice: no caben mas ratones (8 a la vez)");
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_MS_CLOSE: {
+        bpref_t t = bpref_pop(vm, tc);
+        bpvm_raton_borra(t.v);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_MS_GET_X:       push_i32(vm, tc, bpvm_raton_x()); return BPVM_OK;
+    case BUILTIN_MS_GET_Y:       push_i32(vm, tc, bpvm_raton_y()); return BPVM_OK;
+    case BUILTIN_MS_GET_BUTTONS: push_i32(vm, tc, (int32_t) bpvm_raton_botones()); return BPVM_OK;
+    case BUILTIN_MS_INJECT: {
+        int32_t rueda   = pop_i32(vm, tc);   /* el último argumento, arriba */
+        int32_t botones = pop_i32(vm, tc);
+        int32_t y       = pop_i32(vm, tc);
+        int32_t x       = pop_i32(vm, tc);
+        bpvm_raton_pon(x, y, (uint32_t) botones, rueda);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_MS_IS_CONNECTED: push_i32(vm, tc, bpvm_bt_hay_raton() ? 1 : 0); return BPVM_OK;
 
     case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
         uint32_t r = bpvm_heap_alloc_string(vm, BPVM_EOL, sizeof(BPVM_EOL) - 1u);

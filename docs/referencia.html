@@ -201,6 +201,7 @@
     <li class="sub"><a href="#stdlib-sound">14.18 Sound</a></li>
     <li class="sub"><a href="#stdlib-air">14.19 Air</a></li>
     <li class="sub"><a href="#stdlib-keyboards">14.20 Keyboards</a></li>
+    <li class="sub"><a href="#stdlib-mice">14.21 Mice</a></li>
     <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 Qué es un pack, y qué no</a></li>
@@ -2837,6 +2838,53 @@ tk.onKey := pant::tecla                  // un aviso por pulsación, en el hilo 
   simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Sin GUI, en el PC no hay
   teclado. El carácter es el del sistema (la distribución del teclado del PC). En las placas, lo siguiente, con un teclado
   Bluetooth; y en un programa con GUI, la propia GUI llevará el teclado a sus widgets.
+</p>
+
+<h3 id="stdlib-mice">14.21 <code>Mice</code> (el ratón)</h3>
+<p>
+  El ratón (<code>import Mice</code>; V8). Va con una pantalla: su posición son los puntos de esa pantalla, como los de la
+  GUI (<code>(0,0)</code> arriba a la izquierda; con la pantalla girada, tal como se ve). Sin pantalla se puede conectar,
+  pero no hace nada. Los botones, con nombre en el enum <code>Mice.Button</code>: <code>LEFT</code>, <code>RIGHT</code>,
+  <code>MIDDLE</code>, y <code>BACK</code> y <code>FORWARD</code>, los dos laterales que traen muchos ratones.
+</p>
+<pre><code><span class="kw">import</span> Mice
+
+<span class="kw">var</span> ra: Mice.Mouse := Mice.Mouse()
+ra.onPress := pant::pulsado              // en el hilo que creó el ratón
+ra.onMove := pant::movido
+ra.onWheel := pant::rueda
+
+<span class="kw">function</span> <span class="kw">event</span> pulsado(r: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
+  <span class="kw">if</span> b == Mice.Button.LEFT <span class="kw">then</span>
+    <span class="kw">print</span> "clic en " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> pulsado
+
+<span class="kw">function</span> <span class="kw">event</span> movido(r: Mice.Mouse, x: integer, y: integer)
+  <span class="kw">if</span> r.isPressed(Mice.Button.LEFT) <span class="kw">then</span>
+    <span class="kw">print</span> "arrastrando por " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> movido
+
+<span class="kw">function</span> <span class="kw">event</span> rueda(r: Mice.Mouse, d: integer)   // +1 hacia arriba, -1 hacia abajo, por cada muesca
+<span class="kw">end</span> rueda</code></pre>
+<table>
+  <tr><th><code>Mice.Mouse</code></th><th>Qué hace</th></tr>
+  <tr><td><code>Mouse()</code></td><td>Un ratón del programa: desde ahora, lo que haga el ratón le llega como evento, en el hilo que lo crea, que tiene que estar corriendo (un bucle con <code>sleep</code>, por ejemplo). Puede haber varios: cada uno recibe todos los eventos</td></tr>
+  <tr><td><code>onPress(r, b, x, y)</code></td><td>Al apretar un botón: el ratón, el botón y el punto donde se apretó. Antes llega el <code>onMove</code> hasta ese punto. Al soltar no hay evento, de momento</td></tr>
+  <tr><td><code>onMove(r, x, y)</code></td><td>Al moverse, con <strong>sólo la última posición</strong>: si entre dos turnos el ratón pasa por varios puntos, el programa recibe el último (un ratón Bluetooth manda unos 100 informes por segundo). Los botones y la rueda no se pierden: van en orden</td></tr>
+  <tr><td><code>onWheel(r, d)</code></td><td>La rueda: las muescas, +1 hacia arriba y -1 hacia abajo</td></tr>
+  <tr><td><code>getX(): integer</code>, <code>getY(): integer</code></td><td>La posición, tal como está ahora. Desde cualquier hilo</td></tr>
+  <tr><td><code>isPressed(b: Mice.Button): boolean</code></td><td>¿Está apretado ese botón, ahora? Por eso, si el programa va lento, el <code>onMove</code> del final de un arrastre puede llegarle con el botón ya suelto</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>¿Hay un ratón conectado?</td></tr>
+  <tr><td><code>close()</code></td><td>Deja de recibir eventos (<code>getX</code>, <code>getY</code> e <code>isPressed</code> siguen valiendo)</td></tr>
+</table>
+<p>
+  <strong>Dónde.</strong> En el <strong>PC</strong>, el ratón de la ventana de la GUI, sólo con un ratón conectado: el
+  simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». Como táctil, la ventana sigue
+  igual: los botones y los campos de la GUI responden al ratón del PC, esté conectado o no. Sin GUI, en el PC no hay
+  ratón. En las placas, lo siguiente, con un ratón Bluetooth; y en un programa con GUI, la propia GUI llevará el ratón a
+  sus widgets, con una flecha.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>
