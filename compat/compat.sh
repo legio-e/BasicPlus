@@ -114,9 +114,17 @@ trap 'rm -rf "$WORK"' EXIT
 # <flash>/sys/bluetooth.json); sin --flash-dir, la del usuario (~/.basicplus/flash). La red le da a cada ejecución
 # una NUEVA y vacía (run_vm): un sample no ve lo que dejó otro, ni la VM-C lo de la VM-Java, ni la red toca la del
 # usuario. Con su ruta de Windows (cygpath -m), la que entienden las dos VMs.
-FLASH_RED="$WORK/.flash"
-FLASH_ARG="--flash-dir=$FLASH_RED"
-command -v cygpath >/dev/null 2>&1 && FLASH_ARG="--flash-dir=$(cygpath -m "$FLASH_RED")"
+# 9-nov: DENTRO DE LA $WORK DE CADA GRUPO (flash_red, en run_vm). Se calculaba una vez, aquí, con la $WORK común, y los
+# tres grupos de `check` (#726), que corren a la vez con su $WORK, usaban la MISMA flash: la cápsula la borraba mientras
+# el corpus corría AirBluetooth (le faltó su fichero a media ejecución, y la red salió roja). Pasó tres veces por suerte.
+FLASH_WORK=""; FLASH_RED=""; FLASH_ARG=""
+flash_red() {   # la flash de la $WORK de ahora (la del grupo); se calcula una vez por $WORK
+  [ "$FLASH_WORK" = "$WORK" ] && return
+  FLASH_WORK="$WORK"; FLASH_RED="$WORK/.flash"; FLASH_ARG="--flash-dir=$FLASH_RED"
+  command -v cygpath >/dev/null 2>&1 && FLASH_ARG="--flash-dir=$(cygpath -m "$FLASH_RED")"
+  return 0
+}
+flash_red   # la de la $WORK común; cada grupo de `check` la vuelve a calcular con la suya, al empezar
 
 # --- Binarios V2 (capsula inmutable) ---
 V2_FE="$HERE/v2/bin/basicplus-frontend.jar"
@@ -201,10 +209,11 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   # V7/H9 (2-oct, resto de #481) — el CÓDIGO DE SALIDA de cada VM, a un fichero por VM (.rc.java / .rc.c): el
   # stdout va por `filt` y el código se perdía en la tubería. La paridad del corpus lo compara.
   # (cada llamada borra SÓLO el suyo: la paridad llama dos veces seguidas, Java y C, y lee los dos después)
-  # V8 #808 (8-nov) — y una flash NUEVA y vacía en cada ejecución (FLASH_RED, arriba), sólo para las VMs de ahora: las
+  # V8 #808 (8-nov) — y una flash NUEVA y vacía en cada ejecución (flash_red, arriba: la de su $WORK), sólo para las VMs de ahora: las
   # de V2 (gen) no conocen la opción.
   local flash=()
   if [ "$bin" = "$V3_JAVA" ] || [ "$bin" = "$V3_C" ]; then
+    flash_red   # la de la $WORK de este grupo (9-nov: era una para los tres)
     rm -rf "${FLASH_RED:?}"; mkdir -p "$FLASH_RED"; flash=("$FLASH_ARG")
   fi
   case "$bin" in
@@ -1533,15 +1542,15 @@ check() {
     return 1
   fi
   echo "-- la red en tres grupos a la vez (#726): A, el corpus; B, las pruebas de C; C, lo demas. Y al final, solos, el sim, la sombra y el estres --"
-  ( WORK="$WORK/gA"; mkdir -p "$WORK"
+  ( WORK="$WORK/gA"; mkdir -p "$WORK"; flash_red   # #808: su flash, la de su $WORK (9-nov)
     PAR_SAVE="$REF_PAR"; frente A 01-paridad "paridad MOD9" check_parity; PAR_SAVE=""
     frente A 08-mod8 "MOD8" check_mod8 sin-referencia
     frente A 09-smp "dos workers" check_smp sin-referencia
     echo $(( SECONDS - t0 )) > "$LOGS/grupoA.seg" ) & pa=$!
-  ( WORK="$WORK/gB"; mkdir -p "$WORK"
+  ( WORK="$WORK/gB"; mkdir -p "$WORK"; flash_red
     frente B 06-testc "pruebas de C" check_testc
     echo $(( SECONDS - t0 )) > "$LOGS/grupoB.seg" ) & pb=$!
-  ( WORK="$WORK/gC"; mkdir -p "$WORK"
+  ( WORK="$WORK/gC"; mkdir -p "$WORK"; flash_red
     frente C 02-mod7 "capsula V6" check_mod7
     frente C 03-fwd "hacia delante" check_fwd
     frente C 04-norma "norma" check_norma

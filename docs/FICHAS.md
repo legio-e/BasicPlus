@@ -7443,6 +7443,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   littlefs (el texto, `#810`). `compat.sh` le da a cada ejecución de `run_vm` una carpeta nueva y vacía.
 - **Falta: el IDE**, que copie los programas a `<flash>/app/<proyecto>`, como en una placa, en vez de a la carpeta
   temporal que borra.
+- **9-nov, un fallo de la red de `#808`** (el commit de la flash por grupo): la carpeta de la flash de la red se
+  calculaba una vez, con la `$WORK` común, y los tres grupos de `check` (`#726`), que corren a la vez cada uno con su
+  `$WORK`, usaban la misma: la cápsula la borraba mientras el corpus corría `AirBluetooth`, que perdió su fichero a media
+  ejecución (la red, roja: la VM-C escribió el fichero sin el `"autoStart"` que ya tenía). Las tres redes del 8-nov
+  pasaron por suerte. Ahora cada grupo, la suya (`flash_red`).
 
 #### 🔵 `#807` — una referencia caducada a un array (u otro objeto) que se pasa a un builtin no da error (abierta el 7-nov; salió en `#805`)
 
