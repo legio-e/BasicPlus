@@ -32,7 +32,13 @@
 > - **Comprobado:** `Raton.bp` en la red (las dos VMs, lo mismo); y a mano, las ventanas de las dos VMs con un guion (moverse, apretar, arrastrar, el botón derecho y la rueda), con y sin «Ratón simulado» y con la pantalla girada. El guion de la ventana SDL sabe mover el ratón: `mueve`, `pulsa`, `suelta` y `rueda`. Compiladas las nueve imágenes, y BpIde, rehecho. La red, VERDE salvo un frente: el micro simulado, 13/14, por el caso G de `run_tarea_smoke`, que cronometra y está en el filo también sin el ratón (`#812`, abierta: el sim de antes y el nuevo, alternados cuatro veces, dan lo mismo). Lo demás: la paridad, 209; MOD8, 201 y los 8 SKIP; dos workers, 209; la cápsula, 59; las pruebas de C, 112/112. Y check-jc, 207 y los 2 SKIP de siempre.
 > - **Un límite, a la vista:** `isPressed` dice cómo está el botón ahora. Si el programa va lento, el `onMove` del final de un arrastre le puede llegar con el botón ya suelto. Lo arregla el evento al soltar, que irá con el tiempo de las teclas.
 > - **Para el `D1`:** en el índice de la referencia inglesa faltan también `Keyboards` (14.20) y `Mice` (14.21).
-> - **Lo siguiente:** el paso 4, la GUI (Eduardo: *«El 3 y despues el 4»*).
+> - **Commits** (sin subir): `bf3c522c` (el diseño), `a0e4a404` (`#812`, abierta) y `d406b581` (el paso 3).
+> - **Lo siguiente: el paso 4, la GUI, mañana** (Eduardo: *«Es tarde así que el paso 4 lo dejamos para mañana. Cerramos por hoy.»*). El análisis, empezado: hoy la GUI bombea en su propio hilo BP (`HiloGui`, con `__guiRunOnce`), y LVGL lee sus dispositivos (la táctil) dentro de ese bombeo. Lo que pensaba proponerle, **por decidir con él**:
+>   1. que LVGL lea el teclado y el ratón del SO él mismo, en el hilo de la GUI, como hoy la táctil, sin un `Keyboards.Keyboard` ni un `Mice.Mouse` de BP en medio. El 8-nov se dijo que la GUI crearía los suyos en su hilo; lo que se ve sería lo mismo, y `scr.onKey` iría por la cola de eventos de la GUI, como un clic;
+>   2. en el PC, con «Ratón simulado» conectado, el ratón del PC dejaría de hacer de táctil en la GUI: si no, cada clic contaría dos veces (dos punteros con el mismo ratón);
+>   3. en la VM-Java, sin «Teclado simulado», la ventana de Swing dejaría de aceptar el teclado del PC, como la placa y la VM-C.
+>
+>   Lo que hace falta de LVGL 9.2 ya está: `lv_group_set_default` (el grupo, para el foco), `lv_indev_set_cursor` (la flecha), `lv_indev_search_obj` (la rueda, el objeto bajo la flecha) y `lv_indev_enable`.
 >
 > **9-nov** — **H2, el paso 2: el teclado del SO y `Keyboards.Keyboard`, hecho** (Eduardo: *«Continuamos con el Bluetooth.»*), con el plan del 8-nov (`V8_IDEAS` §E1, «El paso 2, hecho»).
 > - **Lo que ve el programa:** el módulo `Keyboards` (el enum `Key`, con los códigos HID; `getCode`, `isShift`, `isCtrl`, `isAlt`, `isAltGr`, `isWin`, `isKey`…) y la clase `Keyboard`, con `onKey(t, k, c)`, `hasKey`, `readKey` (el int32), `getChar`, `isConnected` y `close`. Los builtins, del 325 al 331.
