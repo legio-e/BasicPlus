@@ -7387,6 +7387,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#813` — en el PC, la ventana de la VM-C y del micro simulado con la pantalla girada (`Gui.setRotation(90)`) sale mal: colores pálidos y rayas verticales, sin imagen que se reconozca (abierta el 10-nov, en el paso 4 de H2; lo vio Eduardo)
+
+- **Lo visto** (Eduardo, 10-nov, en las pruebas del ratón con la pantalla girada): *«Sale con los colores pálidos con
+  líneas verticales y no se puede identificar la imagen»*; la horizontal, bien. Las capturas PNG salían bien: dibujan la
+  pantalla (`lv_snapshot_take`), no la ventana. La entrada girada, bien: los clics caen en su botón (medido).
+- **La causa** (leída): el driver de SDL de LVGL 9.2 (`lv_sdl_window.c`, `flush_cb`) sólo gira el dibujo en el modo
+  `PARTIAL`, y la ventana del PC va en `DIRECT` (`lv_conf.h`, `LV_SDL_RENDER_MODE`): girada, LVGL dibuja la pantalla en el
+  búfer del panel sin girar. Desde V7/H6 (`Gui.setRotation`); el comentario de `gui_display_sdl.c` dice que «el driver
+  SDL de LVGL gira en su PROPIO flush», y en `DIRECT` no lo hace. No es del paso 4, que no toca el dibujo.
+- **Lo que se haría:** el modo `PARTIAL` en la ventana del PC (o sólo con la pantalla girada), y mirarlo.
+
 #### 🔵 `#812` — el caso G de `run_tarea_smoke` está en el filo: 200 RUN de un programa vacío tardan 1,17–1,23 s con la tarea `run`, con el tope en ~1,22 (el doble de `--run-viejo` más 0,3), y el 4-oct un RUN eran 1,2 ms (abierta el 9-nov, en la red del paso 3 de H2)
 
 - **Lo medido** (9-nov, por la noche): la red del paso 3 salió con el sim en ROJO por este caso (1,41 s contra 0,47);
