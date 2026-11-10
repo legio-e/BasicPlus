@@ -82,6 +82,7 @@ ifeq ($(LVGL),1)
   GUI := 1
   CFLAGS += -DBPVM_LVGL $(LVGL_INC)
   SRC    += src/gui_display_sdl.c   # backend de display SDL (host); el micro usa LTDC (port/)
+  SRC    += src/gui_entrada.c       # V8/H2, paso 4: el teclado y el ratón del SO, en LVGL
 endif
 ifeq ($(GUI),1)
   CFLAGS += -DBPVM_GUI

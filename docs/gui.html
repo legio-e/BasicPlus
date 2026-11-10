@@ -204,6 +204,7 @@
     <li class="sub"><a href="#ev-async">22.3 Trabajo largo sin congelar la interfaz</a></li>
     <li class="sub"><a href="#ev-slots">22.4 De nombre a método (en carga)</a></li>
     <li class="sub"><a href="#ev-codigo">22.5 Suscribir desde código (sin .win)</a></li>
+    <li class="sub"><a href="#ev-teclado">22.6 El teclado y el ratón</a></li>
 
     <li class="group"><a href="#ejecutar">23. Ejecutar (host y placa)</a></li>
     <li class="sub"><a href="#ej-preview">23.1 Vista previa en el PC</a></li>
@@ -875,6 +876,42 @@ boton1.onClick := pantalla::boton1_onClick</code></pre>
   lógica— y el widget se queda siendo un widget.
 </p>
 
+<h3 id="ev-teclado">22.6 El teclado y el ratón</h3>
+<p>
+  Con un teclado o un ratón conectados (por Bluetooth, con <a href="referencia.html#stdlib-air-bt"><code>Air.Bluetooth</code></a>),
+  la GUI los usa sola, sin escribir nada (V8):
+</p>
+<ul>
+  <li><strong>El teclado</strong> escribe en el control que tiene el foco. Tab y Mayús+Tab pasan al control siguiente y
+    al anterior, en el orden en que se crearon; Enter pulsa el botón con el foco; en un campo, Retroceso, Supr, las
+    flechas, Inicio y Fin; en un deslizador, las flechas cambian el valor. Un clic en un campo también le da el foco. Sin
+    un teclado conectado nadie tiene el foco, y la GUI se ve como siempre.</li>
+  <li><strong>El ratón</strong> mueve una flecha y hace clic, y la rueda desplaza lo que haya bajo la flecha (una lista,
+    un panel que no cabe). Con una pantalla táctil, van los dos.</li>
+</ul>
+<p>
+  <strong>Las teclas tal cual:</strong> la pantalla tiene su evento, <code>onKey</code>, con todas las teclas —también las
+  que usa la GUI—, en el hilo de la GUI, como un clic. La tecla es la de
+  <a href="referencia.html#stdlib-keyboards"><code>Keyboards</code></a> (un número de 32 bits: el código abajo y el estado
+  arriba) y su carácter (<code>""</code> en una especial). Las recibe la última pantalla creada o cargada con
+  <code>load()</code>.
+</p>
+<pre><code><span class="kw">var</span> scr: Gui.<span class="type">Screen</span> := Gui.Screen()
+scr.onKey := pant::tecla
+
+<span class="kw">function event</span> <span class="fn">tecla</span>(s: Gui.<span class="type">Screen</span>, k: integer, c: string)
+  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.F1) <span class="kw">then</span>
+    ayuda()
+  <span class="kw">endif</span>
+<span class="kw">end</span> tecla</code></pre>
+<p>
+  <strong>En el PC</strong>, el teclado y el ratón son los de la ventana, y sólo con los simulados de
+  <code>Air.Bluetooth</code> conectados («Teclado simulado» y «Ratón simulado»), como en una placa: sin un teclado
+  conectado la ventana no teclea, tampoco la de Swing. Con «Ratón simulado», el ratón del PC deja de hacer de táctil y
+  hace de ratón, con la flecha de la GUI en la ventana de la VM-C y del micro simulado (si hiciera las dos cosas, cada
+  clic contaría dos veces); sin él, hace de táctil, como siempre. En las placas, lo siguiente.
+</p>
+
 <h2 id="ejecutar">23. Ejecutar (host y placa)</h2>
 <p>
   Una GUI de BasicPlus se puede ejecutar de tres maneras, de más rápida a más fiel: vista previa en el PC
@@ -1181,7 +1218,7 @@ Gui.<span class="fn">join</span>()</code></pre>
 </p>
 <table>
   <tr><th>Clase</th><th>Constructor</th><th>Miembros propios</th></tr>
-  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — activa esta pantalla como visible. Mide lo que mide el panel (§19.1). En una placa sin la GUI —sin sus packs, o con una pantalla que no arranca— el constructor lanza <code>RuntimeError</code> con el motivo (§23.4).</td></tr>
+  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — activa esta pantalla como visible. <code>onKey(s, k, c)</code> — las teclas tal cual (§22.6). Mide lo que mide el panel (§19.1). En una placa sin la GUI —sin sus packs, o con una pantalla que no arranca— el constructor lanza <code>RuntimeError</code> con el motivo (§23.4).</td></tr>
   <tr><td><code>Panel</code> <em>(Container)</em></td><td><code>Panel(parent)</code></td><td>— (contenedor para agrupar; todo lo hereda).</td></tr>
   <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
   <tr><td><code>Button</code> <em>(Container)</em></td><td><code>Button(parent, text := "")</code></td><td>— (el clic llega por handler o <code>onClick</code>). Con texto lleva un <code>Label</code> hijo; sin texto es un contenedor vacío.</td></tr>

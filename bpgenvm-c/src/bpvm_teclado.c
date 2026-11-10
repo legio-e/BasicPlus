@@ -31,6 +31,9 @@ typedef struct {
     int        ultimo_sig;                  /* dónde va el de un hilo nuevo (rueda) */
     int        pend;                        /* el PC: una pulsación que espera su texto */
     int32_t    pend_k, pend_codigo;
+    struct { uint32_t sig; int usado; } lector[BPVM_TECLADO_LECTORES];   /* paso 4: los de C (LVGL) */
+    uint64_t   pant_ref;                    /* paso 4: la pantalla de scr.onKey (0: ninguna) */
+    uint32_t   pant_sig;
 } teclado_t;
 
 static bpvm_platform_mutex_handle_t s_m;
@@ -186,10 +189,69 @@ void bpvm_teclado_reparte(struct bpvm* vm) {
 }
 
 void bpvm_teclado_fin_de_run(void) {
+    int i, usado[BPVM_TECLADO_LECTORES];
     if (!s_t) return;
     coge();
-    memset(s_t, 0, sizeof *s_t);   /* lo del programa, fuera: sus teclados, lo que no leyó y lo que no se avisó */
+    for (i = 0; i < BPVM_TECLADO_LECTORES; i++) usado[i] = s_t->lector[i].usado;
+    memset(s_t, 0, sizeof *s_t);   /* lo del programa, fuera: sus teclados, su pantalla, lo que no leyó y lo no avisado */
+    for (i = 0; i < BPVM_TECLADO_LECTORES; i++) s_t->lector[i].usado = usado[i];   /* los de C siguen, desde cero */
     suelta();
+}
+
+/* ── V8/H2, paso 4: los lectores de C y la pantalla de scr.onKey ───────────────────────────────────────────────────── */
+
+/* Con el cerrojo cogido: la siguiente que le toca a quien va por `*sig` (quien se queda atrás pierde las más viejas). */
+static int siguiente(teclado_t* t, uint32_t* sig, int32_t* k, int32_t* cp) {
+    if (*sig == t->avisos_fin) return 0;
+    if (t->avisos_fin - *sig > BPVM_TECLADO_AVISOS) *sig = t->avisos_fin - BPVM_TECLADO_AVISOS;
+    *k  = t->avisos[*sig % BPVM_TECLADO_AVISOS].k;
+    *cp = t->avisos[*sig % BPVM_TECLADO_AVISOS].cp;
+    (*sig)++;
+    return 1;
+}
+
+int bpvm_teclado_lector_abre(void) {
+    teclado_t* t = estado();
+    int i, id = -1;
+    if (!t) return -1;
+    coge();
+    for (i = 0; i < BPVM_TECLADO_LECTORES; i++) {
+        if (!t->lector[i].usado) {
+            t->lector[i].usado = 1;
+            t->lector[i].sig = t->avisos_fin;   /* las que lleguen desde ahora */
+            id = i;
+            break;
+        }
+    }
+    suelta();
+    return id;
+}
+
+int bpvm_teclado_lector_lee(int id, int32_t* k, int32_t* cp) {
+    int r = 0;
+    if (!s_t || id < 0 || id >= BPVM_TECLADO_LECTORES) return 0;
+    coge();
+    if (s_t->lector[id].usado) r = siguiente(s_t, &s_t->lector[id].sig, k, cp);
+    suelta();
+    return r;
+}
+
+void bpvm_teclado_pantalla(uint64_t ref) {
+    teclado_t* t = estado();
+    if (!t) return;
+    coge();
+    if (ref != t->pant_ref) t->pant_sig = t->avisos_fin;   /* otra: las que lleguen desde ahora */
+    t->pant_ref = ref;
+    suelta();
+}
+
+int bpvm_teclado_pantalla_lee(uint64_t* ref, int32_t* k, int32_t* cp) {
+    int r = 0;
+    if (!s_t) return 0;
+    coge();
+    if (s_t->pant_ref != 0 && siguiente(s_t, &s_t->pant_sig, k, cp)) { *ref = s_t->pant_ref; r = 1; }
+    suelta();
+    return r;
 }
 
 /* ── El PC: las teclas de la ventana de la GUI ─────────────────────────────────────────────────────────────────────── */

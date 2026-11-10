@@ -81,6 +81,8 @@ public final class GuiBackend {
         void pulsada(int codigo, int estado);
         void texto(int cp, int estado);
         void soltada(int codigo);
+        /** V8/H2, paso 4 — ¿hay un teclado conectado? Sin él, las teclas de la ventana no llegan a sus controles. */
+        boolean conectado();
     }
     private volatile TecladoPC tecladoPC;
     private final TeclasSwing teclas = new TeclasSwing();
@@ -439,8 +441,43 @@ public final class GuiBackend {
     }
     public int getReadonly(int handle) { Node n = nodes.get(handle); return (n != null && n.readOnly) ? 1 : 0; }
 
+    /** V8/H2, paso 4 (10-nov) — EL TECLADO, COMO EN LVGL (V8_IDEAS §E1, «El paso 4»): Enter pulsa el botón (y la casilla
+     *  y el interruptor) que tiene el foco —en Swing, de serie, es la barra espaciadora— y Tab sale de un campo de texto
+     *  al control siguiente, en vez de escribir un tabulador. */
+    private static void comoLvgl(JComponent comp) {
+        if (comp instanceof AbstractButton) {
+            javax.swing.InputMap im = comp.getInputMap(JComponent.WHEN_FOCUSED);
+            im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, 0, false), "pressed");
+            im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, 0, true), "released");
+        } else if (comp instanceof JTextArea) {
+            comp.setFocusTraversalKeys(java.awt.KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, null);
+            comp.setFocusTraversalKeys(java.awt.KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, null);
+        }
+    }
+
+    /** V8/H2, paso 4 — el número de creación de cada control (OrdenDeCreacion). */
+    private static final String ORDEN = "bp.orden";
+
+    /** V8/H2, paso 4 (10-nov) — EL FOCO, EN EL ORDEN EN QUE SE CREARON LOS CONTROLES, como el grupo de LVGL: Tab pasa al
+     *  que se creó después, y al abrir la ventana lo tiene el primero. La política de Swing ordena por la posición (el
+     *  campo y la lista de su misma fila, y después los botones de debajo), y la de LVGL por la creación (medido con un
+     *  arnés). De la de Swing se queda lo que recibe el foco (los paneles y las etiquetas, no); cambia el orden. */
+    private static final class OrdenDeCreacion extends javax.swing.LayoutFocusTraversalPolicy {
+        OrdenDeCreacion() {
+            setComparator((a, b) -> Integer.compare(orden(a), orden(b)));
+        }
+        private static int orden(java.awt.Component c) {
+            Object o = (c instanceof JComponent) ? ((JComponent) c).getClientProperty(ORDEN) : null;
+            return (o instanceof Integer) ? (Integer) o : Integer.MAX_VALUE;
+        }
+    }
+
     private int create(String type, JComponent comp, int parent) {
+        comoLvgl(comp);
         int h = nextHandle++;
+        comp.putClientProperty(ORDEN, h);   // V8/H2, paso 4: el foco, en el orden de creación
+        if (comp instanceof javax.swing.JSpinner && ((javax.swing.JSpinner) comp).getEditor() instanceof javax.swing.JSpinner.DefaultEditor)
+            ((javax.swing.JSpinner.DefaultEditor) ((javax.swing.JSpinner) comp).getEditor()).getTextField().putClientProperty(ORDEN, h);
         Node n = new Node(h, type, comp, parent);
         nodes.put(h, n);
         Node p = nodes.get(parent);
@@ -775,6 +812,7 @@ public final class GuiBackend {
             SwingUtilities.invokeAndWait(() -> {
                 frame = new JFrame("BasicPlus GUI");
                 frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+                frame.setFocusTraversalPolicy(new OrdenDeCreacion());   // V8/H2, paso 4: el foco, como el grupo de LVGL
                 frame.getContentPane().setPreferredSize(new Dimension(screenW, screenH));
                 frame.getContentPane().add(root.comp);
                 root.comp.setBounds(0, 0, screenW, screenH);
@@ -786,12 +824,17 @@ public final class GuiBackend {
                         events.offer(new int[]{EVENT_CLOSE, 0});
                     }
                 });
-                // V8/H2, paso 2 — las teclas de ESTA ventana, al teclado del SO, sin quitárselas a Swing (devuelve false)
+                // V8/H2, paso 2 — las teclas de ESTA ventana, al teclado del SO. Paso 4 (10-nov): y sin un teclado
+                // conectado, no llegan a los controles de Swing (devuelve true), como en la placa y en la VM-C; con él,
+                // Swing hace lo suyo (devuelve false)
                 final JFrame esta = frame;
                 despachador = ev -> {
                     TecladoPC t = tecladoPC;
                     java.awt.Component c = ev.getComponent();
-                    if (t != null && (c == esta || javax.swing.SwingUtilities.getWindowAncestor(c) == esta)) teclas.evento(ev, t);
+                    if (t != null && (c == esta || javax.swing.SwingUtilities.getWindowAncestor(c) == esta)) {
+                        teclas.evento(ev, t);
+                        return !t.conectado();
+                    }
                     return false;
                 };
                 java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(despachador);

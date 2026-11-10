@@ -204,6 +204,7 @@
     <li class="sub"><a href="#ev-async">22.3 Long work without freezing the GUI</a></li>
     <li class="sub"><a href="#ev-slots">22.4 From name to method (at load time)</a></li>
     <li class="sub"><a href="#ev-codigo">22.5 Subscribing from code (no .win)</a></li>
+    <li class="sub"><a href="#ev-teclado">22.6 The keyboard and the mouse</a></li>
 
     <li class="group"><a href="#ejecutar">23. Running (host and board)</a></li>
     <li class="sub"><a href="#ej-preview">23.1 Preview on the PC</a></li>
@@ -885,6 +886,42 @@ boton.onClick := pantalla::boton_onClick</code></pre>
   job in one line, and the handler can live wherever it makes sense.</p>
 </div>
 
+<h3 id="ev-teclado">22.6 The keyboard and the mouse</h3>
+<p>
+  With a keyboard or a mouse connected (over Bluetooth, with <a href="referencia.html#stdlib-air-bt"><code>Air.Bluetooth</code></a>),
+  the GUI uses them on its own, without writing anything (V8):
+</p>
+<ul>
+  <li><strong>The keyboard</strong> types into the control that has the focus. Tab and Shift+Tab move to the next and the
+    previous control, in the order they were created; Enter presses the focused button; in a field, Backspace, Delete,
+    the arrows, Home and End; in a slider, the arrows change the value. Clicking a field also gives it the focus. With no
+    keyboard connected nobody has the focus, and the GUI looks as always.</li>
+  <li><strong>The mouse</strong> moves an arrow and clicks, and the wheel scrolls whatever is under the arrow (a list, a
+    panel that does not fit). With a touch screen, both work.</li>
+</ul>
+<p>
+  <strong>The keys as they come:</strong> the screen has its event, <code>onKey</code>, with every key —also the ones the
+  GUI uses—, on the GUI thread, like a click. The key is the one of
+  <a href="referencia.html#stdlib-keyboards"><code>Keyboards</code></a> (a 32-bit number: the code in the low part and the
+  state in the high part) and its character (<code>""</code> for a special key). The last screen created, or loaded with
+  <code>load()</code>, gets them.
+</p>
+<pre><code><span class="kw">var</span> scr: Gui.<span class="type">Screen</span> := Gui.Screen()
+scr.onKey := screen::key
+
+<span class="kw">function event</span> <span class="fn">key</span>(s: Gui.<span class="type">Screen</span>, k: integer, c: string)
+  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.F1) <span class="kw">then</span>
+    help()
+  <span class="kw">endif</span>
+<span class="kw">end</span> key</code></pre>
+<p>
+  <strong>On the PC</strong>, the keyboard and the mouse are those of the window, and only with the simulated ones of
+  <code>Air.Bluetooth</code> connected («Teclado simulado» and «Ratón simulado»), as on a board: with no keyboard connected
+  the window does not type, not even the Swing one. With «Ratón simulado», the PC mouse stops acting as a touch screen and
+  acts as a mouse, with the GUI's arrow in the window of the VM-C and the simulated micro (doing both, every click would
+  count twice); without it, it acts as a touch screen, as always. On the boards, next.
+</p>
+
 <h2 id="ejecutar">23. Running (host and board)</h2>
 <p>
   A BasicPlus GUI can be run three ways, from fastest to most faithful: preview on the PC (Swing), real
@@ -1201,7 +1238,7 @@ Gui.<span class="fn">join</span>()</code></pre>
 </p>
 <table>
   <tr><th>Class</th><th>Constructor</th><th>Own members</th></tr>
-  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one. It is the size of the panel (§19.1). On a board without the GUI —without its packs, or with a display that does not start— the constructor throws <code>RuntimeError</code> with the reason (§23.4).</td></tr>
+  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one. <code>onKey(s, k, c)</code> — the keys as they come (§22.6). It is the size of the panel (§19.1). On a board without the GUI —without its packs, or with a display that does not start— the constructor throws <code>RuntimeError</code> with the reason (§23.4).</td></tr>
   <tr><td><code>Panel</code> <em>(Container)</em></td><td><code>Panel(parent)</code></td><td>— (grouping container; everything inherited).</td></tr>
   <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
   <tr><td><code>Button</code> <em>(Container)</em></td><td><code>Button(parent, text := "")</code></td><td>— (the click arrives via handler or <code>onClick</code>). With text it carries a child <code>Label</code>; without text it is an empty container.</td></tr>

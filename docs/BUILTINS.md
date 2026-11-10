@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **339** (0–338). Cada builtin tiene:
+id—. Hoy son **340** (0–339). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -801,6 +801,20 @@ momento. En el PC, el ratón de la ventana de la GUI (SDL en la VM-C y el micro 
 pantalla tal como se ve, como hace LVGL con la táctil; Swing en la VM-Java), sólo con un ratón conectado
 (`bpvm_bt_hay_raton`: en el PC, el simulado); el guion de la ventana SDL lo sabe mover: `mueve <x> <y>`,
 `pulsa <x> <y> [b]`, `suelta <x> <y> [b]` y `rueda <d>`. La prueba: `bpgenvm-c/samples/Raton.bp`.
+
+## 339 — la pantalla de `scr.onKey`  *(V8, H2, paso 4, 10-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 339 | `__guiKeyTarget` (y en `Gui`) | `(t: any)` | `Gui.Screen()` y `load()`: la pantalla que recibe las teclas de la GUI (la última), sin mantenerla viva |
+
+La GUI con el teclado y el ratón (`V8_IDEAS` §E1, «El paso 4»; `gui.html` §22.6). LVGL lee el teclado y el ratón del SO él
+mismo, en el hilo de la GUI, como la táctil, con los lectores de C del teclado y del ratón del SO
+(`bpvm_teclado_lector_*`, `bpvm_raton_lector_*`; `gui_entrada.c`); y `__guiRunOnce`, en ese hilo, le entrega cada tecla
+nueva a la pantalla apuntada con `Gui.__guiDispatchKey(pantalla, k, cp)`, que hace el `raise onKey`, como un clic. El
+despachador se busca por nombre sólo cuando hay una tecla: no tiene sitio en la VM, porque un campo nuevo en `bpvm_t`
+movería lo que leen los `.mdn`. Y no hay nada nuevo en `bpvm_gui.h`: el pack de la GUI de las placas se enlaza por nombre
+con sus funciones, y una que le faltara lo dejaría sin GUI. La prueba: `bpgenvm-c/samples/GuiTeclas.bp`.
 
 ---
 

@@ -23,6 +23,7 @@
 #include "bpvm_gui_host.h"   /* V7 #646: los verbos de la ventana, sólo del PC */
 #include "bpvm_teclado.h"    /* V8/H2, paso 2: las teclas de la ventana, al teclado del SO */
 #include "bpvm_raton.h"      /* V8/H2, paso 3: y su ratón, al ratón del SO */
+#include "gui_entrada.h"     /* V8/H2, paso 4: el teclado y el ratón del SO, en LVGL */
 #include "crc32.h"
 
 static volatile int g_window_closed = 0;
@@ -495,10 +496,40 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
     return rc;
 }
 
+/* V8/H2, paso 4 (10-nov) — LO DE ENCIMA DE LA PANTALLA, SOBRE LA CAPTURA: lv_snapshot_take dibuja la pantalla y sus hijos,
+ * no las capas de encima, donde están un Msgbox (la de arriba) y la flecha del ratón (la del sistema). Sin esto, la
+ * captura no enseñaba lo que se ve en la ventana (la flecha, medido con el guion del ratón). Las dos, ARGB8888 sin
+ * premultiplicar: se mezcla cada punto con su alfa. */
+static void compone_capa(lv_draw_buf_t* snap, lv_obj_t* capa) {
+    lv_draw_buf_t* c;
+    uint32_t x, y, w, h;
+    if (!capa) return;
+    c = lv_snapshot_take(capa, LV_COLOR_FORMAT_ARGB8888);
+    if (!c) return;
+    w = (uint32_t) snap->header.w;
+    h = (uint32_t) snap->header.h;
+    if ((uint32_t) c->header.w == w && (uint32_t) c->header.h == h) {
+        for (y = 0; y < h; y++) {
+            uint8_t* d = snap->data + y * (uint32_t) snap->header.stride;
+            const uint8_t* s = c->data + y * (uint32_t) c->header.stride;
+            for (x = 0; x < w; x++, d += 4, s += 4) {
+                unsigned a = s[3];
+                if (a == 0) continue;
+                d[0] = (uint8_t) ((s[0] * a + d[0] * (255u - a)) / 255u);
+                d[1] = (uint8_t) ((s[1] * a + d[1] * (255u - a)) / 255u);
+                d[2] = (uint8_t) ((s[2] * a + d[2] * (255u - a)) / 255u);
+            }
+        }
+    }
+    lv_draw_buf_destroy(c);
+}
+
 /* Snapshot de la pantalla activa → PNG numerado en el cwd. Lo llama el pump. */
 static void bpvm_gui_take_screenshot(void) {
     lv_draw_buf_t* snap = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
     if (!snap) { printf("[gui] captura: lv_snapshot_take fallo" BPVM_EOL); fflush(stdout); return; }
+    compone_capa(snap, lv_layer_top());   /* V8/H2, paso 4: y lo de encima (un Msgbox, la flecha del ratón) */
+    compone_capa(snap, lv_layer_sys());
     static int n = 0;
     char path[64];
     snprintf(path, sizeof(path), "bp_shot_%04d.png", ++n);
@@ -564,6 +595,9 @@ void bpvm_gui_disp_set_title(const char* title) {
     snprintf(g_title, sizeof g_title, "%s", title);
 }
 
+/* V8/H2, paso 4 — el cursor del sistema en la ventana: escondido mientras se ve la flecha de la GUI (gui_entrada.c). */
+static void cursor_sdl(int visible) { SDL_ShowCursor(visible ? SDL_ENABLE : SDL_DISABLE); }
+
 void bpvm_gui_disp_init(int w, int h) {
     if (g_headless) { disp_init_headless(w, h); return; }
     SDL_SetMainReady();
@@ -571,7 +605,18 @@ void bpvm_gui_disp_init(int w, int h) {
     g_hilo_ventana = SDL_ThreadID();   /* V7/H12: el único que la bombea */
     lv_display_t* d = lv_sdl_window_create(w, h);
     lv_sdl_window_set_title(d, g_title);
-    lv_sdl_mouse_create();
+    /* V8/H2, paso 4: el teclado y el ratón del SO, en LVGL (gui_entrada.c). En el PC la táctil es el mismo ratón: con
+     * «Ratón simulado» conectado se apaga, y el cursor del sistema se esconde en la ventana.
+     * ⚠️ LOS NUESTROS, ANTES QUE LOS DE SDL, Y EL TECLADO DE SDL, APAGADO: los manejadores de SDL de LVGL cogen el primer
+     * dispositivo de cada tipo de su lista, que empieza por el más nuevo, y dan por hecho que es el suyo. Con el nuestro
+     * más nuevo, el de las teclas leía unos datos que el nuestro no tiene y reventaba (strlen de un nulo, medido con gdb
+     * al teclear), y el del ratón se habría quedado con nuestro puntero, sin táctil. Así encuentran los suyos: la táctil y
+     * un teclado de SDL que no se lee nunca. */
+    bpvm_gui_entrada_init(1, cursor_sdl);
+    lv_indev_t* tactil = lv_sdl_mouse_create();   /* el ratón del PC, como táctil */
+    lv_indev_t* teclado_sdl = lv_sdl_keyboard_create();
+    if (teclado_sdl) lv_indev_enable(teclado_sdl, false);
+    bpvm_gui_entrada_tactil(tactil);
     g_ven_w = w;   /* V8/H2, paso 3: para el ratón del SO, el punto en la pantalla */
     g_ven_h = h;
     SDL_AddEventWatch(lvgl_watch, NULL);

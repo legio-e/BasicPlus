@@ -495,6 +495,7 @@ public class VirtualMachine {
             @Override public void pulsada(int codigo, int estado) { if (bluetooth().hayTeclado()) teclado().pcPulsada(codigo, estado); }
             @Override public void texto(int cp, int estado)       { if (bluetooth().hayTeclado()) teclado().pcTexto(cp, estado); }
             @Override public void soltada(int codigo)             { teclado().pcSoltada(codigo); }
+            @Override public boolean conectado()                  { return bluetooth().hayTeclado(); }   // V8/H2, paso 4
         });
         // V8/H2, paso 3 — y su ratón, al ratón del SO, sólo con un ratón conectado (en el PC, el simulado): lo mismo que
         // bpvm_raton_pc en la VM-C, con el de SDL
@@ -2841,6 +2842,7 @@ public class VirtualMachine {
         lastGcHeapNext = heapNext;
         gcBumpThreshold = Math.max(4096, (STACK_BASE - nuevo) / 8);
         guiDispatchPc = -2;   // se resuelve una vez por RUN, y lo que hay ha cambiado
+        guiDispatchKeyPc = -2;
         if (motivo != null) return "Overlay.load: " + motivo;
         overlayCs = moduleManager.overlayCs();
         overlayEntrada = moduleManager.overlayEntrada();
@@ -2936,6 +2938,7 @@ public class VirtualMachine {
         overlayCs = Integer.MAX_VALUE;
         overlayBp = 0;
         guiDispatchPc = -2;
+        guiDispatchKeyPc = -2;   // V8/H2, paso 4
         tipoDestructorPorClase.clear();   // por dirección: otro programa puede poner otra clase en la misma
     }
 
@@ -6689,6 +6692,9 @@ public class VirtualMachine {
                 break;
             }
             case MS_IS_CONNECTED: pushTc(tc, bluetooth().hayRaton() ? 1 : 0); break;
+            // V8/H2, paso 4 (10-nov) — la pantalla de scr.onKey (la última Gui.Screen creada o cargada), con su referencia
+            // entera: no la mantiene viva. Las teclas se las entrega guiEventLoopOnce, en el hilo de la GUI.
+            case GUI_KEY_TARGET: teclado().pantalla(popTcRef(tc)); pushTc(tc, 0); break;   // void
             // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
             case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {
@@ -9345,6 +9351,17 @@ public class VirtualMachine {
     private int guiEventLoopOnce(ThreadContext tc) {
         if (!guiStarted) { gui.start(); guiStarted = true; }
         int drained = 0;
+        // V8/H2, paso 4 (10-nov) — LAS TECLAS DE LA PANTALLA (scr.onKey), aquí, en el hilo de la GUI, como un clic: cada
+        // tecla nueva del teclado del SO, a Gui.__guiDispatchKey(pantalla, k, cp). Antes que los clics: sin ventana, el
+        // cierre llega en la primera pasada. El espejo de GUI_RUN_ONCE en la VM-C.
+        Teclado tk = teclado;
+        if (tk != null) {
+            int[] t = new int[2];
+            while (tk.pantallaLee(t)) {
+                long ref = tk.pantallaRef();
+                if (refViva(ref)) { invokeGuiDispatchKey(tc, ref, t[0], t[1]); drained++; }
+            }
+        }
         int[] ev;
         while ((ev = gui.pollEvent()) != null) {
             int objptr = ev[0], kind = ev[1];
@@ -9463,6 +9480,50 @@ public class VirtualMachine {
             tc.cs = savedCs;
             tc.pc = savedPc;
             tc.setStatus(savedStatus, -1, "L6110"); // el de antes de la llamada (el centinela THREAD_EXIT ya no lo toca: #742)
+            tc.yieldRequested = savedYield;
+        }
+    }
+
+    private int guiDispatchKeyPc = -2, guiDispatchKeyCs = 0;   // V8/H2, paso 4: Gui.__guiDispatchKey (resuelto 1 vez)
+
+    /**
+     * V8/H2, paso 4 (10-nov) — llama (anidado) a Gui.__guiDispatchKey(self, k, cp), que hace el `raise onKey` de la
+     * pantalla: el mismo camino que un clic (invokeGuiDispatch), con dos argumentos más. `ref`, la referencia entera de
+     * la pantalla, ya mirada viva.
+     */
+    private void invokeGuiDispatchKey(ThreadContext tc, long ref, int k, int cp) {
+        if (guiDispatchKeyPc == -2) {
+            Integer pc = (moduleManager != null) ? moduleManager.resolveGlobal("Gui.__guiDispatchKey") : null;
+            if (pc == null) guiDispatchKeyPc = -1;
+            else { guiDispatchKeyPc = pc; guiDispatchKeyCs = moduleManager.getModuleBaseFromPC(pc); }
+        }
+        if (guiDispatchKeyPc < 0) return;
+        int base = tc.sp;
+        int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
+        ThreadStatus savedStatus = tc.getStatus();
+        boolean savedYield = tc.yieldRequested;
+        // [self (ref, 8 B), k (4), cp (4), PC = 0 (el centinela), BP, CS]: la convención de CALL, como invokeGuiDispatch
+        refStore(memory, base, ref);
+        writeInt32(base + 8,  k);
+        writeInt32(base + 12, cp);
+        writeInt32(base + 16, 0);
+        writeInt32(base + 20, savedBp);
+        writeInt32(base + 24, savedCs);
+        tc.bp = base + 28;
+        tc.sp = base + 28;
+        tc.pc = guiDispatchKeyPc;
+        tc.cs = guiDispatchKeyCs;
+        tc.yieldRequested = false;
+        try {
+            correAnidado(tc, "el despacho de las teclas de la GUI");
+        } catch (Throwable t) {
+            System.err.println("[gui dispatch] " + t);
+        } finally {
+            tc.sp = base;
+            tc.bp = savedBp;
+            tc.cs = savedCs;
+            tc.pc = savedPc;
+            tc.setStatus(savedStatus, -1, "L6110");
             tc.yieldRequested = savedYield;
         }
     }

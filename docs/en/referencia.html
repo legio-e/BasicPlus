@@ -2471,8 +2471,9 @@ tk.onKey := screen::key                  // one notice per press, on the thread 
 <p>
   <strong>Where.</strong> On the <strong>PC</strong>, the keys of the GUI window, only with a keyboard connected: the
   simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Without a GUI there is
-  no keyboard on the PC. The character is the system's (the PC keyboard layout). On the boards, next, with a Bluetooth
-  keyboard; and in a program with a GUI, the GUI itself will take the keyboard to its widgets.
+  no keyboard on the PC. The character is the system's (the PC keyboard layout). In a program with a GUI, the GUI itself
+  takes the keyboard to its controls (the focus, Tab, Enter), and the screen has the keys as they come, <code>onKey</code>
+  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the boards, next, with a Bluetooth keyboard.
 </p>
 
 <h3 id="stdlib-mice">14.21 <code>Mice</code> (the mouse)</h3>
@@ -2519,8 +2520,9 @@ mo.onWheel := screen::wheel
   <strong>Where.</strong> On the <strong>PC</strong>, the mouse of the GUI window, only with a mouse connected: the
   simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». As a touch screen, the
   window stays the same: the GUI buttons and fields respond to the PC mouse, connected or not. Without a GUI there is no
-  mouse on the PC. On the boards, next, with a Bluetooth mouse; and in a program with a GUI, the GUI itself will take the
-  mouse to its widgets, with an arrow.
+  mouse on the PC. In a program with a GUI, the GUI itself takes the mouse to its controls, with an arrow, and with «Ratón
+  simulado» the PC mouse stops acting as a touch screen (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the boards,
+  next, with a Bluetooth mouse.
 </p>
 
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>

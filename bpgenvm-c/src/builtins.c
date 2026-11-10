@@ -578,6 +578,39 @@ static void gui_dispatchers(bpvm_t* vm, uint32_t* click, uint32_t* change) {
     *change = (vm->gui_disp_change == 1) ? 0 : vm->gui_disp_change;
 }
 
+/* V8/H2, paso 4 (10-nov) — LAS TECLAS DE LA PANTALLA (scr.onKey), en el hilo de la GUI, como un clic: cada tecla nueva
+ * del teclado del SO, a Gui.__guiDispatchKey(pantalla, k, cp), que hace el `raise onKey`. La pantalla, con su referencia
+ * entera: si ya no existe, la tecla se tira. El despachador se busca por nombre sólo cuando hay una tecla (no va en la
+ * VM, como los de los clics: un campo nuevo en bpvm_t mueve lo que leen los .mdn). Devuelve cuántas entregó. El espejo,
+ * en la VM-Java: guiEventLoopOnce. Sólo con GUI (la usa GUI_RUN_ONCE): sin ella sería una función sin usar. */
+#ifdef BPVM_GUI
+static int teclas_de_la_pantalla(bpvm_t* vm, bpvm_thread_t* tc) {
+    uint64_t pref;
+    int32_t k, cp;
+    uint32_t disp = 0;
+    int buscado = 0, n = 0;
+    while (bpvm_teclado_pantalla_lee(&pref, &k, &cp)) {
+        bpref_t r;
+        int32_t a[3];
+        r.v = pref;
+        if (bpvm_ref_dead(vm, r)) continue;   /* la pantalla ya no existe */
+        if (!buscado) {
+            int i;
+            buscado = 1;
+            for (i = 0; i < vm->symbol_count; i++)
+                if (strcmp(bpvm_symbol_name(vm, i), "Gui.__guiDispatchKey") == 0) { disp = vm->symbols[i].abs_addr; break; }
+        }
+        if (!disp) continue;
+        a[0] = (int32_t) bpref_addr(r);
+        a[1] = k;
+        a[2] = cp;
+        bpvm_call_bp_from_builtin(vm, tc, disp, a, 3, 1u);   /* #302: arg0, la pantalla, es una referencia */
+        n++;
+    }
+    return n;
+}
+#endif
+
 /* Helpers UTF-8 (utf8_cp_count / utf8_byte_offset / utf8_decode / utf8_encode)
  * viven en bpvm_internal.h (fuente única compartida con el AOT). */
 
@@ -1391,6 +1424,7 @@ int bpvm_builtin_de_la_gui(int id) {
     case BUILTIN_GUI_SLOT_OF: case BUILTIN_GUI_GET_ALIGN: case BUILTIN_GUI_GET_ALIGN_DX:
     case BUILTIN_GUI_GET_ALIGN_DY: case BUILTIN_GUI_GET_AUTH_WIDTH: case BUILTIN_GUI_GET_AUTH_HEIGHT:
     case BUILTIN_GUI_SHOT:
+    case BUILTIN_GUI_KEY_TARGET:   /* V8/H2, paso 4: no toca LVGL (apunta la pantalla de scr.onKey), pero es de la GUI */
         return 1;
     default:
         return 0;
@@ -1902,6 +1936,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t disp_click, disp_change;
         gui_dispatchers(vm, &disp_click, &disp_change);   /* #486 - una vez por RUN */
         int drained = 0;
+        drained += teclas_de_la_pantalla(vm, tc);   /* V8/H2, paso 4: scr.onKey, antes que los clics (como la VM-Java) */
         uint32_t objptr; int kind;
         while ((objptr = bpvm_gui_next_event(&kind)) != 0) {
             uint32_t d = (kind == 1) ? disp_change : disp_click;
@@ -2895,6 +2930,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_MS_IS_CONNECTED: push_i32(vm, tc, bpvm_bt_hay_raton() ? 1 : 0); return BPVM_OK;
+
+    /* V8/H2, paso 4 (10-nov) — la pantalla de scr.onKey (la última Gui.Screen creada o cargada), con su referencia entera:
+     * no la mantiene viva. Las teclas se las entrega GUI_RUN_ONCE, en el hilo de la GUI (teclas_de_la_pantalla). */
+    case BUILTIN_GUI_KEY_TARGET: {
+        bpref_t t = bpref_pop(vm, tc);
+        bpvm_teclado_pantalla(t.v);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
 
     case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
         uint32_t r = bpvm_heap_alloc_string(vm, BPVM_EOL, sizeof(BPVM_EOL) - 1u);

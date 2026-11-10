@@ -1951,6 +1951,11 @@ module Core
   function __msIsConnected(): boolean   // ¿hay un ratón conectado?
     inline CALL_BUILTIN 338
   end __msIsConnected
+  // V8/H2, paso 4 (10-nov) — la pantalla de scr.onKey (Gui.Screen): la última que lo pide recibe las teclas de la GUI,
+  // en el hilo de la GUI (V8_IDEAS §E1, «El paso 4»). No la mantiene viva.
+  function __guiKeyTarget(t: any)
+    inline CALL_BUILTIN 339
+  end __guiKeyTarget
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

@@ -729,6 +729,32 @@ clic en un campo también le da el foco.
 - **Para la placa (el paso 5)**: lo mismo, por el pack de la GUI, con una API de entrada publicada por la imagen (la
   `ENTR` del 14-oct).
 
+### El paso 4, hecho (10-nov): la GUI con el teclado y el ratón, en el PC
+
+Lo del plan, y como salió:
+- **Los lectores de C** (`bpvm_teclado_lector_*`, `bpvm_raton_lector_*`) y **la pantalla de `scr.onKey`**
+  (`bpvm_teclado_pantalla`; en la VM-Java, `Teclado.pantalla`), con el builtin 339. El despachador,
+  `Gui.__guiDispatchKey`, se busca por nombre sólo cuando hay una tecla: no va en `bpvm_t`, porque un campo nuevo movería
+  lo que leen los `.mdn`.
+- **LVGL** (`gui_entrada.c`, en la ventana de SDL de la VM-C y del micro simulado): el grupo del foco se crea cuando hay
+  un teclado conectado, con los controles que ya haya. Si existiera siempre, LVGL le daría el foco al primer control al
+  crearlo, y un campo de texto enseñaría su cursor desde el arranque sin teclado. El ratón, un segundo puntero con su
+  flecha, que no pierde un clic corto; y la rueda, al objeto que se desplaza bajo la flecha.
+- **Dos cosas de LVGL que costaron:** los manejadores de SDL de LVGL cogen el primer dispositivo de cada tipo de su
+  lista, que empieza por el más nuevo, y dan por hecho que es el suyo: con nuestro teclado el más nuevo, el de las teclas
+  reventaba (medido con `gdb`). Así que los nuestros se crean antes que los de SDL, con un teclado de SDL apagado, y se
+  comprueba (si no, lo dice). Y la resolución «física» de LVGL 9.2 también se da girada: para deshacer el giro del puntero
+  hay que tomar la del panel sin girar (con 90°, los clics caían fuera del botón).
+- **La captura PNG de la ventana**, con las capas de encima: dibujaba la pantalla, no la flecha (ni un `Msgbox`).
+- **Swing:** además de lo previsto, el foco, como en LVGL: en el orden en que se crearon los controles (Swing lo da por la
+  posición: el campo, la lista de su misma fila y después los botones), y al abrir la ventana, en el primero.
+- **Las pruebas:** `GuiTeclas.bp` en la red, sin ventana: `scr.onKey`, en las dos VMs, lo mismo. Y a mano, el guion
+  «Hola», Tab, Enter, Tab, Enter en las dos ventanas: con «Teclado simulado», «Hola» en el campo, un clic en A y uno en B,
+  y las 8 teclas en `scr.onKey`; sin él, nada. El del ratón, en la de la VM-C: con «Ratón simulado», un clic por botón (no
+  dos), la flecha y la lista desplazada con la rueda; sin él, los clics como táctil. Y con la pantalla girada, los clics en
+  su botón, cinco de cinco.
+- **Salió `#813`**: la ventana de la VM-C girada se dibuja mal (lo vio Eduardo), desde V7. No es del paso 4.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

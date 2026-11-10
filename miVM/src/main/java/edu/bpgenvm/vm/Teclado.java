@@ -39,6 +39,9 @@ final class Teclado {
     private int ultSig;
     private boolean pend;   // el PC: una pulsación que espera su texto
     private int pendK, pendCodigo;
+    // V8/H2, paso 4 (10-nov): la pantalla de scr.onKey (la última Gui.Screen creada o cargada) y el número de la
+    // siguiente tecla que le toca; se la entrega __guiRunOnce, en el hilo de la GUI. El espejo de bpvm_teclado_pantalla.
+    private long pantallaRef, pantallaSig;
 
     Teclado() {
         for (int i = 0; i < OBJETOS; i++) ap[i] = new Apuntado();
@@ -106,6 +109,28 @@ final class Teclado {
         for (Apuntado a : ap) if (a.enUso && a.ref == ref) a.enUso = false;
     }
 
+    // ── V8/H2, paso 4: la pantalla de scr.onKey ────────────────────────────────────────────────────────────────────
+
+    /** La pantalla que recibe las teclas de la GUI: desde ahora, las que lleguen. Otra la sustituye. */
+    synchronized void pantalla(long ref) {
+        if (ref != pantallaRef) pantallaSig = avisosFin;
+        pantallaRef = ref;
+    }
+
+    synchronized long pantallaRef() { return pantallaRef; }
+
+    /** La siguiente tecla para la pantalla, en {k, cp}; false si no hay (o no hay pantalla). Quien se queda atrás pierde
+     *  las más viejas, como un teclado apuntado. */
+    synchronized boolean pantallaLee(int[] out) {
+        if (pantallaRef == 0 || pantallaSig == avisosFin) return false;
+        if (avisosFin - pantallaSig > AVISOS) pantallaSig = avisosFin - AVISOS;
+        int i = (int) (pantallaSig % AVISOS);
+        out[0] = avisosK[i];
+        out[1] = avisosCp[i];
+        pantallaSig++;
+        return true;
+    }
+
     /** Al acabar un programa: fuera lo suyo (sus teclados, lo que no leyó y lo que no se avisó). */
     synchronized void finDeRun() {
         buferIni = 0;
@@ -121,6 +146,8 @@ final class Teclado {
         pend = false;
         pendK = 0;
         pendCodigo = 0;
+        pantallaRef = 0;
+        pantallaSig = 0;
     }
 
     // ── El PC: las teclas de la ventana de la GUI (las de Swing), sólo con un teclado conectado ─────────────────────

@@ -344,7 +344,8 @@ enum {
     BUILTIN_MS_GET_BUTTONS               = 336,   /* __msGetButtons(): integer */
     BUILTIN_MS_INJECT                    = 337,   /* __msInject(x: integer, y: integer, botones: integer, rueda: integer) */
     BUILTIN_MS_IS_CONNECTED              = 338,   /* __msIsConnected(): boolean */
-    BUILTIN__CUANTOS = 339
+    BUILTIN_GUI_KEY_TARGET               = 339,   /* __guiKeyTarget(t: any) */
+    BUILTIN__CUANTOS = 340
 };
 
 #endif

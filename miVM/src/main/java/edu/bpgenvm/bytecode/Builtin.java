@@ -348,7 +348,8 @@ public enum Builtin {
     MS_GET_Y("__msGetY"),   // [335] __msGetY(): integer
     MS_GET_BUTTONS("__msGetButtons"),   // [336] __msGetButtons(): integer
     MS_INJECT("__msInject"),   // [337] __msInject(x: integer, y: integer, botones: integer, rueda: integer)
-    MS_IS_CONNECTED("__msIsConnected");   // [338] __msIsConnected(): boolean
+    MS_IS_CONNECTED("__msIsConnected"),   // [338] __msIsConnected(): boolean
+    GUI_KEY_TARGET("__guiKeyTarget");   // [339] __guiKeyTarget(t: any)
 
     public final String bpName;
     public final int id;

@@ -28,6 +28,7 @@ typedef struct {
     aviso_t    avisos[BPVM_RATON_AVISOS];    /* los últimos, por su número de orden */
     uint32_t   avisos_fin;                   /* el número del siguiente que llegue */
     apuntado_t ap[BPVM_RATON_OBJETOS];
+    struct { uint32_t sig; int usado; } lector[BPVM_RATON_LECTORES];   /* paso 4: los de C (LVGL) */
 } raton_t;
 
 static bpvm_platform_mutex_handle_t s_m;
@@ -199,12 +200,57 @@ void bpvm_raton_reparte(struct bpvm* vm) {
 void bpvm_raton_fin_de_run(void) {
     int32_t x, y;
     uint32_t b;
+    int i, usado[BPVM_RATON_LECTORES];
     if (!s_r) return;
     coge();
     x = s_r->x; y = s_r->y; b = s_r->botones;   /* la posición y los botones son del ratón, no del programa: se quedan */
+    for (i = 0; i < BPVM_RATON_LECTORES; i++) usado[i] = s_r->lector[i].usado;
     memset(s_r, 0, sizeof *s_r);                /* lo del programa, fuera: sus ratones y lo que no se avisó */
     s_r->x = x; s_r->y = y; s_r->botones = b;
+    for (i = 0; i < BPVM_RATON_LECTORES; i++) s_r->lector[i].usado = usado[i];   /* los de C siguen, desde cero */
     suelta();
+}
+
+/* ── V8/H2, paso 4: los lectores de C ──────────────────────────────────────────────────────────────────────────────── */
+
+int bpvm_raton_lector_abre(void) {
+    raton_t* r = estado();
+    int i, id = -1;
+    if (!r) return -1;
+    coge();
+    for (i = 0; i < BPVM_RATON_LECTORES; i++) {
+        if (!r->lector[i].usado) {
+            r->lector[i].usado = 1;
+            r->lector[i].sig = r->avisos_fin;
+            id = i;
+            break;
+        }
+    }
+    suelta();
+    return id;
+}
+
+int bpvm_raton_lector_lee(int id, int32_t* x, int32_t* y, int* izq, int32_t* rueda) {
+    uint32_t s;
+    int pulsado = 0;
+    int32_t muescas = 0;
+    if (!s_r || id < 0 || id >= BPVM_RATON_LECTORES) return 0;
+    coge();
+    if (!s_r->lector[id].usado) { suelta(); return 0; }
+    s = s_r->lector[id].sig;
+    if (s_r->avisos_fin - s > BPVM_RATON_AVISOS) s = s_r->avisos_fin - BPVM_RATON_AVISOS;   /* atrás: los viejos, fuera */
+    for (; s != s_r->avisos_fin; s++) {
+        const aviso_t* a = &s_r->avisos[s % BPVM_RATON_AVISOS];
+        if (a->tipo == BPVM_RATON_PULSA && a->dato == (int32_t) BPVM_RATON_IZQ) pulsado = 1;
+        else if (a->tipo == BPVM_RATON_RUEDA) muescas += a->dato;
+    }
+    s_r->lector[id].sig = s;
+    *x = s_r->x;
+    *y = s_r->y;
+    *izq = pulsado || (s_r->botones & BPVM_RATON_IZQ) != 0;
+    *rueda = muescas;
+    suelta();
+    return 1;
 }
 
 /* ── El PC: el ratón de la ventana de la GUI ───────────────────────────────────────────────────────────────────────── */

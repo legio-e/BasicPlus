@@ -23,8 +23,8 @@
  *     se aprieta), y después el aviso; sin avisos, un BPVM_RATON_MUEVE a la posición del SO, si ha cambiado. UNO en la
  *     cola por ratón como mucho, como los teclados.
  *
- * LA MEMORIA: nada fijo más que un puntero y el cerrojo (12 B en la Pico). El estado (528 B) se reserva la primera vez
- * que se usa, con bpvm_malloc_os, como el teclado.
+ * LA MEMORIA: nada fijo más que un puntero y el cerrojo (12 B en la Pico). El estado (544 B, con los lectores del paso
+ * 4) se reserva la primera vez que se usa, con bpvm_malloc_os, como el teclado.
  *
  * El espejo, en la VM-Java: Raton.java (y el reparto, VirtualMachine.repartirRaton). Las dos VMs tienen que repartir lo
  * mismo y en el mismo orden.
@@ -76,6 +76,14 @@ void     bpvm_raton_fin_de_run(void);           /* al acabar un programa: fuera 
  * ventana con el punto ya en la pantalla, los botones en bits BPVM_RATON_* y la rueda en muescas. La VM-Java hace lo
  * mismo con el ratón de Swing (RatonSwing). */
 void     bpvm_raton_pc(int32_t x, int32_t y, uint32_t botones, int32_t rueda);
+
+/* V8/H2, paso 4 (10-nov) — LOS LECTORES DE C: quien lee el ratón desde C sin un Mice.Mouse de BP (LVGL, el puntero de
+ * la GUI). Cada lectura da lo que ha pasado desde la anterior: dónde está; si el izquierdo está apretado, o se apretó
+ * entre medias (un clic corto, entre dos lecturas, cuenta una vez); y las muescas de la rueda. Al acabar un programa
+ * siguen abiertos y empiezan de cero, como los del teclado. */
+#define BPVM_RATON_LECTORES 2
+int      bpvm_raton_lector_abre(void);                                                  /* su número, o -1 */
+int      bpvm_raton_lector_lee(int id, int32_t* x, int32_t* y, int* izq, int32_t* rueda);   /* 1, o 0 si no vale */
 
 #ifdef __cplusplus
 }

@@ -2836,8 +2836,9 @@ tk.onKey := pant::tecla                  // un aviso por pulsación, en el hilo 
 <p>
   <strong>Dónde.</strong> En el <strong>PC</strong>, las teclas de la ventana de la GUI, sólo con un teclado conectado: el
   simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Sin GUI, en el PC no hay
-  teclado. El carácter es el del sistema (la distribución del teclado del PC). En las placas, lo siguiente, con un teclado
-  Bluetooth; y en un programa con GUI, la propia GUI llevará el teclado a sus widgets.
+  teclado. El carácter es el del sistema (la distribución del teclado del PC). En un programa con GUI, la propia GUI lleva
+  el teclado a sus controles (el foco, Tab, Enter), y la pantalla tiene sus teclas tal cual, <code>onKey</code>
+  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las placas, lo siguiente, con un teclado Bluetooth.
 </p>
 
 <h3 id="stdlib-mice">14.21 <code>Mice</code> (el ratón)</h3>
@@ -2883,8 +2884,9 @@ ra.onWheel := pant::rueda
   <strong>Dónde.</strong> En el <strong>PC</strong>, el ratón de la ventana de la GUI, sólo con un ratón conectado: el
   simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». Como táctil, la ventana sigue
   igual: los botones y los campos de la GUI responden al ratón del PC, esté conectado o no. Sin GUI, en el PC no hay
-  ratón. En las placas, lo siguiente, con un ratón Bluetooth; y en un programa con GUI, la propia GUI llevará el ratón a
-  sus widgets, con una flecha.
+  ratón. En un programa con GUI, la propia GUI lleva el ratón a sus controles, con una flecha, y con «Ratón simulado» el
+  ratón del PC deja de hacer de táctil (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las placas, lo siguiente,
+  con un ratón Bluetooth.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

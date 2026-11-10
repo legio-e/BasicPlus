@@ -80,6 +80,18 @@ void    bpvm_teclado_pc_pulsada(int32_t codigo, uint32_t estado);
 void    bpvm_teclado_pc_texto(int32_t cp, uint32_t estado);
 void    bpvm_teclado_pc_soltada(int32_t codigo);
 
+/* V8/H2, paso 4 (10-nov) — LA GUI (V8_IDEAS §E1, «El paso 4»), sin un Keyboards.Keyboard de BP en medio:
+ *   - LOS LECTORES DE C: quien lee las teclas desde C (LVGL, el grupo de la GUI), cada uno con su número de la siguiente
+ *     que le toca, como un teclado apuntado. Al acabar un programa siguen abiertos (en el micro simulado, LVGL vive de un
+ *     RUN al siguiente) y empiezan de cero, con las teclas del programa nuevo.
+ *   - LA PANTALLA de scr.onKey: la última Gui.Screen creada o cargada (__guiKeyTarget), con su referencia entera (no la
+ *     mantiene viva); __guiRunOnce le entrega cada tecla en el hilo de la GUI, como un clic. Al acabar, fuera. */
+#define BPVM_TECLADO_LECTORES 2
+int     bpvm_teclado_lector_abre(void);                                 /* su número, o -1 si no caben */
+int     bpvm_teclado_lector_lee(int id, int32_t* k, int32_t* cp);       /* 1 y la siguiente, o 0 si no hay */
+void    bpvm_teclado_pantalla(uint64_t ref);                            /* la que recibe las teclas desde ahora */
+int     bpvm_teclado_pantalla_lee(uint64_t* ref, int32_t* k, int32_t* cp);   /* 1, su pantalla y la siguiente; o 0 */
+
 #ifdef __cplusplus
 }
 #endif

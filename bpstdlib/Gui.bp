@@ -725,6 +725,11 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   public function __guiChange(w: Component)   // cambio de valor sintético (diagnóstico)
     inline CALL_BUILTIN 165
   end __guiChange
+  // V8/H2, paso 4 (10-nov) — la pantalla de scr.onKey: la apunta Screen() (y load()), y la recibe la última. La VM le
+  // entrega cada tecla en el hilo de la GUI, por NOMBRE: __guiDispatchKey(self, k, cp) → self.__fireKey(k, cp).
+  public function __guiKeyTarget(self: Component)
+    inline CALL_BUILTIN 339
+  end __guiKeyTarget
   // H13 — Forms: call-by-name del handler. Resuelve `name` como función PÚBLICA
   // del módulo al que pertenece `host` (la ventana) y la invoca con `sender`
   // (el widget que disparó) como arg0. La usa el dispatch de eventos de Gui.Window.
@@ -759,6 +764,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
   // ---- Screen — pantalla raíz (la entrega el backend ya montada). ----
   public class Screen extends Container
+    // V8/H2, paso 4 (10-nov) — LAS TECLAS TAL CUAL (V8_IDEAS §E1, «El paso 4»): todas, también las que usa la GUI (Tab,
+    // Enter, lo que se escribe en un campo), en el hilo de la GUI, como un clic. La tecla, el int32 de Keyboards (abajo
+    // el código HID, arriba los bits de estado: Keyboards.isKey, isShift...), y su carácter ("" en una especial). Las
+    // recibe la última pantalla creada o cargada.
+    event onKey(s: Screen, k: integer, c: string)
+
     public function typeName(): string
       return "Screen"
     end typeName
@@ -766,10 +777,26 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       super()
       this.lvglId := __guiScreenActive()
       this.attach(null)
+      __guiKeyTarget(this)
     end Screen
     public function load()
       __guiScreenLoad(this.lvglId)
+      __guiKeyTarget(this)
     end load
+
+    // Lo llama la VM (Gui.__guiDispatchKey) con cada tecla, en el hilo de la GUI: no es para los programas.
+    public function __fireKey(k: integer, cp: integer)
+      raise onKey(this, k, this.caracter(cp))
+    end __fireKey
+
+    function caracter(cp: integer): string
+      if cp <= 0 or cp > 1114111 or (cp >= 55296 and cp <= 57343) then
+        return ""
+      endif
+      var sb: StringBuilder := StringBuilder()
+      sb.appendChar(cp)
+      return sb.toString()
+    end caracter
   end Screen
 
   // ---- Panel — contenedor simple (agrupa widgets). ----
@@ -1450,6 +1477,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   public function __guiDispatchChange(self: Component)
     self.__fireChange()
   end __guiDispatchChange
+
+  // V8/H2, paso 4 — las teclas de la pantalla (scr.onKey): la VM llama aquí por NOMBRE, desde __guiRunOnce, en el hilo
+  // de la GUI, con cada tecla nueva del teclado del SO.
+  public function __guiDispatchKey(self: Screen, k: integer, cp: integer)
+    self.__fireKey(k, cp)
+  end __guiDispatchKey
 
   // ---- run — lazo de eventos (bloquea: refresca y entrega los onClick/onChange).
   //

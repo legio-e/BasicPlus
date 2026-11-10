@@ -200,6 +200,8 @@ Y el teclado del SO (`bpvm_teclado.c`, V8/H2, paso 2, 9-nov), igual: **12 B de R
 de flash; su estado (~0,7 KB: el búfer, los avisos y los teclados apuntados), la primera vez que se usa. Y el ratón del
 SO (`bpvm_raton.c`, el paso 3, el mismo día), lo mismo: **12 B de RAM fija** (medido en la Pico) y 1,2 KB de flash; su
 estado (528 B: la posición, los avisos de los botones y la rueda, y los ratones apuntados), la primera vez que se usa.
+Con el paso 4 (10-nov), los lectores de C de la GUI: 16 B más en el estado del ratón y 32 en el del teclado; la RAM
+fija, igual (medido en la Pico: 12 B cada uno).
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

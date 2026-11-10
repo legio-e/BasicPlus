@@ -1,0 +1,69 @@
+// GuiTeclas.bp — V8/H2, paso 4 (10-nov): scr.onKey, sin ventana, igual en las dos VMs (V8_IDEAS §E1, «El paso 4»). Las
+// teclas entran con Keyboards.__kbInject antes de Gui.run(): sin ventana, la GUI da sus pasadas y acaba, y en la primera
+// le entrega a la pantalla cada tecla nueva, como un clic.
+//
+// Lo que se prueba: todas las teclas, en orden, con su código, sus bits de estado y su carácter (también Tab y Enter, que
+// en una ventana usaría la GUI); en el hilo de la GUI: el main espera en Gui.run(), así que salen antes que lo que se
+// imprime después; la recibe la última pantalla creada, y la de antes ya no; y sin pantalla apuntada, nada.
+module GuiTeclas
+  import Gui
+  import Keyboards
+
+  class Pant
+    public property nombre: string
+    public property n: integer
+
+    public function Pant(nombre: string)
+      this.nombre := nombre
+      this.n := 0
+    end Pant
+
+    function event tecla(s: Gui.Screen, k: integer, c: string)
+      this.n := this.n + 1
+      var e: string := ""
+      if Keyboards.isShift(k) then
+        e := " shift"
+      endif
+      if Keyboards.isCtrl(k) then
+        e := e + " ctrl"
+      endif
+      print this.nombre + ": codigo " + Keyboards.getCode(k) + " [" + c + "]" + e
+    end tecla
+  end Pant
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var pa: Pant := Pant("a")
+    scr.onKey := pa::tecla
+    var l: Gui.Label := Gui.Label(scr, "teclas")
+
+    // Shift+H, una o, Tab, Enter, F1, Ctrl+S y una ñ
+    Keyboards.__kbInject(11 | (1 shl 17), 72)
+    Keyboards.__kbInject(18, 111)
+    Keyboards.__kbInject(43, 0)
+    Keyboards.__kbInject(40, 0)
+    Keyboards.__kbInject(58, 0)
+    Keyboards.__kbInject(22 | (1 shl 16), 0)
+    Keyboards.__kbInject(51, 241)
+    Gui.run()
+    print "despues de run: a " + pa.n
+
+    // otra pantalla se queda con las teclas; la de antes, ya no
+    var scr2: Gui.Screen := Gui.Screen()
+    var pb: Pant := Pant("b")
+    scr2.onKey := pb::tecla
+    Keyboards.__kbInject(4, 97)
+    Gui.run()
+    print "despues de run: a " + pa.n + ", b " + pb.n
+
+    // el teclado del programa sigue a lo suyo: el búfer del SO tiene las 8 (nadie las ha leído)
+    var tk: Keyboards.Keyboard := Keyboards.Keyboard()
+    var quedan: integer := 0
+    while tk.hasKey() do
+      var k: integer := tk.readKey()
+      quedan := quedan + 1
+    endwh
+    print "en el bufer del SO: " + quedan
+    print "fin"
+  end Main
+end GuiTeclas
