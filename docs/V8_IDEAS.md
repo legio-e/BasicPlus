@@ -671,6 +671,64 @@ Lo del plan, y como salió:
   ratón conectado, nada. Girada, la VM-C da los puntos tal como se ven; la VM-Java no gira el dibujo, cambia el aspecto
   de la ventana, así que sus puntos ya son los de la pantalla.
 
+### El paso 4: la GUI (10-nov)
+
+**Lo que tiene que pasar:** en un programa con GUI, sin escribir nada, el teclado escribe en el campo con el foco, Tab pasa
+al control siguiente y Enter pulsa el botón; y el ratón mueve una flecha y hace clic.
+
+**Lo decidido** (lo propuse el 10-nov, y Eduardo, a los cinco puntos: *«OK, adelante.»*):
+1. **LVGL lee el teclado y el ratón del SO él mismo, en el hilo de la GUI, como hoy la táctil**, sin un
+   `Keyboards.Keyboard` ni un `Mice.Mouse` de BP en medio. El 8-nov se dijo que la GUI crearía los suyos y le pasaría sus
+   eventos a LVGL; con el ratón no puede ser: un clic es apretar y soltar, LVGL necesita saber cuándo se suelta, y el ratón
+   del programa no avisa al soltar. LVGL pregunta, como a la táctil: dónde está y si está apretado. Lo que se ve es lo
+   acordado (todo, en el hilo de la GUI; los programas no cambian), y una tecla no gasta sitio en la cola de eventos.
+2. **`scr.onKey(s, k, c)`, para las teclas tal cual**: todas, también las que usa la GUI (Tab, Enter, lo que se escribe en
+   un campo), en el hilo de la GUI, como un clic, con el int32 y el carácter de `Keyboards`.
+   ```basic
+   var scr: Gui.Screen := Gui.Screen()
+   scr.onKey := pant::tecla
+
+   function event tecla(s: Gui.Screen, k: integer, c: string)
+     if Keyboards.isKey(k, Keyboards.Key.F1) then
+       ayuda()
+     endif
+   end tecla
+   ```
+3. **En el PC, con «Ratón simulado» conectado, el ratón del PC deja de hacer de táctil y hace de ratón**: en la ventana, la
+   flecha de la GUI (la de la placa) y no la del sistema. Si no, cada clic contaría dos veces: el mismo ratón movería dos
+   punteros. Sin él, táctil, como hoy. En la placa son dos aparatos y van los dos. Cambia, sólo en el PC, lo del 8-nov
+   («el ratón del PC sigue haciendo de táctil, siempre»).
+4. **En la VM-Java, sin «Teclado simulado», la ventana de Swing no acepta el teclado del PC**, como la placa y la VM-C. Con
+   él, como hoy, y además Enter pulsa el botón con el foco, como en LVGL (en Swing, de serie, es la barra espaciadora).
+5. **La rueda desplaza lo que haya bajo la flecha** (una lista, un panel que no cabe), en LVGL; Swing ya lo hace.
+
+**Las teclas en LVGL:** Tab y Mayús+Tab, el control siguiente y el anterior; Enter pulsa el botón con el foco; en un
+campo, las letras, Retroceso, Supr, las flechas, Inicio y Fin; Esc; en un deslizador, las flechas cambian el valor. Un
+clic en un campo también le da el foco.
+
+**El plan para programarlo** (lo interno es mío):
+- **Sin tocar `bpvm_gui.h`**: el pack de la GUI de las placas se enlaza por nombre con sus funciones, y una que le
+  falte deja la GUI sin funcionar hasta rehacer el pack (`gui_pack.c`, «al pack 'LVGL' le falta…»). Lo nuevo va en el
+  teclado y el ratón del SO y en un builtin propio.
+- **Los lectores de C** del teclado y del ratón del SO: quien lee sin un objeto de BP (LVGL), cada uno con su número del
+  siguiente aviso que le toca, como los objetos apuntados. El de la pantalla, aparte: la pantalla de `scr.onKey` la
+  apunta `Gui.Screen()` (y `load()`) con un builtin nuevo, el 339 (`__guiKeyTarget`): la última creada o cargada; y
+  `__guiRunOnce`, en el hilo de la GUI, le entrega cada tecla con `Gui.__guiDispatchKey`, como un clic. Al acabar el
+  programa, fuera la pantalla; los lectores siguen (en el micro simulado, LVGL vive de un RUN al siguiente) y empiezan de
+  cero.
+- **LVGL, en el PC** (la VM-C y el micro simulado; `gui_entrada.c`): un grupo por defecto (cada control que se cree entra
+  solo) con un teclado de LVGL que lee su lector (las teclas HID a las de LVGL, y los caracteres); un segundo puntero
+  para el ratón, con la flecha (`lv_indev_set_cursor`), que no pierde un clic corto (un botón apretado entre dos lecturas
+  cuenta una vez); y la rueda, al objeto que se desplaza bajo la flecha. Con «Ratón simulado» conectado, la táctil (el
+  ratón de SDL) se apaga y el cursor del sistema se esconde en la ventana.
+- **Swing**: sin teclado conectado, las teclas de la ventana no llegan a sus controles; con él, Enter en un botón (y en
+  una casilla) lo pulsa, y Tab sale de un campo de texto, como en LVGL.
+- **La prueba de la red**, sin ventana: `scr.onKey` con `Keyboards.__kbInject`, en las dos VMs. Lo de LVGL (el foco, lo
+  que se escribe, la flecha, el clic una sola vez, la rueda), a mano, con el guion de la ventana SDL; y lo de Swing, con
+  un arnés.
+- **Para la placa (el paso 5)**: lo mismo, por el pack de la GUI, con una API de entrada publicada por la imagen (la
+  `ENTR` del 14-oct).
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
