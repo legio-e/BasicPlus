@@ -21,4 +21,8 @@ void bpvm_gui_disp_set_exit_on_close(int on);
  * de qué está corriendo. Llamar ANTES de disp_init. */
 void bpvm_gui_disp_set_title(const char* title);
 
+/* #813 (11-nov) — al revés que las de arriba: la define gui.c y la llama la ventana. El tamaño de la pantalla del
+ * modelo, ya girado: en el PC, la ventana gira con la pantalla y mide siempre lo que ella. */
+void bpvm_gui_get_screen_size(int* w, int* h);
+
 #endif /* BPVM_GUI_HOST_H */

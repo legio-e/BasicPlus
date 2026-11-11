@@ -18,6 +18,7 @@
  */
 #if !defined(BPVM_GUI_PACK)
 #include "bpvm_gui.h"
+#include "bpvm_gui_host.h"   /* #813: bpvm_gui_get_screen_size, que sólo llama la ventana del PC */
 #include "bpvm_fs.h"     /* lectura de PNG portable (host libc + device RAM-FS) */
 #include <stdlib.h>
 #include <string.h>
@@ -63,6 +64,14 @@ void bpvm_gui_set_screen_size(int w, int h) {
     g_screen_w0 = w;
     g_screen_h0 = h;
     g_screen_size_explicit = 1;
+}
+
+/* #813 (11-nov) — el tamaño de la pantalla del modelo, ya girado. La ventana del PC (gui_display_sdl.c) mide siempre lo
+ * que ella: cuando el programa gira la pantalla, la ventana gira con ella. Sólo la usa el PC (bpvm_gui_host.h); en el
+ * pack de la GUI de las placas nadie la llama, y --gc-sections la quita. */
+void bpvm_gui_get_screen_size(int* w, int* h) {
+    if (w) *w = g_screen_w0;
+    if (h) *h = g_screen_h0;
 }
 
 /* V6/P2.3 — decisión de Eduardo (4-sep-2026): *«la resolución ha de ser la que tenga
@@ -394,8 +403,9 @@ int bpvm_gui_screen_active(void) {
 
 /* Orientación del display: 0/90/180/270 (grados); otros valores se IGNORAN (misma
  * regla que miVM → paridad). El giro real lo hace el display (costura disp_set_rotation:
- * en el P4-ws lo implementa su flush, en el host SDL el propio driver LVGL; el táctil se
- * transforma solo en lv_indev). El MODELO solo refleja el aspecto en el screen. */
+ * en las placas, el panel, que gira el dibujo en su flush, y el táctil se transforma solo
+ * en lv_indev; en el PC, #813, no gira nada: la ventana toma el tamaño del modelo, como
+ * en la VM-Java). El MODELO solo refleja el aspecto en el screen. */
 static int g_rotation = 0;
 
 void bpvm_gui_set_rotation(int deg) {

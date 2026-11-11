@@ -753,7 +753,9 @@ Lo del plan, y como salió:
   y las 8 teclas en `scr.onKey`; sin él, nada. El del ratón, en la de la VM-C: con «Ratón simulado», un clic por botón (no
   dos), la flecha y la lista desplazada con la rueda; sin él, los clics como táctil. Y con la pantalla girada, los clics en
   su botón, cinco de cinco.
-- **Salió `#813`**: la ventana de la VM-C girada se dibuja mal (lo vio Eduardo), desde V7. No es del paso 4.
+- **Salió `#813`**: la ventana de la VM-C girada se dibuja mal (lo vio Eduardo), desde V7. No es del paso 4. Arreglada el
+  11-nov: en el PC, la ventana gira con la pantalla, como la de la VM-Java, y el punto del ratón de la ventana ya no
+  lleva la cuenta del giro (la ventana es la pantalla tal como se ve).
 
 ---
 

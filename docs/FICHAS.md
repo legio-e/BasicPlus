@@ -7387,7 +7387,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#813` — en el PC, la ventana de la VM-C y del micro simulado con la pantalla girada (`Gui.setRotation(90)`) sale mal: colores pálidos y rayas verticales, sin imagen que se reconozca (abierta el 10-nov, en el paso 4 de H2; lo vio Eduardo)
+#### ✅ `#813` — en el PC, la ventana de la VM-C y del micro simulado con la pantalla girada (`Gui.setRotation(90)`) sale mal: colores pálidos y rayas verticales, sin imagen que se reconozca (abierta el 10-nov, en el paso 4 de H2; lo vio Eduardo · **CERRADA el 11-nov**, el commit de `#813`; Eduardo: *«La opción 2 parece mas razonable»*: la ventana gira con la pantalla)
 
 - **Lo visto** (Eduardo, 10-nov, en las pruebas del ratón con la pantalla girada): *«Sale con los colores pálidos con
   líneas verticales y no se puede identificar la imagen»*; la horizontal, bien. Las capturas PNG salían bien: dibujan la
@@ -7399,6 +7399,28 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que se haría:** el modo `PARTIAL` en la ventana del PC (o sólo con la pantalla girada), y mirarlo.
 - **Para el 11-nov, con el paso 5 de H2** (Eduardo, 10-nov: *«El #813 y el paso 5 para mañana, lo dejamos por hoy.»*).
   Para comprobarlo no vale la captura PNG, que dibuja la pantalla y salía bien: hay que ver la ventana.
+- **Y una segunda causa** (11-nov, leída y medida): si el programa gira antes de crear la pantalla, que es lo que pide
+  el manual, la VM-C giraba dos veces. `gui.c` cambia el ancho por el alto del modelo y crea el display con ese tamaño
+  (la ventana, vertical: la que vio Eduardo), y después LVGL lo giraba otra vez: el modelo medía 320×480 y la pantalla
+  de LVGL, 480×320 (la captura PNG del 10-nov con el giro mide 480×320). En la VM-Java, no. En las placas, tampoco: su
+  display toma el tamaño del panel (`pant_lvgl.c`, V7 `#644`).
+- **Lo decidido** (Eduardo, 11-nov), entre dos opciones —la ventana es el panel y la imagen sale girada dentro, o la
+  ventana gira con la pantalla, como la de la VM-Java—: *«En un micro, cuando giras la imagen es por que la pantalla
+  físicamente se ha girado. La pantalla la giras físicamente porque te interesa verla en esa posición. La opción 2
+  parece mas razonable.»* Y su criterio: lo que más importa es que funcione bien la VM-C, la de LVGL, la que más se
+  parece a la de los micros.
+- **Lo hecho** (11-nov): en el PC, LVGL ya no gira. `bpvm_gui_disp_set_rotation` le da a la pantalla el tamaño del
+  modelo (`bpvm_gui_get_screen_size`, de `gui.c`, sólo para el PC: `bpvm_gui_host.h`), y el driver de SDL de LVGL pone
+  la ventana de ese tamaño; sin ventana (`--no-screen`), igual. Con 180°, como sin girar, como en la VM-Java. El punto
+  del ratón de la ventana ya no lleva la cuenta del giro. El modo de dibujo, el de siempre. Las placas no cambian: en
+  el pack de la GUI nadie llama a la función nueva, y `--gc-sections` la quita (`gui.c`, compilado con sus opciones:
+  va en su propia sección).
+- **Comprobado** (a mano: la red no lleva LVGL): `GuiGiro.bp` (en el scratchpad), capturando la ventana del escritorio
+  y no la imagen de LVGL. Girando antes de crear la pantalla, después de crear los controles, con 180°, con 270° y sin
+  girar, la ventana mide lo que la pantalla del modelo y la imagen sale derecha; al girar con los controles creados, la
+  ventana cambia de forma y lo alineado se recoloca. Los clics en A y en B, uno por botón, con la táctil y con «Ratón
+  simulado», con la flecha en su sitio. Sin ventana, la captura (`Gui.shot`) mide 320×480. Y la ventana de la VM-Java,
+  igual que la de la VM-C. Compilado el micro simulado con GUI.
 
 #### 🔵 `#812` — el caso G de `run_tarea_smoke` está en el filo: 200 RUN de un programa vacío tardan 1,17–1,23 s con la tarea `run`, con el tope en ~1,22 (el doble de `--run-viejo` más 0,3), y el 4-oct un RUN eran 1,2 ms (abierta el 9-nov, en la red del paso 3 de H2)
 

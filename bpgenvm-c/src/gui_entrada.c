@@ -15,7 +15,8 @@
  *     sistema se esconde en la ventana; si no, cada clic contaría dos veces. En una placa son dos aparatos y van los dos.
  *
  * El ratón del SO da los puntos de la pantalla tal como se ve; LVGL quiere los del panel (los gira él, como los de la
- * táctil): a_panel deshace la cuenta de indev_pointer_proc (lv_indev.c).
+ * táctil): a_panel deshace la cuenta de indev_pointer_proc (lv_indev.c). En el PC no hace nada: allí LVGL no gira, la
+ * ventana gira con la pantalla (#813).
  *
  * Lo usa la ventana de SDL (gui_display_sdl.c: la VM-C y el micro simulado). En las placas, el paso 5, por el pack.
  */

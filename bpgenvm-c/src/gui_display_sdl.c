@@ -29,10 +29,7 @@
 static volatile int g_window_closed = 0;
 static volatile int g_shot_requested = 0;   /* F12 → captura de pantalla (docs) */
 
-/* V8/H2, paso 3 — el ratón de la ventana: su tamaño (el del panel: la ventana no gira con la pantalla), el giro de la
- * pantalla (Gui.setRotation) y los botones de la ventana, como quedan (los bits HID), para el ratón del SO. */
-static int      g_ven_w = 0, g_ven_h = 0;
-static int      g_giro  = 0;
+/* V8/H2, paso 3 — el ratón de la ventana: los botones, como quedan (los bits HID), para el ratón del SO. */
 static uint32_t g_raton_botones = 0;
 
 /* V7/H12, LVGL con dos runs — LA VENTANA, SIEMPRE DESDE EL HILO QUE LA CREÓ. LVGL lee los eventos de SDL dentro de
@@ -331,17 +328,17 @@ static uint32_t botones_hid(uint32_t m) {
     return b;
 }
 
-/* El punto de la ventana, en la pantalla tal como se ve, y dentro de ella. La ventana no gira con la pantalla (el driver
- * de SDL de LVGL gira el dibujo en su flush), así que se hace la cuenta que hace LVGL con la táctil
- * (indev_pointer_proc, lv_indev.c), con el tamaño de la ventana, que es el del panel. Arrastrando fuera, el borde. */
+/* El punto de la ventana, en la pantalla, y dentro de ella: arrastrando fuera, el borde. #813: la ventana es la pantalla
+ * tal como se ve (gira con ella: bpvm_gui_disp_set_rotation), así que no hay cuenta que hacer, y su tamaño es el de la
+ * pantalla de LVGL. */
 static void en_pantalla(int wx, int wy, int32_t* x, int32_t* y) {
-    const int w = g_ven_w, h = g_ven_h;
-    if (wx < 0) wx = 0;
+    lv_display_t* d = lv_display_get_default();
+    const int w = d ? (int) lv_display_get_horizontal_resolution(d) : 0;
+    const int h = d ? (int) lv_display_get_vertical_resolution(d) : 0;
     if (wx >= w) wx = w - 1;
-    if (wy < 0) wy = 0;
+    if (wx < 0) wx = 0;
     if (wy >= h) wy = h - 1;
-    if (g_giro == 180 || g_giro == 270) { wx = w - wx - 1; wy = h - wy - 1; }
-    if (g_giro == 90 || g_giro == 270) { int t = wy; wy = wx; wx = h - t - 1; }
+    if (wy < 0) wy = 0;
     *x = wx;
     *y = wy;
 }
@@ -372,7 +369,7 @@ static int SDLCALL lvgl_watch(void* ud, SDL_Event* e) {
     /* V8/H2, paso 3 — el ratón de la ventana, al ratón del SO (él mira que haya un ratón conectado): moverse, los botones
      * y la rueda, con el punto en la pantalla. Como táctil, LVGL lo sigue viendo igual. Lo que SDL fabrica de una
      * pantalla táctil no es un ratón. */
-    if (g_ven_w > 0 && g_ven_h > 0) {
+    if (lv_display_get_default() != NULL) {   /* al cerrar la ventana, LVGL borra la pantalla */
         int32_t x, y;
         if (e->type == SDL_MOUSEMOTION && e->motion.which != SDL_TOUCH_MOUSEID) {
             g_raton_botones = botones_hid(e->motion.state);
@@ -617,8 +614,6 @@ void bpvm_gui_disp_init(int w, int h) {
     lv_indev_t* teclado_sdl = lv_sdl_keyboard_create();
     if (teclado_sdl) lv_indev_enable(teclado_sdl, false);
     bpvm_gui_entrada_tactil(tactil);
-    g_ven_w = w;   /* V8/H2, paso 3: para el ratón del SO, el punto en la pantalla */
-    g_ven_h = h;
     SDL_AddEventWatch(lvgl_watch, NULL);
     /* windowID de la ventana que acaba de crear LVGL: hace falta para inyectar
      * eventos de ratón sintéticos (BPVM_GUI_SCRIPT). lv_sdl_mouse_handler filtra
@@ -689,25 +684,27 @@ uint32_t bpvm_gui_disp_pump(void) {
 
 int  bpvm_gui_disp_is_open(void) { return !g_window_closed; }
 
-/* Rotación en runtime (Gui.setRotation): el driver SDL de LVGL gira en su PROPIO flush
- * (lv_sdl_window.c) — la ventana (el "panel físico") se queda w×h y el contenido rota
- * dentro, igual que en placa. deg llega validado de gui.c. */
 /* V6/P2.3 — en host la ventana no tiene tamaño propio: manda --screen= o el default
  * del modelo (480×320). Devolver 0 es decir «no sé»; gui.c no toca nada. */
 int bpvm_gui_disp_native_size(int* w, int* h) { (void) w; (void) h; return 0; }
 
+/* Rotación en runtime (Gui.setRotation). #813 (11-nov) — EN EL PC, LA VENTANA GIRA CON LA PANTALLA. En una placa, la
+ * imagen se gira porque el panel se ha girado de verdad, para verlo así (Eduardo: «La pantalla la giras físicamente
+ * porque te interesa verla en esa posición»): en el PC, la ventana se pone como ese panel girado y la imagen se ve
+ * derecha, como en la VM-Java. Con 180°, como sin girar. Así que LVGL no gira nada: la pantalla toma el tamaño que ya
+ * tiene el modelo (gui.c lo cambia antes de llamar aquí), y el driver de SDL de LVGL pone la ventana de ese tamaño; sin
+ * ventana, igual. La táctil, el ratón y el guion, en la pantalla tal como se ve, sin cuentas.
+ * Hasta el 11-nov giraba LVGL, y salía mal por dos cosas: su driver de SDL sólo gira el dibujo en el modo PARTIAL, y la
+ * ventana va en DIRECT (rayas y colores pálidos, sin imagen); y si el programa giraba antes de crear la pantalla, la
+ * ventana ya se creaba con el tamaño girado y LVGL la giraba otra vez (el modelo, 320×480; LVGL, 480×320). */
 void bpvm_gui_disp_set_rotation(int deg)
 {
-    lv_display_t *d = lv_display_get_default();
+    lv_display_t* d = lv_display_get_default();
+    int w = 0, h = 0;
+    (void) deg;   /* lo que importa, el tamaño, ya está en el modelo */
     if (d == NULL) return;
-    switch (deg) {
-        case 0:   lv_display_set_rotation(d, LV_DISPLAY_ROTATION_0);   break;
-        case 90:  lv_display_set_rotation(d, LV_DISPLAY_ROTATION_90);  break;
-        case 180: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_180); break;
-        case 270: lv_display_set_rotation(d, LV_DISPLAY_ROTATION_270); break;
-        default:  return;
-    }
-    g_giro = deg;   /* V8/H2, paso 3: el ratón del SO, en la pantalla tal como se ve */
+    bpvm_gui_get_screen_size(&w, &h);
+    if (w > 0 && h > 0) lv_display_set_resolution(d, w, h);
 }
 
 #endif /* BPVM_LVGL */
