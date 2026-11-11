@@ -50,4 +50,8 @@
  * Eduardo: «C3 y C6 sin wifi». */
 #define CHIP_TIENE_WIFI 1
 
+/* V8/H2, paso 5 (11-nov): y el Bluetooth (NimBLE, bt_esp32.c), con la misma radio. La primera placa del paso: tiene radio
+ * propia y pantalla (V8_IDEAS §E1, «El paso 5»). Va en el gancho `red`, con la WiFi: necesita CHIP_TIENE_WIFI. */
+#define CHIP_TIENE_BT 1
+
 #endif /* BPVM_CHIP_CFG_H */

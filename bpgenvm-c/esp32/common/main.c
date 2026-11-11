@@ -64,6 +64,13 @@
 #include "wifi_esp32.h"
 #include "wire_red.h"
 #endif
+#ifndef CHIP_TIENE_BT
+#define CHIP_TIENE_BT 0        /* V8/H2, paso 5: lo dice cada `chip_cfg.h` que lo lleve */
+#endif
+#if CHIP_TIENE_BT
+#include "bpvm_bt.h"
+#include "bt_esp32.h"
+#endif
 #include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
 #include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */
 uint8_t*       s_vm_buffer      = NULL;
@@ -295,6 +302,11 @@ static void esp32_red(void) {
     wifi_esp32_publicar(NULL);
     wire_red_iniciar();
     bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
+#if CHIP_TIENE_BT
+    /* V8/H2, paso 5: y el Bluetooth, si /sys/bluetooth.json lo pide ("autoStart"). Tampoco bloquea. */
+    bt_esp32_publicar();
+    bpvm_bt_arranque();
+#endif
 }
 #endif
 

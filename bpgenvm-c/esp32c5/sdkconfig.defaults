@@ -113,3 +113,27 @@ CONFIG_ESP_WIFI_NVS_ENABLED=n
 CONFIG_ESP_PHY_CALIBRATION_AND_DATA_STORAGE=n
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# V8/H2, paso 5 (11-nov): EL BLUETOOTH, NimBLE como anfitrión (esp32/common/bt_esp32.c), con la radio del chip. Sólo
+# central y observador: el teclado y el ratón son los periféricos. Hasta 3 conexiones. Los vínculos, en la RAM, sin la
+# NVS: sus claves van a /sys/bluetooth.keys, porque una actualización de la imagen borra la NVS (14-oct). La memoria del
+# anfitrión, en la PSRAM: la interna va justa (55 KB de mínima con la WiFi, el 11-nov). Y su registro, sólo los avisos.
+# Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_MAX_BONDS=8
+CONFIG_BT_NIMBLE_NVS_PERSIST=n
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+# Y sus búferes, a la mitad de lo de por defecto (pensado para muchas conexiones con mucho tráfico): para un teclado y un
+# ratón sobran, y salen de la RAM interna. Medido el 11-nov, con la WiFi conectada: encendido y buscando, la mínima bajaba
+# a 15,9 KB con los de por defecto.
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=12
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=12
+CONFIG_BT_NIMBLE_TRANSPORT_ACL_FROM_LL_COUNT=12
+CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=16

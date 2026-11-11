@@ -25,6 +25,7 @@ idf_component_register(
         "../../src/wire_cables.c"            # V8/H3: encima del cable local, y del de la red donde lo haya
         "../../esp32/common/wire_red.c"      # V8/H3: el cable de la red
         "../../esp32/common/wifi_esp32.c"    # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../../esp32/common/bt_esp32.c"      # V8/H2, paso 5: el Bluetooth de la familia (NimBLE), publicado como 'BT  '
         "../../esp32/common/net_esp32.c"     # V8/H3: la IP y los sockets (esp_netif, lwIP)
         "c5_board_id.c"                       # V7/H11: identidad de placa (pisa el default del S3)
         "../../esp32/common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
@@ -129,6 +130,7 @@ idf_component_register(
         "../../third_party/fatfs"      # V7/H3 SD.3: ff.h (nuestro ffconf.h sale de ../../include)
     REQUIRES
         esp_wifi         # V8/H3: la WiFi
+        bt               # V8/H2, paso 5: el Bluetooth (NimBLE)
         esp_netif
         esp_event
         lwip

@@ -815,6 +815,29 @@ informes de verdad que quedaron en los registros del 14-oct.
 - **`scr.onKey` ya está en las imágenes**: `BPVM_GUI` va en la C5, la C6, la P4 y la DK2.
 - **El Bluetooth no está activado en ningún `sdkconfig`**; en la P4, `esp_hosted` 3.0.9 trae su parte de Bluetooth
   (`HOST_FEAT_BT`), sin usar.
+- **Conectar, en la placa, tarda segundos** (emparejar, buscar el servicio HID, suscribirse), y `Air.Bluetooth.connect`
+  llama a un builtin que espera: pararía todos los hilos BP, la GUI incluida (la VM corre en un solo hilo del sistema).
+  Como `turnOn` y `scan`: empezar y esperar en BP, con `sleep`. Para quien programa, `connect` no cambia.
+
+### El paso 5, primer tramo, hecho en la C5 (11-nov): encender, apagar y buscar
+
+- **La radio**, `esp32/common/bt_esp32.c`: NimBLE con el controlador del chip, publicada como `'BT  '`. Encender es
+  `nimble_port_init` (el controlador y la pila) y su tarea, y la radio lista llega por el aviso; apagar, parar la tarea y
+  `nimble_port_deinit` (la RAM vuelve). Buscar, activo, porque el nombre suele llegar en la respuesta al escaneo: un
+  aparato se cuenta cuando se sabe que está en modo de emparejar (los flags de su anuncio) y cómo se llama, una vez; el
+  tipo, por su apariencia (`0x03C1`, teclado; `0x03C2`, ratón), o `unknown`. Conectar, desconectar y olvidar, en el
+  segundo tramo. `CHIP_TIENE_BT` en el `chip_cfg.h` de la C5, y el arranque, en el gancho `red`, con `"autoStart"`.
+- **Probado en la C5**: enciende en 15 ms, busca 10 s y apaga en 5 ms; encontró un aparato de la casa en modo de
+  emparejar. Compilan las cinco imágenes ESP.
+- **La memoria** (`MEMORIA.md`): 26 KB fijos de RAM interna aunque no se encienda (el código del controlador corre desde
+  la IRAM), y otros 26 encendido; con la WiFi conectada, a la C5 le quedan 35,6 KB libres, y 15,9 en el peor momento.
+  Recortar los búferes de NimBLE no movió nada: van a la PSRAM. **Decidido** (Eduardo): *«la C5 tiene PSRAM, la SRAM es
+  RAM de trabajo pero no nos importa mucho porque la VM con quien realmente trabaja es con la PSRAM. Así que la opción 1
+  está bien»*: seguir así, sin pasar el controlador a la flash.
+- **Los packs**: la imagen creció 339 KB y la zona de packs se movió; se regrabaron la biblioteca estándar (el
+  `Stdlib.pack` del 10-nov: `Keyboards`, `Mice` y el `Gui` del paso 4), la GUI y el driver de la pantalla. Un tropiezo
+  mío: los dos últimos, primero con la familia de la P4 (`riscv`) en vez de la de la C5 (`riscv-imc`). Se vio antes del
+  reset, porque el driver salía «sin motor nativo», y se regrabaron bien; la placa nunca los cargó.
 
 ---
 

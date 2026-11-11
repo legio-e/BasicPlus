@@ -203,6 +203,28 @@ estado (528 B: la posición, los avisos de los botones y la rueda, y los ratones
 Con el paso 4 (10-nov), los lectores de C de la GUI: 16 B más en el estado del ratón y 32 en el del teclado; la RAM
 fija, igual (medido en la Pico: 12 B cada uno).
 
+**La radio del Bluetooth en la C5** (NimBLE, `esp32/common/bt_esp32.c`; V8/H2, paso 5, 11-nov), medida en la placa con la
+WiFi conectada y la línea `mem:` del log (el final de cada RUN, con un programa vacío, `Nada`):
+
+| | DRAM interna libre al acabar | mínima desde el arranque |
+|---|---|---|
+| la imagen de antes, sin el Bluetooth | 87 KB | 52 KB |
+| con el Bluetooth en la imagen, apagado | 61,8 KB | 26,1 KB (el pico de conectarse la WiFi) |
+| con el Bluetooth encendido (`autoStart`) | **35,6 KB** | **15,9 KB** (las dos radios arrancando) |
+
+- **Enlazarlo cuesta 26 KB de RAM interna fija**, aunque no se encienda: tras arrancar la VM quedan 118.879 B en vez de
+  144.923. Es casi todo código del controlador que corre desde la IRAM (`libble_app.a`, 20,7 KB; `libbt.a`, 4,2 KB), y en
+  la C5 la IRAM y la DRAM salen de la misma SRAM.
+- **Encendido, otros ~26 KB**, del controlador; al apagarlo vuelven todos menos 1,6 KB. Recortar a la mitad los búferes de
+  NimBLE (las dos bolsas de mensajes, los paquetes de datos y los eventos) no movió nada: van a la PSRAM
+  (`CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`).
+- En flash, +339 KB: la imagen, 1,82 MB de una partición de 2 (quedan 277 KB).
+- **Decidido, seguir así** (Eduardo, 11-nov: *«la C5 tiene PSRAM, la SRAM es RAM de trabajo pero no nos importa mucho
+  porque la VM con quien realmente trabaja es con la PSRAM. Así que la opción 1 está bien»*). Lo otro, por si un día
+  hiciera falta: `CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY`, que pasa a la flash la mayor parte del código del controlador
+  (~20 KB fijos), y que Espressif marca como experimental (la radio, más lenta; y una conexión puede caerse mientras se
+  escribe en la flash).
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las
