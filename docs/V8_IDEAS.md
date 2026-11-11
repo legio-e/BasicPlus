@@ -757,6 +757,65 @@ Lo del plan, y como salió:
   11-nov: en el PC, la ventana gira con la pantalla, como la de la VM-Java, y el punto del ratón de la ventana ya no
   lleva la cuenta del giro (la ventana es la pantalla tal como se ve).
 
+### El paso 5: las placas (11-nov)
+
+Eduardo: *«Seguimos»*; y a la propuesta, *«OK, la C5 está conectada, adelante»*.
+
+**Lo que se verá al acabar**, lo mismo que en el PC desde el paso 4, con el teclado y el ratón de verdad: en la C5 y la
+P4, un programa con GUI se maneja con ellos sin escribir nada; `Keyboards.Keyboard`, `Mice.Mouse` y `scr.onKey` reciben
+lo que mandan; y `Air.Bluetooth` busca, conecta (la primera vez empareja), desconecta y olvida, y al arrancar, con
+`autoStart`, los recordados vuelven solos. En la S3, sin pantalla, sólo el teclado: el ratón se conecta y no hace nada
+(8-nov).
+
+**Las cinco piezas:**
+1. **La radio, común a las ESP** (`esp32/common/bt_esp32.c`, como `wifi_esp32.c`): NimBLE como anfitrión, con la tabla
+   `'BT  '` que ya tiene el PC (encender, apagar, buscar, conectar, desconectar y olvidar). Sale del firmware de prueba
+   del 14-oct (`p4_hid`, 745 líneas), con tres cambios: las claves, fuera de la NVS; la búsqueda enseña cualquier
+   aparato en modo de emparejar, no sólo los dos de Eduardo por su nombre; y cada informe se reparte según lo que
+   declara el aparato en su descriptor (el teclado declara también un ratón, y el ratón, un teclado), no por su
+   longitud.
+2. **Lo que mandan, al teclado y al ratón del SO**: cada tecla, con su carácter de una tabla del teclado americano, a
+   `bpvm_teclado_pon`; el ratón suma sus desplazamientos, sin salirse de la pantalla y empezando en el centro, y va a
+   `bpvm_raton_pon`. Lo de los pasos 1 a 4 ya está compilado en las imágenes; en la placa hay que regrabar la biblioteca
+   estándar y la GUI, que son de antes.
+3. **La GUI en la placa**: la imagen publica una tabla nueva, `'ENTR'` (los lectores del teclado y del ratón del SO, y
+   quién está conectado), y el pack de la GUI lleva el mismo `gui_entrada.c` que el PC, leyéndolos por ella, como hoy la
+   táctil por `'PANT'`. La tabla `'LVGL'` no cambia. Un pack viejo con una imagen nueva, o al revés, se queda como hoy:
+   sin teclado ni ratón en la GUI, sin romper nada.
+4. **En la P4, el enlace con la C6, compartido**: hoy lo abre y lo cierra la WiFi (`radio_p4.c`), y apagarla deja la C6
+   en reset. Abierto mientras lo use la WiFi o el Bluetooth.
+5. **El arranque**: `bt=1` o `bt=0` en el Entorno, como `wifi=1` (6-nov), y `"autoStart"` en `/sys/bluetooth.json`.
+
+Lo que se pueda, primero en el PC: la tabla del teclado, el reparto de los informes y la suma del ratón, con los
+informes de verdad que quedaron en los registros del 14-oct.
+
+**Lo decidido** (Eduardo, 11-nov, *«OK»* a la propuesta):
+1. **El orden: la C5, la P4 y la S3.** Primero RISC-V; la C5 tiene radio propia y pantalla, y en ella se prueba todo sin
+   el enlace con la C6. En cada placa, primero el teclado y el ratón sin GUI, y después la GUI.
+2. **Las claves de los emparejamientos, en un fichero aparte, `/sys/bluetooth.keys`**, que escribe el firmware (el
+   `bluetooth.json` lo escribe el programa). El IDE lo enseña, como enseña la clave de la WiFi en `/sys/wifi.json` (*«la
+   seguridad, de momento no»*, 6-nov).
+3. **El apagado por falta de uso, como la WiFi**: `"autoOff"` en `/sys/bluetooth.json`, 600 s por defecto, y 0, nunca.
+   Cuenta como uso una tecla, un movimiento del ratón, una búsqueda o una conexión. Con la radio apagada, un teclado
+   dormido no vuelve hasta que algo la encienda (un programa, o un reinicio con `autoStart`): para una placa que se
+   maneja con teclado, `"autoOff": 0`.
+4. **Sin preguntar**: los cambios de los parámetros de conexión que piden los aparatos, rechazados (7,5–15 ms, sin
+   latencia), como el 14-oct, que no se cortó ninguna conexión; la C3 y la C6, sin Bluetooth, como sin WiFi; y medir lo
+   que ocupa NimBLE en la C5 antes de seguir (su imagen, 1,46 MB de una partición de 2).
+
+**Lo que dijo la lectura del código** (11-nov), para programarlo:
+- **Al encender, lo común llama a `conectar` por cada recordado, uno tras otro, y espera** (`bpvm_bt.c`,
+  `reconectar_recordados`, desde el aviso de «lista»). En el PC conectan en el acto. En la placa, un aparato dormido no
+  contesta, y uno que vuelve solo (al pulsar una tecla) no tiene aviso: hacen falta un aviso de «ha vuelto», con lo que
+  es, y que la radio siga esperando a los recordados, por su dirección, como el 14-oct. Y ese aviso no puede llegar desde
+  la tarea de NimBLE si de él sale una llamada que espera a NimBLE.
+- **En la C5, la RAM interna**: 145 KB libres antes de encender la WiFi, y la mínima, 55 KB (el `INFO` del 11-nov, con
+  la WiFi conectada). Lo que pida el controlador del Bluetooth, medido antes de seguir.
+- **El registro de tablas de la BIOS tiene 8 sitios**: en la P4 irían `PANT`, `WIFI`, `BT  `, `ENTR`, `LVGL` y `SQLI`.
+- **`scr.onKey` ya está en las imágenes**: `BPVM_GUI` va en la C5, la C6, la P4 y la DK2.
+- **El Bluetooth no está activado en ningún `sdkconfig`**; en la P4, `esp_hosted` 3.0.9 trae su parte de Bluetooth
+  (`HOST_FEAT_BT`), sin usar.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
