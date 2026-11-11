@@ -19,8 +19,18 @@
  *
  * UN FALLO DEL ENLACE NO REINICIA LA PLACA (CONFIG_ESP_HOSTED_HOST_TRANSPORT_RESTART_ON_FAILURE=n, que por defecto hace
  * abort()): la WiFi se queda apagada y lo dice el log.
+ *
+ * V8/H2, paso 5 (11-nov): Y EL BLUETOOTH, por la misma C6 (lo del 14-oct, `p4_hid`): NimBLE en la P4 y el controlador en la
+ * C6, por el canal HCI de esp_hosted. EL ENLACE SE COMPARTE: se abre la primera vez que lo pide alguien (la WiFi o el
+ * Bluetooth) y se cierra, con la C6 a reset, cuando lo suelta el último. El del Bluetooth, además, enciende el controlador
+ * de la C6 y lo une a NimBLE (esp_hosted_bt_host_stack_setup): desde que la C6 lleva esp_hosted 3.0.9 (19-oct), el
+ * controlador lo enciende el anfitrión.
  */
 #include "wifi_esp32.h"
+#include "bt_esp32.h"
+#include "esp_hosted_bt_host_stack.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "bpvm_env.h"
 #include "bpvm_machine.h"
 #include "bpvm_wifi.h"
@@ -57,7 +67,7 @@ static void al_evento(void* arg, esp_event_base_t base, int32_t id, void* datos)
     if (id == ESP_HOSTED_EVENT_TRANSPORT_FAILURE) wifi_esp32_radio_rota();
 }
 
-static int abrir(char* err, size_t n) {
+static int abrir_c6(char* err, size_t n) {
     static int s_version_dicha = 0;
     int64_t t0 = esp_timer_get_time();
     int ini, con;
@@ -83,13 +93,57 @@ static int abrir(char* err, size_t n) {
     return 0;
 }
 
-static void cerrar(void) {
+static void cerrar_c6(void) {
     int r = esp_hosted_deinit();
     if (r != 0) log_printf("radio: esp_hosted_deinit -> %d", r);
     c6_a_reset();
 }
 
+/* El enlace, compartido entre la WiFi y el Bluetooth: cuántos lo usan, con su cerrojo. */
+static SemaphoreHandle_t s_enlace_m = NULL;
+static int s_usos = 0;
+
+static int abrir(char* err, size_t n) {
+    int r = 0;
+    if (!s_enlace_m) { snprintf(err, n, "el enlace con la C6, sin preparar"); return -1; }
+    xSemaphoreTake(s_enlace_m, portMAX_DELAY);
+    if (s_usos == 0) r = abrir_c6(err, n);
+    if (r == 0) s_usos++;
+    xSemaphoreGive(s_enlace_m);
+    return r;
+}
+
+static void cerrar(void) {
+    if (!s_enlace_m) return;
+    xSemaphoreTake(s_enlace_m, portMAX_DELAY);
+    if (s_usos > 0 && --s_usos == 0) cerrar_c6();
+    xSemaphoreGive(s_enlace_m);
+}
+
 static const wifi_esp32_enlace_t ENLACE_C6 = { abrir, cerrar };
+
+/* El Bluetooth: el enlace, y encima el controlador de la C6, unido a NimBLE. */
+static int abrir_bt(char* err, size_t n) {
+    esp_hosted_bt_host_stack_cfg_t cfg = ESP_HOSTED_BT_HOST_STACK_CONFIG_DEFAULT();
+    esp_err_t e;
+    if (abrir(err, n) != 0) return -1;
+    e = esp_hosted_bt_host_stack_setup(&cfg);
+    if (e != ESP_OK) {
+        snprintf(err, n, "Bluetooth: el controlador de la C6 no arranca (%s)", esp_err_to_name(e));
+        cerrar();
+        return -1;
+    }
+    log_printf("radio: el Bluetooth de la C6, encendido");
+    return 0;
+}
+
+static void cerrar_bt(void) {
+    esp_err_t e = esp_hosted_bt_host_stack_teardown();
+    if (e != ESP_OK) log_printf("radio: apagar el Bluetooth de la C6 -> %s", esp_err_to_name(e));
+    cerrar();
+}
+
+static const bt_esp32_enlace_t ENLACE_BT_C6 = { abrir_bt, cerrar_bt };
 
 /* Al arrancar (p4_hw). */
 void p4_radio_registrar(void) {
@@ -112,6 +166,8 @@ void p4_radio_registrar(void) {
         if (bpvm_caps_reservar_sistema(PINES[i], BPVM_PIN_SIS_RADIO, err, sizeof err) != 0)
             log_printf("radio: el GPIO%d NO se pudo reservar: %s", PINES[i], err);
     c6_a_reset();
+    s_enlace_m = xSemaphoreCreateMutex();
     wifi_esp32_publicar(&ENLACE_C6);
+    bt_esp32_publicar(&ENLACE_BT_C6);   /* V8/H2, paso 5: el Bluetooth, por la misma C6 */
     log_printf("radio: la C6 por SDIO (ranura %d), en reset hasta que haga falta", CONFIG_ESP_HOSTED_HOST_SDIO_SLOT);
 }

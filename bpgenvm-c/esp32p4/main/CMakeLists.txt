@@ -30,6 +30,7 @@ idf_component_register(
         "sonido_p4.c"                         # V8/H4 (#708): el sonido, la cintura del ES8311 (esp_codec_dev)
         "radio_p4.c"                          # V8/H3: la radio, la de su C6 por SDIO (esp_hosted)
         "../../esp32/common/wifi_esp32.c"     # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../../esp32/common/bt_esp32.c"       # V8/H2, paso 5: el Bluetooth de la familia (NimBLE), por la C6
         "../../esp32/common/net_esp32.c"      # V8/H3: la IP de la familia (esp_netif)
         "../../esp32/common/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
@@ -129,6 +130,7 @@ idf_component_register(
     REQUIRES
         esp_eth
         esp_wifi         # V8/H3: en la P4, sus funciones van a la C6 (esp_hosted, el IDF 6.1)
+        bt               # V8/H2, paso 5: NimBLE (el controlador, en la C6)
         esp_netif
         esp_event
         esp_timer

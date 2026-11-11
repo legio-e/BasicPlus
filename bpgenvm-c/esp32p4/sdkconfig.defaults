@@ -130,7 +130,8 @@ CONFIG_PM_ENABLE=y
 CONFIG_ESP_HOSTED=y
 CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
 CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
-CONFIG_ESP_HOSTED_HOST_FEAT_BT=n
+# V8/H2, paso 5 (11-nov): y el Bluetooth de la C6 (abajo), por el canal HCI de esp_hosted.
+CONFIG_ESP_HOSTED_HOST_FEAT_BT=y
 # Un fallo del enlace con la C6 NO reinicia la placa (por defecto hace abort()): se ve en el log y se sigue.
 CONFIG_ESP_HOSTED_HOST_TRANSPORT_RESTART_ON_FAILURE=n
 # esp_hosted no arranca solo antes de app_main: el enlace se abre cuando se pide. El controlador SDMMC es del sistema
@@ -143,3 +144,24 @@ CONFIG_WIFI_RMT_NVS_ENABLED=n
 # La tarea de eventos del IDF: bpvm_red_hay_ip escribe en el log desde ella, y con los 2304 B de por defecto iría justa.
 # Como las de arriba: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar. Sólo gasta con la WiFi encendida.
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+
+# V8/H2, paso 5 (11-nov): EL BLUETOOTH, NimBLE en la P4 y el controlador en su C6 (esp32/common/bt_esp32.c y radio_p4.c),
+# como el firmware de prueba del 14-oct (C:\tmp\v8bt\p4_hid). Sólo central y observador: el teclado y el ratón son los
+# periféricos. Hasta 3 conexiones. Los vínculos, en la RAM, sin la NVS: sus claves van a /sys/bluetooth.keys, porque una
+# actualización de la imagen borra la NVS. La memoria del anfitrión, en la PSRAM. Su registro, sólo los avisos. Los búferes,
+# los de por defecto: aquí no falta RAM interna (con la WiFi y los dos aparatos conectados, 148 KB libres en el peor
+# momento, el 11-nov).
+# Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_CONTROLLER_DISABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_TRANSPORT_UART=n
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_MAX_BONDS=8
+CONFIG_BT_NIMBLE_NVS_PERSIST=n
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y

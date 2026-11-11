@@ -231,6 +231,14 @@ WiFi conectada y la línea `mem:` del log (el final de cada RUN, con un programa
   la C5, recortar los búferes de la WiFi en la RAM interna (*«c»*); se hará después de dejar el Bluetooth funcionando en
   la P4, que no tiene este problema.
 
+**La radio del Bluetooth en la P4** (el mismo `bt_esp32.c`, con el controlador en su C6, por `esp_hosted`; el paso 5,
+11-nov), medida en la placa con la WiFi conectada: la mínima desde el arranque (`rtosHeapMinFreeBytes`, del `INFO`) y la
+línea `mem:` del log.
+- **Enlazarlo cuesta 3 KB de RAM interna**: la mínima, de 173,4 KB a 170,3, con el Bluetooth apagado. El controlador está
+  en la C6, y lo de NimBLE va a la PSRAM.
+- **Encendido, con el teclado y el ratón conectados, otros 22 KB en el peor momento**: la mínima, 148,1 KB; al acabar el
+  programa, 203,1 KB libres (con la radio apagada, 209,2). Los búferes de NimBLE, los de por defecto.
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las

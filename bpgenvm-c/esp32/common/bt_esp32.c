@@ -108,6 +108,7 @@ static aparato_t* s_ap = NULL;       /* MAX_APARATOS, en la PSRAM si la hay */
 
 /* ── El estado de la radio ─────────────────────────────────────────────────────────────────────────────────────────── */
 
+static const bt_esp32_enlace_t* s_enlace = NULL;   /* el del controlador, si no está en el chip (la P4: su C6) */
 static bpvm_bt_aviso_fn s_aviso = NULL;
 static bpvm_bt_visto_fn s_visto = NULL;
 static volatile int s_encendida = 0;  /* NimBLE arrancado (de encender a apagar) */
@@ -1028,7 +1029,17 @@ static void al_sincronizar(void) {
      * no casa con la lista blanca (11-nov: el teclado volvía y el ratón no). */
     (void) ble_hs_misc_restore_irks();
     s_lista = 1;
-    log_printf("bt: NimBLE en marcha (%d alias; claves: %u B)", s_nalias, (unsigned) s_claves_len);
+    {
+        /* La dirección propia: la que ven los aparatos, y con la que se vincularon (el 14-oct, la pública de la C6). */
+        ble_addr_t yo;
+        char t[18];
+        memset(&yo, 0, sizeof yo);
+        yo.type = s_propia;
+        (void) ble_hs_id_copy_addr(s_propia, yo.val, NULL);
+        dir_texto(&yo, t, sizeof t);
+        log_printf("bt: NimBLE en marcha (la propia, %s, %s; %d alias; claves: %u B)", t,
+                   s_propia == BLE_OWN_ADDR_PUBLIC ? "pública" : "aleatoria", s_nalias, (unsigned) s_claves_len);
+    }
     if (s_aviso) s_aviso(BPVM_BT_AV_LISTA, NULL, NULL);
     arbitro();
 }
@@ -1068,8 +1079,14 @@ static int r_encender(bpvm_bt_aviso_fn aviso, char* err, size_t n) {
     if (!s_ap) { snprintf(err, n, "Bluetooth: sin memoria para los aparatos"); return -1; }
     s_espera_activa = s_espera_n = s_espera_fallos = s_buscar_ms = s_buscando = 0;
     s_pedido_ap = NULL;
+    if (s_enlace && s_enlace->abrir(err, n) != 0) {   /* la P4: el enlace con la C6 y su controlador */
+        heap_caps_free(s_ap);
+        s_ap = NULL;
+        return -1;
+    }
     e = nimble_port_init();
     if (e != ESP_OK) {
+        if (s_enlace) s_enlace->cerrar();
         heap_caps_free(s_ap);
         s_ap = NULL;
         snprintf(err, n, "Bluetooth: la radio no arranca (%s)", esp_err_to_name(e));
@@ -1099,6 +1116,7 @@ static void r_apagar(void) {
     if (ble_gap_conn_active()) ble_gap_conn_cancel();
     nimble_port_stop();           /* corta las conexiones y para la tarea */
     nimble_port_deinit();         /* la pila y el controlador: la RAM vuelve */
+    if (s_enlace) s_enlace->cerrar();   /* la P4: el controlador de la C6, y el enlace si nadie más lo usa */
     if (s_pedido_ap) {
         /* Quien espere a un connect, que no espere más. Ya sin la tarea de NimBLE: nadie más toca el pedido. */
         s_pedido.r = -1;
@@ -1177,7 +1195,9 @@ static const bpvm_pack_api_t TABLA = {
     BPVM_BT_MARCA, BPVM_BT_API_VER, sizeof SIMBOLOS / sizeof SIMBOLOS[0], SIMBOLOS
 };
 
-void bt_esp32_publicar(void) {
-    int r = bpvm_bios_publica(BPVM_BT_MARCA, &TABLA);
+void bt_esp32_publicar(const bt_esp32_enlace_t* enlace) {
+    int r;
+    s_enlace = enlace;
+    r = bpvm_bios_publica(BPVM_BT_MARCA, &TABLA);
     if (r != 0) log_printf("bt: la radio no se pudo publicar (%d)", r);
 }

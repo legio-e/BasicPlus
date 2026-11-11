@@ -872,6 +872,36 @@ donde no hay problema de memoria. Aquí estamos mezclando problemas y eso no es 
 (su mínima con la WiFi, 64 KB), así que se sigue en la P4 (173 KB), donde funcionó el 14-oct (*«OK»*): primero el teclado y
 el ratón funcionando del todo allí, y después la C5, sólo con su memoria.
 
+### El paso 5, segundo tramo, en la P4 (11-nov): los dos, con la WiFi
+
+- **El enlace con la C6, compartido** (`radio_p4.c`): se abre la primera vez que lo pide la WiFi o el Bluetooth, y se
+  cierra, con la C6 a reset, cuando lo suelta el último (cuántos lo usan, con un cerrojo). El del Bluetooth, además,
+  enciende el controlador de la C6 y lo une a NimBLE (`esp_hosted_bt_host_stack_setup`, como el 14-oct), y al apagar lo
+  deshace antes de soltar el enlace. La radio de las ESP recibe el enlace al publicarse, como la WiFi:
+  `bt_esp32_publicar(&enlace)`, y `NULL` con el controlador del chip (la C5 y la S3). En el `sdkconfig`, el Bluetooth de
+  `esp_hosted` (`HOST_FEAT_BT`) y NimBLE como en la C5, con los búferes de por defecto.
+- **Probado en la P4, con la WiFi conectada**: empareja los dos en la misma búsqueda, sabiendo qué es cada uno (el
+  `connect`, 880 ms el teclado y 1267 el ratón), y guarda sus claves en `/sys/bluetooth.keys`; y **los dos vuelven solos
+  por su MAC**, cifrados con su clave: el teclado, a los 35 ms de encender (se le estaba pulsando); el ratón, a los 97 s.
+  En el minuto de espera no volvió, y en una búsqueda de 30 s con un diagnóstico de cómo se anuncian los recordados
+  (quitado después), ni un anuncio suyo, ni normal ni dirigido a la placa: volvió 6 s después de acabar. Es el mecanismo
+  del 14-oct (la lista blanca y un connect sin dirección, con los mismos parámetros), y entonces el ratón tardó 13 y 44 s.
+- **La dirección de la placa, la de siempre**: el log dice ahora con cuál arranca NimBLE, y es la pública de la C6, la
+  del 14-oct. Si cambiara, los aparatos no reconocerían a la placa con la que se vincularon.
+- **La memoria** (`MEMORIA.md`): el controlador está en la C6 y lo de NimBLE va a la PSRAM. Enlazarlo cuesta 3 KB de RAM
+  interna, y encendido, con los dos conectados, otros 22 en el peor momento: quedan 148 KB.
+
+**Lo que salió:**
+- **El ratón tarda en volver.** Queda por ver si es cosa suya o de la WiFi, que en la C6 comparte la antena con el
+  Bluetooth (el 14-oct no había WiFi). La prueba: la misma, con la WiFi apagada.
+- **El teclado y el ratón de Eduardo cambian de dirección cada vez que se emparejan** (la suben en uno: el teclado, tres
+  veces el 11-nov; el ratón, dos). Para la radio, emparejarlo otra vez es un aparato nuevo, y el recordado de antes se
+  queda en la lista sin volver nunca: hay que olvidarlo a mano.
+- **Un pánico de la P4, una vez** (`#815`): buscando, la segunda vez que se encendía el Bluetooth en el mismo arranque.
+  No se ha repetido.
+
+Lo siguiente, en la P4: la pieza 2, lo que mandan el teclado y el ratón, al teclado y al ratón del SO.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
