@@ -1866,7 +1866,7 @@ module Core
   function __btTurnOff()                 // apaga: corta todas las conexiones
     inline CALL_BUILTIN 311
   end __btTurnOff
-  function __btGetState(): integer       // 0 off, 1 starting, 2 on, 3 scanning
+  function __btGetState(): integer       // 0 off, 1 starting, 2 on, 3 scanning, 4 connecting (un connect sin acabar)
     inline CALL_BUILTIN 312
   end __btGetState
   function __btScan(ms: integer)         // busca durante ms; vuelve en seguida (el estado, 3 mientras)
@@ -1890,7 +1890,7 @@ module Core
   function __btFoundRssi(i: integer): integer  // la intensidad, en dBm
     inline CALL_BUILTIN 319
   end __btFoundRssi
-  function __btConnect(address: string, addressType: string): boolean   // conecta; la primera vez, empareja
+  function __btConnect(address: string, addressType: string): boolean   // conecta (la primera vez, empareja); en una placa lo empieza y vuelve: el estado, 4 mientras
     inline CALL_BUILTIN 320
   end __btConnect
   function __btDisconnect(address: string)    // cierra esa conexión

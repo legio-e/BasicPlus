@@ -303,9 +303,20 @@ module Air
 
     // Conecta. La primera vez empareja y lo recuerda en el fichero; después, por su dirección. true si
     // conecta.
+    // En una placa conectar tarda segundos (emparejar, el servicio HID, suscribirse): __btConnect lo empieza y
+    // vuelve, y aquí se espera, con sleep, mientras el estado es 4, hasta 30 s, sin parar los demás hilos (como
+    // turnOn y scan). En el PC conecta en el acto.
     public function connect(d: BtDevice): boolean
       this.encendido("connect")
       if not __btConnect(d.getAddress(), d.getAddressType()) then
+        return false
+      endif
+      var i: integer := 0
+      while __btGetState() == 4 and i < 300 do
+        sleep(100)
+        i := i + 1
+      endwh
+      if not __btIsConnected(d.getAddress()) then
         return false
       endif
       var raiz: Json.JsonObject := this.leer()

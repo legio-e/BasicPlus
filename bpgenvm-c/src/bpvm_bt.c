@@ -1,8 +1,14 @@
 /*
  * bpvm_bt.c — V8/H2 (8-nov): EL BLUETOOTH, lo común de la HAL BP. La interfaz y el porqué, en bpvm_bt.h.
  *
- * Sin tarea propia: la radio vuelve en seguida y cuenta lo que pase por sus avisos. Todo el estado, bajo un cerrojo; a la
- * radio se la llama SIN él (en el PC avisa desde dentro de la propia llamada, y en una placa desde su tarea).
+ * Todo el estado, bajo un cerrojo; a la radio se la llama SIN él (en el PC avisa desde dentro de la propia llamada, y en
+ * una placa desde su tarea).
+ *
+ * LA TAREA DEL BLUETOOTH (V8/H2, paso 5, 11-nov), como la de la WiFi: nace al encender la primera vez y es la única que
+ * llama a `conectar`, que en una placa espera segundos. Le llegan dos encargos por su cola: el PASE (al encender, los
+ * recordados, sin esperar a ninguno: el que no está, la radio lo sigue esperando y avisa cuando vuelve) y CONECTAR (el
+ * connect de un programa, que espera hasta BT_ESPERA_MS). Mientras queda un connect sin acabar, el estado es 4 y el
+ * programa espera en BP (Air.Bluetooth.connect). Al apagar, la GENERACIÓN sube: lo que la tarea traía de antes se tira.
  *
  * LO RECORDADO lo escribe la clase Air.Bluetooth (en BP, con el módulo Json); aquí sólo se lee, al encender: los
  * recordados se conectan por su dirección, sin emparejar otra vez (lo probado el 14-oct). El JSON, con los aparatos por su
@@ -24,14 +30,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BT_JSON_MAX  1536   /* 8 recordados de ~120 caracteres, con margen */
+#define BT_JSON_MAX   1536    /* 8 recordados de ~120 caracteres, con margen */
+#define BT_PILA       6144u   /* la tarea lee /sys/bluetooth.json (littlefs) y espera a la radio */
+#define BT_COLA       8u      /* los encargos: el pase y los connect de los programas */
+#define BT_ESPERA_MS  20000   /* lo que espera un connect: emparejar, buscar el servicio HID, suscribirse */
 
 /* ── La radio ──────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
 typedef int  (*radio_encender_fn)(bpvm_bt_aviso_fn aviso, char* err, size_t n);
 typedef void (*radio_apagar_fn)(void);
 typedef int  (*radio_buscar_fn)(int ms, bpvm_bt_visto_fn visto, char* err, size_t n);
-typedef int  (*radio_conectar_fn)(const char* dir, const char* tipo, char* clase, size_t nclase, char* err, size_t n);
+typedef int  (*radio_conectar_fn)(const char* dir, const char* tipo, int ms, char* clase, size_t nclase, char* err,
+                                  size_t n);
 typedef void (*radio_dir_fn)(const char* dir);
 
 static radio_encender_fn s_encender;
@@ -78,6 +88,7 @@ typedef struct {
 } bt_listas_t;
 
 static bpvm_platform_mutex_handle_t s_m;
+static bpvm_platform_cond_handle_t  s_c;    /* la tarea espera aquí sus encargos */
 static int s_listo = 0;             /* el cerrojo y las listas: sólo en una placa con radio, al encenderla */
 static int s_estado = BPVM_BT_OFF;
 static int64_t s_busca_hasta = 0;   /* buscando: hasta cuándo (ms) */
@@ -85,6 +96,16 @@ static bt_listas_t* s_l = NULL;
 static int s_nvistos = 0;
 static int s_ncon = 0;
 static int s_tocado = 0;            /* un programa lo ha encendido o apagado: al acabar, vuelve a lo del fichero */
+
+/* La tarea y sus encargos (con el cerrojo). */
+enum { BT_E_PASE = 1, BT_E_CONECTAR = 2 };
+typedef struct { int que; char dir[BPVM_BT_DIR]; char tipo[BPVM_BT_TIPO]; } bt_encargo_t;
+static bpvm_platform_thread_handle_t s_hilo;
+static int s_hilo_vivo = 0;
+static bt_encargo_t s_cola[BT_COLA];
+static unsigned s_cola_cabeza = 0, s_cola_n = 0;
+static int s_conectando = 0;        /* connects de los programas, pedidos y sin acabar: el estado dice 4 */
+static unsigned s_generacion = 0;   /* sube al apagar */
 
 static int cerrojo(void) {
     if (s_listo) return 0;
@@ -94,6 +115,7 @@ static int cerrojo(void) {
         memset(s_l, 0, sizeof *s_l);
     }
     if (bpvm_platform_mutex_init(&s_m) != 0) return -1;
+    if (bpvm_platform_cond_init(&s_c) != 0) return -1;
     s_listo = 1;
     return 0;
 }
@@ -118,16 +140,34 @@ static void quita_conectado(const char* dir) {
     if (i < 0) return;
     s_l->con[i] = s_l->con[--s_ncon];
 }
+static void anota_conectado(const char* dir, const char* clase) {
+    if (conectado_en(dir) >= 0 || s_ncon >= BPVM_BT_MAX_CONECTADOS) return;
+    copia(s_l->con[s_ncon].dir, sizeof s_l->con[s_ncon].dir, dir);
+    copia(s_l->con[s_ncon].clase, sizeof s_l->con[s_ncon].clase, clase && clase[0] ? clase : "unknown");
+    s_ncon++;
+}
 
-/* Lo que cuenta la radio, desde la tarea que sea. */
-static void reconectar_recordados(void);
-static void al_aviso(int aviso, const char* dir) {
-    int lista = 0;
+/* Un encargo a la tarea. Con el cerrojo cogido. 0, o -1 con la cola llena. */
+static int meter(int que, const char* dir, const char* tipo) {
+    bt_encargo_t* e;
+    if (s_cola_n == BT_COLA) return -1;
+    e = &s_cola[(s_cola_cabeza + s_cola_n) % BT_COLA];
+    e->que = que;
+    copia(e->dir, sizeof e->dir, dir);
+    copia(e->tipo, sizeof e->tipo, tipo);
+    s_cola_n++;
+    bpvm_platform_cond_broadcast(&s_c);
+    return 0;
+}
+
+/* Lo que cuenta la radio, desde la tarea que sea (en una placa, la de NimBLE): sólo el estado, con el cerrojo un momento.
+ * Lo que llama a la radio va a la tarea del Bluetooth: llamarla desde aquí podría esperar a la propia tarea que avisa. */
+static void al_aviso(int aviso, const char* dir, const char* clase) {
     coge();
-    if (aviso == BPVM_BT_AV_LISTA && s_estado == BPVM_BT_STARTING) { s_estado = BPVM_BT_ON; lista = 1; }
+    if (aviso == BPVM_BT_AV_LISTA && s_estado == BPVM_BT_STARTING) (void) meter(BT_E_PASE, NULL, NULL);
     else if (aviso == BPVM_BT_AV_SE_FUE && dir) quita_conectado(dir);
+    else if (aviso == BPVM_BT_AV_VOLVIO && dir && s_estado != BPVM_BT_OFF) anota_conectado(dir, clase);
     suelta();
-    if (lista) reconectar_recordados();   /* sin el cerrojo: llama a la radio */
 }
 static void al_visto(const bpvm_bt_aparato_t* a) {
     int i;
@@ -163,10 +203,11 @@ static int fichero_auto_start(void) {
     return r;
 }
 
-/* Cada recordado, por su dirección: la radio lo conecta (en una placa, lo espera; en el PC, lo encuentra). Si alguno no
- * está o no conecta, no es un error (Eduardo: «al menos que lo intenten pero si no están o no conectan que no se produzca
- * un error»): se pasa al siguiente. */
-static void reconectar_recordados(void) {
+/* EL PASE: cada recordado, por su dirección, sin esperar a ninguno (`ms` 0): la radio lo conecta si está (en el PC, lo
+ * encuentra) y, si no, lo sigue esperando y avisa cuando vuelve. Si alguno no está o no conecta, no es un error (Eduardo:
+ * «al menos que lo intenten pero si no están o no conectan que no se produzca un error»): se pasa al siguiente. Si se
+ * apaga a medias (la generación cambia), se deja. */
+static void reconectar_recordados(unsigned gen) {
     json_obj_t raiz, aparatos, a;
     const json_pair_t* d;
     int i;
@@ -182,20 +223,55 @@ static void reconectar_recordados(void) {
         char dir[BPVM_BT_DIR], tipo[BPVM_BT_TIPO], clase[BPVM_BT_CLASE], err[96];
         const json_pair_t* p = &aparatos.pairs[i];
         size_t n = p->key_len < sizeof dir - 1 ? p->key_len : sizeof dir - 1;
+        int sigue;
         memcpy(dir, p->key, n); dir[n] = '\0';
         if (p->type != JSON_TYPE_OBJECT || json_parse(p->value, p->value_len, &a) != 0) continue;
         if (json_get_str(&a, "addressType", tipo, sizeof tipo) < 0) copia(tipo, sizeof tipo, "public");
+        coge(); sigue = (gen == s_generacion); suelta();
+        if (!sigue) break;
         clase[0] = '\0';
-        if (s_conectar(dir, tipo, clase, sizeof clase, err, sizeof err) != 0) continue;
+        if (s_conectar(dir, tipo, 0, clase, sizeof clase, err, sizeof err) != 0) continue;
         coge();
-        if (conectado_en(dir) < 0 && s_ncon < BPVM_BT_MAX_CONECTADOS) {
-            copia(s_l->con[s_ncon].dir, sizeof s_l->con[s_ncon].dir, dir);
-            copia(s_l->con[s_ncon].clase, sizeof s_l->con[s_ncon].clase, clase[0] ? clase : "unknown");
-            s_ncon++;
-        }
+        if (gen == s_generacion) anota_conectado(dir, clase);
         suelta();
     }
     bpvm_free(buf);
+}
+
+/* ── La tarea del Bluetooth ────────────────────────────────────────────────────────────────────────────────────────── */
+
+static void tarea(void* arg) {
+    (void) arg;
+    for (;;) {
+        bt_encargo_t e;
+        unsigned gen;
+        coge();
+        while (s_cola_n == 0) bpvm_platform_cond_wait(&s_c, &s_m);
+        e = s_cola[s_cola_cabeza];
+        s_cola_cabeza = (s_cola_cabeza + 1u) % BT_COLA;
+        s_cola_n--;
+        gen = s_generacion;
+        suelta();
+        if (e.que == BT_E_PASE) {
+            reconectar_recordados(gen);
+            coge();
+            if (gen == s_generacion && s_estado == BPVM_BT_STARTING) s_estado = BPVM_BT_ON;   /* listo, con los recordados */
+            suelta();
+        } else if (e.que == BT_E_CONECTAR) {
+            char clase[BPVM_BT_CLASE], err[96];
+            int r;
+            clase[0] = '\0';
+            err[0] = '\0';
+            r = s_conectar(e.dir, e.tipo, BT_ESPERA_MS, clase, sizeof clase, err, sizeof err);
+            coge();
+            if (gen == s_generacion) {
+                if (r == 0) anota_conectado(e.dir, clase);
+                if (s_conectando > 0) s_conectando--;
+            }
+            suelta();
+            if (r != 0) bpvm_diag("bluetooth: %s no conecta: %s", e.dir, err[0] ? err : "sin motivo");
+        }
+    }
 }
 
 /* ── Encender y apagar ─────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -206,6 +282,14 @@ static int encender(char* det, size_t n) {
     if (!radio()) { snprintf(det, n, "%s", s_motivo); return -1; }
     if (cerrojo() != 0) { snprintf(det, n, "Bluetooth: no se pudo preparar (sin memoria)"); return -1; }
     coge();
+    if (!s_hilo_vivo) {
+        if (bpvm_platform_thread_create_nativa(&s_hilo, tarea, NULL, BT_PILA) != 0) {
+            suelta();
+            snprintf(det, n, "Bluetooth: no se pudo crear su tarea");
+            return -1;
+        }
+        s_hilo_vivo = 1;
+    }
     estaba = s_estado;
     if (estaba == BPVM_BT_OFF) s_estado = BPVM_BT_STARTING;
     suelta();
@@ -219,7 +303,12 @@ static int encender(char* det, size_t n) {
 
 static void apagar(void) {
     if (!radio() || !s_listo) return;
-    s_apagar();
+    coge();
+    s_generacion++;          /* lo que la tarea traiga de antes se tira */
+    s_cola_n = 0;
+    s_conectando = 0;
+    suelta();
+    s_apagar();              /* en una placa, también corta lo que la tarea estuviera esperando */
     coge();
     s_estado = BPVM_BT_OFF;
     s_ncon = 0;
@@ -235,6 +324,7 @@ int bpvm_bt_estado(void) {
     coge();
     if (s_estado == BPVM_BT_SCANNING && bpvm_platform_now_ms() >= s_busca_hasta) s_estado = BPVM_BT_ON;
     e = s_estado;
+    if (e == BPVM_BT_ON && s_conectando > 0) e = BPVM_BT_CONNECTING;
     suelta();
     return e;
 }
@@ -285,23 +375,17 @@ int bpvm_bt_encontrado(int i, bpvm_bt_aparato_t* out) {
 
 /* ── Conectar, desconectar y olvidar ───────────────────────────────────────────────────────────────────────────────── */
 
+/* Se lo encarga a la tarea y vuelve: el programa espera en BP mientras el estado es 4 (Air.Bluetooth.connect). */
 int bpvm_bt_conectar(const char* dir, const char* tipo, char* det, size_t n) {
-    char clase[BPVM_BT_CLASE];
-    int ya;
+    int r;
     if (det && n) det[0] = '\0';
     if (bpvm_bt_estado() < BPVM_BT_ON) { snprintf(det, n, "Bluetooth.connect: está apagado (turnOn primero)"); return -1; }
-    coge(); ya = conectado_en(dir) >= 0; suelta();
-    if (ya) return 1;
-    clase[0] = '\0';
-    if (s_conectar(dir, tipo, clase, sizeof clase, det, n) != 0) return 0;   /* no conecta: el programa recibe false */
     coge();
-    if (conectado_en(dir) < 0 && s_ncon < BPVM_BT_MAX_CONECTADOS) {
-        copia(s_l->con[s_ncon].dir, sizeof s_l->con[s_ncon].dir, dir);
-        copia(s_l->con[s_ncon].clase, sizeof s_l->con[s_ncon].clase, clase[0] ? clase : "unknown");
-        s_ncon++;
-    }
+    if (conectado_en(dir) >= 0) r = 1;
+    else if (meter(BT_E_CONECTAR, dir, tipo) == 0) { s_conectando++; r = 2; }
+    else r = 0;
     suelta();
-    return 1;
+    return r;
 }
 
 void bpvm_bt_desconectar(const char* dir) {

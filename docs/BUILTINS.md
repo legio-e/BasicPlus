@@ -728,7 +728,7 @@ de un método privado, `#752`) y la stdlib (`List`, con su `IndexError`); y una 
 | 309 | `__btIsAvailable` (y en `Air`) | `(): boolean` | `Air.Bluetooth.isAvailable()` |
 | 310 | `__btTurnOn` | `()` | `Air.Bluetooth.turnOn()`: da la orden y vuelve; sin radio, lanza el motivo |
 | 311 | `__btTurnOff` | `()` | `Air.Bluetooth.turnOff()`: corta todas las conexiones |
-| 312 | `__btGetState` | `(): integer` | 0 off, 1 starting, 2 on, 3 scanning |
+| 312 | `__btGetState` | `(): integer` | 0 off, 1 starting, 2 on, 3 scanning, 4 connecting (un connect sin acabar; V8/H2, paso 5) |
 | 313 | `__btScan` | `(ms: integer)` | `Air.Bluetooth.scan(ms)`: empieza a buscar y vuelve; durante `ms`, el estado es 3 |
 | 314 | `__btFoundCount` | `(): integer` | cuántos encontró la última búsqueda (hasta 16; los conectados no salen) |
 | 315 | `__btFoundName` | `(i: integer): string` | el nombre del `i` |
@@ -736,7 +736,7 @@ de un método privado, `#752`) y la stdlib (`List`, con su `IndexError`); y una 
 | 317 | `__btFoundAddressType` | `(i: integer): string` | `"public"` o `"random"`: sin él no se conecta |
 | 318 | `__btFoundKind` | `(i: integer): string` | `"keyboard"`, `"mouse"` o `"unknown"` (el teclado no lo dice en la búsqueda) |
 | 319 | `__btFoundRssi` | `(i: integer): integer` | su intensidad, en dBm |
-| 320 | `__btConnect` | `(address: string, addressType: string): boolean` | `Air.Bluetooth.connect(d)`: true si conecta; apagado, un `RuntimeError` |
+| 320 | `__btConnect` | `(address: string, addressType: string): boolean` | `Air.Bluetooth.connect(d)`: lo empieza, en la tarea del Bluetooth, y vuelve (true si se empezó o ya estaba); la clase espera mientras el estado es 4 y mira `__btIsConnected` (V8/H2, paso 5: en una placa conectar tarda segundos); apagado, un `RuntimeError` |
 | 321 | `__btDisconnect` | `(address: string)` | `Air.Bluetooth.disconnect(d)`: cierra esa conexión |
 | 322 | `__btForget` | `(address: string)` | `Air.Bluetooth.forget(d)`: la conexión y sus claves |
 | 323 | `__btIsConnected` | `(address: string): boolean` | `Air.BtDevice.isConnected()` |

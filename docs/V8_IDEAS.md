@@ -839,6 +839,39 @@ informes de verdad que quedaron en los registros del 14-oct.
   mío: los dos últimos, primero con la familia de la P4 (`riscv`) en vez de la de la C5 (`riscv-imc`). Se vio antes del
   reset, porque el driver salía «sin motor nativo», y se regrabaron bien; la placa nunca los cargó.
 
+### El paso 5, segundo tramo, a medias en la C5 (11-nov): conectar, emparejar, las claves y volver solos
+
+**Lo común, en las dos VMs del PC** (la tabla `'BT  '`, versión 2): la tarea del Bluetooth, como la de la WiFi, la única
+que llama a `conectar`; el connect de un programa se le encarga y el programa espera en BP mientras el estado es 4
+(`Air.Bluetooth.connect`, como `turnOn` y `scan`); al encender, el PASE de los recordados, sin esperar a ninguno; y el aviso
+de «ha vuelto», con lo que es. En el PC conecta en el acto, y la VM-Java no cambia. La red, VERDE, y check-jc, 208.
+
+**La radio de las ESP** (`bt_esp32.c`): una sola tarea toca NimBLE y los aparatos, la de NimBLE, y lo de los demás hilos le
+llega como un evento a su cola; un árbitro decide qué hace el controlador (una búsqueda, un connect del programa o la
+espera de los recordados por su dirección, con la lista blanca); conectar, como el 14-oct (el cifrado, el servicio HID, la
+referencia de cada informe, la suscripción y el descriptor, del que sale si es teclado o ratón); y las claves en
+`/sys/bluetooth.keys`. Las trampas de NimBLE que salieron, cada una medida en la placa:
+- **Su parte de privacidad vuelve a iniciar el almacén de las claves al arrancar la pila** (`ble_hs_pvcy.c`, con
+  `BLE_STATIC_TO_DYNAMIC`): lo vacía y vuelve a poner sus funciones. Emparejado el teclado, el fichero no se escribía. El
+  almacén nuestro se pone al sincronizar.
+- **Y justo antes de avisar, pasa las IRK guardadas a la lista de resolución del controlador** (`ble_hs_misc_restore_irks`):
+  con lo nuestro cargado después, se repite. (Los aparatos de Eduardo no dan IRK: no era lo del ratón.)
+- **El aviso de cifrado puede llegar dos veces** (el teclado, al emparejarlo otra vez): la preparación, una vez.
+- **La pila de la tarea de NimBLE, en sus 4 KB**: con 8 KB, al controlador ya no le quedaba memoria contigua para empezar a
+  buscar (el error 0x07 del HCI, «Memory Capacity Exceeded»). Por eso el fichero de las claves no se escribe allí: allí se
+  preparan los bytes, y los escribe otra tarea.
+
+**Lo que funciona en la C5**: emparejar el teclado y el ratón, sabiendo qué es cada uno; guardar sus claves; y el teclado
+vuelve solo por su MAC (cifrado con su clave guardada) al tocarlo, y manda sus informes. **Lo que no**: el ratón no vuelve,
+aunque se le espera por su MAC (Eduardo lo movió); y con la WiFi encendida no caben dos aparatos: con uno conectado, el
+controlador no puede empezar la segunda conexión (0x07, sin memoria). Con la WiFi apagada, sí empieza.
+
+**Decidido** (Eduardo): para la RAM de la C5 con la WiFi, *«c»*: recortar los búferes de la WiFi en la RAM interna. Y el
+orden, corregido: *«A ver, no entiendo por que hemos empezado con C5. Esto ya funcionaba, lo normal es empezar por S3 o P4
+donde no hay problema de memoria. Aquí estamos mezclando problemas y eso no es un buen sistema.»* La S3 tampoco va holgada
+(su mínima con la WiFi, 64 KB), así que se sigue en la P4 (173 KB), donde funcionó el 14-oct (*«OK»*): primero el teclado y
+el ratón funcionando del todo allí, y después la C5, sólo con su memoria.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

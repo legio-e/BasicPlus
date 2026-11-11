@@ -98,82 +98,88 @@ lines
 1134 299
 1142 301
 1158 0
-1161 307
-1172 308
-1195 309
-1208 311
-1218 312
-1231 313
-1237 314
-1258 315
-1279 316
-1303 317
-1322 318
-1336 319
-1348 320
-1360 0
-1363 326
-1378 0
-1381 331
-1393 332
-1403 333
-1416 334
-1422 335
-1425 336
-1440 337
-1467 338
-1499 340
-1507 342
-1521 343
-1536 0
-1539 348
-1545 349
-1562 350
-1565 351
-1580 352
-1596 353
-1674 354
-1682 356
-1698 0
-1701 361
-1727 0
-1730 366
-1740 367
-1757 368
-1772 0
-1775 372
-1785 373
-1811 0
-1814 378
-1830 0
-1833 382
-1849 383
-1865 385
-1892 0
-1895 389
-1909 390
-1931 392
-1947 0
-1950 396
-1962 397
-1975 399
-1993 0
-1999 0
-2029 0
-2043 0
-2060 0
-2074 0
-2091 0
+1161 310
+1172 311
+1195 312
+1208 314
+1211 315
+1240 316
+1250 317
+1258 319
+1274 320
+1287 322
+1297 323
+1310 324
+1316 325
+1337 326
+1358 327
+1382 328
+1401 329
+1415 330
+1427 331
+1439 0
+1442 337
+1457 0
+1460 342
+1472 343
+1482 344
+1495 345
+1501 346
+1504 347
+1519 348
+1546 349
+1578 351
+1586 353
+1600 354
+1615 0
+1618 359
+1624 360
+1641 361
+1644 362
+1659 363
+1675 364
+1753 365
+1761 367
+1777 0
+1780 372
+1806 0
+1809 377
+1819 378
+1836 379
+1851 0
+1854 383
+1864 384
+1890 0
+1893 389
+1909 0
+1912 393
+1928 394
+1944 396
+1971 0
+1974 400
+1988 401
+2010 403
+2026 0
+2029 407
+2041 408
+2054 410
+2072 0
+2078 0
 2108 0
-2125 0
-2146 0
-2162 0
-2181 0
-2198 0
-2215 0
-2232 0
-2252 0
-2319 0
+2122 0
+2139 0
+2153 0
+2170 0
+2187 0
+2204 0
+2225 0
+2241 0
+2260 0
+2277 0
+2294 0
+2311 0
+2331 0
+2398 0
 vars
 func Wifi.isAvailable 45
 this -20 8 0 ?
@@ -265,84 +271,85 @@ i 24 4 0 integer
 func Bluetooth.connect 1158
 this -28 8 0 ?
 d -20 8 0 ref
-raiz 8 8 0 ?
-aparatos 16 8 0 ?
-a 24 8 0 ?
-func Bluetooth.disconnect 1360
+i 8 4 0 integer
+raiz 12 8 0 ?
+aparatos 20 8 0 ?
+a 28 8 0 ?
+func Bluetooth.disconnect 1439
 this -28 8 0 ?
 d -20 8 0 ref
-func Bluetooth.forget 1378
+func Bluetooth.forget 1457
 this -28 8 0 ?
 d -20 8 0 ref
 raiz 4 8 0 ?
 aparatos 12 8 0 ?
 quedan 20 8 0 ?
 i 28 4 0 integer
-func Bluetooth.listDevices 1536
+func Bluetooth.listDevices 1615
 this -20 8 0 ?
 l 8 8 0 ?
 aparatos 16 8 0 ?
 i 24 4 0 integer
 a 28 8 0 ?
-func Bluetooth.isAutoStart 1698
+func Bluetooth.isAutoStart 1777
 this -20 8 0 ?
-func Bluetooth.setAutoStart 1727
+func Bluetooth.setAutoStart 1806
 this -24 8 0 ?
 b -16 4 0 boolean
 raiz 0 8 0 ?
-func Bluetooth.encendido 1772
+func Bluetooth.encendido 1851
 this -28 8 0 ?
 que -20 8 0 string
-func Bluetooth.fichero 1811
+func Bluetooth.fichero 1890
 this -20 8 0 ?
-func Bluetooth.leer 1830
+func Bluetooth.leer 1909
 this -20 8 0 ?
-func Bluetooth.aparatosDe 1892
+func Bluetooth.aparatosDe 1971
 this -28 8 0 ?
 raiz -20 8 0 ref
-func Bluetooth.escribir 1947
+func Bluetooth.escribir 2026
 this -28 8 0 ?
 raiz -20 8 0 ref
-func Bluetooth.__init 1993
+func Bluetooth.__init 2072
 this -20 8 0 ?
-func __cls_init_Bluetooth() 2029
+func __cls_init_Bluetooth() 2108
 this -20 8 0 ?
-func __cls_m_Bluetooth#isAvailable()z 2043
+func __cls_m_Bluetooth#isAvailable()z 2122
 this -20 8 0 ?
-func __cls_m_Bluetooth#turnOff()V 2060
+func __cls_m_Bluetooth#turnOff()V 2139
 this -20 8 0 ?
-func __cls_m_Bluetooth#disconnect(LAir/BtDevice;)V 2074
+func __cls_m_Bluetooth#disconnect(LAir/BtDevice;)V 2153
 this -28 8 0 ?
 d -20 8 0 ref
-func __cls_m_Bluetooth#turnOn()z 2091
+func __cls_m_Bluetooth#turnOn()z 2170
 this -20 8 0 ?
-func __cls_m_Bluetooth#isConnected()z 2108
+func __cls_m_Bluetooth#isConnected()z 2187
 this -20 8 0 ?
-func __cls_m_Bluetooth#scan(i)LCore/List; 2125
+func __cls_m_Bluetooth#scan(i)LCore/List; 2204
 this -24 8 0 ?
 ms -16 4 0 integer
-func __cls_m_Bluetooth#setAutoStart(z)V 2146
+func __cls_m_Bluetooth#setAutoStart(z)V 2225
 this -24 8 0 ?
 b -16 4 0 boolean
-func __cls_m_Bluetooth#listDevices()LCore/List; 2162
+func __cls_m_Bluetooth#listDevices()LCore/List; 2241
 this -20 8 0 ?
-func __cls_m_Bluetooth#isAutoStart()z 2181
+func __cls_m_Bluetooth#isAutoStart()z 2260
 this -20 8 0 ?
-func __cls_m_Bluetooth#forget(LAir/BtDevice;)V 2198
+func __cls_m_Bluetooth#forget(LAir/BtDevice;)V 2277
 this -28 8 0 ?
 d -20 8 0 ref
-func __cls_m_Bluetooth#isOn()z 2215
+func __cls_m_Bluetooth#isOn()z 2294
 this -20 8 0 ?
-func __cls_m_Bluetooth#connect(LAir/BtDevice;)z 2232
+func __cls_m_Bluetooth#connect(LAir/BtDevice;)z 2311
 this -28 8 0 ?
 d -20 8 0 ref
-func __strconcat3 2252
+func __strconcat3 2331
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 2319
+func __strequals 2398
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

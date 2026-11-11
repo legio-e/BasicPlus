@@ -224,6 +224,12 @@ WiFi conectada y la línea `mem:` del log (el final de cada RUN, con un programa
   hiciera falta: `CONFIG_BT_CTRL_RUN_IN_FLASH_ONLY`, que pasa a la flash la mayor parte del código del controlador
   (~20 KB fijos), y que Espressif marca como experimental (la radio, más lenta; y una conexión puede caerse mientras se
   escribe en la flash).
+- **Y después, conectando** (el segundo tramo, el mismo día), salió que **no es sólo cuánta, sino que sea contigua**: con la
+  pila de la tarea de NimBLE a 8 KB, el controlador no pudo empezar una búsqueda (el error 0x07 del HCI, «Memory Capacity
+  Exceeded»; con 4, sí); y con la WiFi conectada y un aparato conectado (18 KB libres), no puede empezar la conexión del
+  segundo (con la WiFi apagada, 46 KB, sí). La tarea del Bluetooth de lo común, 6 KB más. **Decidido** (Eduardo): para
+  la C5, recortar los búferes de la WiFi en la RAM interna (*«c»*); se hará después de dejar el Bluetooth funcionando en
+  la P4, que no tiene este problema.
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

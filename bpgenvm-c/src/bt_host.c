@@ -21,7 +21,7 @@ static const char* const CLASES[2] = { "keyboard", "mouse" };
 
 static int h_encender(bpvm_bt_aviso_fn aviso, char* err, size_t n) {
     (void) err; (void) n;
-    aviso(BPVM_BT_AV_LISTA, NULL);   /* el PC no tiene que esperar a nada */
+    aviso(BPVM_BT_AV_LISTA, NULL, NULL);   /* el PC no tiene que esperar a nada */
     return 0;
 }
 
@@ -34,9 +34,10 @@ static int h_buscar(int ms, bpvm_bt_visto_fn visto, char* err, size_t n) {
     return 0;
 }
 
-static int h_conectar(const char* dir, const char* tipo, char* clase, size_t nclase, char* err, size_t n) {
+/* Los simulados están siempre ahí: conectan en el acto, se espere o no (`ms`). */
+static int h_conectar(const char* dir, const char* tipo, int ms, char* clase, size_t nclase, char* err, size_t n) {
     int i;
-    (void) tipo;
+    (void) tipo; (void) ms;
     for (i = 0; i < 2; i++)
         if (strcmp(dir, SIMULADOS[i].dir) == 0) { snprintf(clase, nclase, "%s", CLASES[i]); return 0; }
     snprintf(err, n, "Bluetooth: no se encuentra el aparato %s", dir);

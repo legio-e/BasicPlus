@@ -2840,7 +2840,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         (void) read_bp_string(vm, tref, tipo, sizeof tipo);
         int r = bpvm_bt_conectar(dir, tipo, det, sizeof det);
         if (r < 0) return builtin_throw(vm, tc, det);
-        push_i32(vm, tc, r);
+        push_i32(vm, tc, r > 0 ? 1 : 0);   /* V8/H2, paso 5: true también si se ha empezado (2): Air.Bluetooth espera */
         return BPVM_OK;
     }
     case BUILTIN_BT_DISCONNECT: case BUILTIN_BT_FORGET: {
