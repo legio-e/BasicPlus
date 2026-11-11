@@ -20,10 +20,13 @@
  *
  * CONECTAR UN APARATO (lo del 14-oct): conectar; pedir el cifrado (la primera vez empareja, en Just Works: la placa no
  * tiene con qué enseñar ni teclear un código; las siguientes, cifra con la clave guardada); buscar el servicio HID
- * (0x1812) y sus características; de cada informe (0x2A4D), leer su referencia (0x2908: su número y si es de entrada) y,
- * si es de entrada, suscribirse (su CCCD, 0x2902); y leer el descriptor de informes (0x2A4B), del que sale lo que es: la
- * primera colección de aplicación del escritorio genérico (teclado o ratón). Lo que mandan, al teclado y al ratón del SO:
- * el tercer tramo.
+ * (0x1812) y sus características; de cada informe (0x2A4D), leer su referencia (0x2908: su número y si es de entrada o
+ * de salida) y, si es de entrada, suscribirse (su CCCD, 0x2902); y leer el descriptor de informes (0x2A4B), del que sale
+ * lo que es (la primera colección de aplicación del escritorio genérico: teclado o ratón) y qué es cada informe.
+ *
+ * LO QUE MANDAN (la pieza 2, 11-nov), al teclado y al ratón del SO: cada informe, con el número de su referencia, a
+ * bpvm_hid.c, que lo reparte según el descriptor. Y LAS LUCES DE LOS BLOQUEOS (Bloq Num, Bloq Mayús), que lleva la placa:
+ * al conectar un teclado y cuando cambian, a su informe de salida.
  *
  * LAS CLAVES, en /sys/bluetooth.keys (Eduardo, 11-nov), no en la NVS: una actualización de la imagen la borra (14-oct).
  * NimBLE las guarda en su almacén de la RAM (store/config, sin la NVS); aquí se envuelven sus escrituras y borrados, y al
@@ -40,6 +43,7 @@
 #include "bpvm_bios.h"
 #include "bpvm_bt.h"
 #include "bpvm_fs.h"
+#include "bpvm_hid.h"
 #include "bpvm_pack_api.h"
 #include "log.h"
 
@@ -98,10 +102,13 @@ typedef struct {
     chr_t      chr[MAX_CHR];
     uint16_t   cccd, ref;            /* los descriptores de la característica que se prepara */
     uint16_t   mapa;
-    uint8_t*   desc;
+    uint8_t*   desc;                 /* el descriptor de informes, mientras se lee */
     int        ndesc;
     char       clase[BPVM_BT_CLASE];
-    int        informes;             /* los primeros, al log (el tercer tramo los reparte) */
+    bpvm_hid_mapa_t    hid;          /* lo que dice el descriptor: qué es cada informe y dónde está cada cosa */
+    bpvm_hid_teclado_t teclado;      /* lo que tenía apretado, en su informe anterior */
+    uint16_t   luces_h;              /* su informe de salida con las luces de los bloqueos (0: no tiene) */
+    int        luces_sin_resp;       /* y se escribe sin respuesta */
 } aparato_t;
 
 static aparato_t* s_ap = NULL;       /* MAX_APARATOS, en la PSRAM si la hay */
@@ -458,50 +465,64 @@ static void falla(aparato_t* a, const char* motivo) {
     if (a->pedido && s_pedido_ap == a) responde(-1, "", motivo);
 }
 
-/* ── Lo que es: el descriptor de informes ──────────────────────────────────────────────────────────────────────────── */
+/* ── Las luces de los bloqueos ─────────────────────────────────────────────────────────────────────────────────────── */
 
-/* La primera colección de aplicación del escritorio genérico (página 0x01): con el uso 0x06 o 0x07, un teclado; con el
- * 0x02 o el 0x01, un ratón. Los aparatos declaran varias (el teclado de Eduardo, también un ratón; su ratón, también un
- * teclado), y la primera es la suya. */
-static const char* clase_del_mapa(const uint8_t* d, int n) {
-    int i = 0;
-    uint32_t pagina = 0, uso = 0;
-    while (i < n) {
-        uint8_t pre = d[i++];
-        int tam, tipo, tag;
-        uint32_t dato = 0;
-        int k;
-        if (pre == 0xFE) {                       /* un item largo: se salta */
-            if (i + 1 >= n) break;
-            i += 2 + d[i];
-            continue;
-        }
-        tam = pre & 3; if (tam == 3) tam = 4;
-        tipo = (pre >> 2) & 3;
-        tag = pre >> 4;
-        if (i + tam > n) break;
-        for (k = 0; k < tam; k++) dato |= (uint32_t) d[i + k] << (8 * k);
-        i += tam;
-        if (tipo == 1 && tag == 0) pagina = dato;           /* Usage Page (global) */
-        else if (tipo == 2 && tag == 0) uso = dato;         /* Usage (local) */
-        else if (tipo == 0 && tag == 0xA) {                 /* Collection */
-            if (dato == 1 && pagina == 0x01) {              /* de aplicación, del escritorio genérico */
-                if (uso == 0x06 || uso == 0x07) return "keyboard";
-                if (uso == 0x02 || uso == 0x01) return "mouse";
-            }
+/* El informe de salida con las luces de un teclado: la característica de informe (0x2A4D) de salida (tipo 2) con el
+ * número que declara su descriptor, y que se pueda escribir. */
+static void busca_luces(aparato_t* a) {
+    int i;
+    a->luces_h = 0;
+    a->luces_sin_resp = 0;
+    if (!a->hid.luces) return;
+    for (i = 0; i < a->nchr; i++) {
+        const chr_t* c = &a->chr[i];
+        if (c->uuid == 0x2A4D && c->tipo_informe == 2 && c->id_informe == a->hid.luces_id &&
+            (c->props & (BLE_GATT_CHR_PROP_WRITE | BLE_GATT_CHR_PROP_WRITE_NO_RSP))) {
+            a->luces_h = c->val;
+            a->luces_sin_resp = (c->props & BLE_GATT_CHR_PROP_WRITE_NO_RSP) != 0;
+            return;
         }
     }
-    return "unknown";
+}
+
+static int al_escribir_luces(uint16_t conn, const struct ble_gatt_error* err, struct ble_gatt_attr* attr, void* arg) {
+    (void) conn; (void) err; (void) attr; (void) arg;
+    return 0;
+}
+
+/* Las luces de los bloqueos de ahora, a un teclado listo. */
+static void escribe_luces(aparato_t* a) {
+    uint8_t v[8];
+    int n;
+    if (a->estado != E_LISTO || a->luces_h == 0) return;
+    n = bpvm_hid_luces(&a->hid, v, (int) sizeof v);
+    if (n <= 0) return;
+    if (a->luces_sin_resp) (void) ble_gattc_write_no_rsp_flat(a->conn, a->luces_h, v, (uint16_t) n);
+    else (void) ble_gattc_write_flat(a->conn, a->luces_h, v, (uint16_t) n, al_escribir_luces, NULL);
+}
+
+/* Han cambiado los bloqueos (una tecla, en un teclado): las luces, a todos, que son del SO y no de cada teclado. */
+static void luces_a_todos(void) {
+    int i;
+    for (i = 0; i < MAX_APARATOS; i++) if (s_ap[i].en_uso) escribe_luces(&s_ap[i]);
 }
 
 /* ── Preparar un aparato conectado: el servicio HID, sus informes y su descriptor ──────────────────────────────────── */
 
 static void listo(aparato_t* a) {
+    char que[112];
     a->estado = E_LISTO;
-    snprintf(a->clase, sizeof a->clase, "%s", a->desc ? clase_del_mapa(a->desc, a->ndesc) : "unknown");
+    /* El descriptor: lo que es (la clase) y qué es cada informe. Leído, se suelta: lo que hace falta queda en a->hid. */
+    bpvm_hid_lee_mapa(a->desc, a->desc ? a->ndesc : 0, &a->hid);
+    suelta_mapa(a);
+    memset(&a->teclado, 0, sizeof a->teclado);
+    busca_luces(a);
+    snprintf(a->clase, sizeof a->clase, "%s", bpvm_hid_clase(&a->hid));
+    bpvm_hid_describe(&a->hid, que, sizeof que);
     /* La marca de la pila de NimBLE, que se queda en sus 4 KB (el fichero de las claves se escribe fuera de ella). */
-    log_printf("bt: %s listo (%s; de la pila de NimBLE quedan %u B)", a->dir, a->clase,
+    log_printf("bt: %s listo (%s: %s; de la pila de NimBLE quedan %u B)", a->dir, a->clase, que,
                (unsigned) uxTaskGetStackHighWaterMark(NULL));
+    escribe_luces(a);   /* un teclado: las luces de los bloqueos de ahora (al arrancar, la de Bloq Num) */
     if (a->pedido && s_pedido_ap == a) responde(0, a->clase, "");
     else if (s_aviso) s_aviso(BPVM_BT_AV_VOLVIO, a->dir, a->clase);
     arbitro();
@@ -581,11 +602,12 @@ static int al_descriptor(uint16_t conn, const struct ble_gatt_error* err, uint16
     return 0;
 }
 
-/* El siguiente informe de entrada (0x2A4D con notificación): sus descriptores, su referencia y la suscripción. Al acabar,
- * el descriptor de informes. */
+/* El siguiente informe (0x2A4D): de entrada (con notificación), sus descriptores, su referencia y la suscripción; de
+ * salida (se escribe: las luces de un teclado), su referencia. Al acabar, el descriptor de informes. */
 static void siguiente_informe(aparato_t* a) {
     while (a->paso < a->nchr && !(a->chr[a->paso].uuid == 0x2A4D &&
-                                  (a->chr[a->paso].props & (BLE_GATT_CHR_PROP_NOTIFY | BLE_GATT_CHR_PROP_INDICATE))))
+                                  (a->chr[a->paso].props & (BLE_GATT_CHR_PROP_NOTIFY | BLE_GATT_CHR_PROP_INDICATE |
+                                                            BLE_GATT_CHR_PROP_WRITE | BLE_GATT_CHR_PROP_WRITE_NO_RSP))))
         a->paso++;
     if (a->paso >= a->nchr) { lee_mapa(a); return; }
     {
@@ -747,10 +769,17 @@ static int al_gap(struct ble_gap_event* ev, void* arg) {
         return 0;
     }
     case BLE_GAP_EVENT_NOTIFY_RX:
-        if (a->estado == E_LISTO && a->informes < 3) {   /* el tercer tramo los reparte; de momento, los primeros al log */
-            a->informes++;
-            log_printf("bt: %s manda un informe (h=%u, %d B)", a->dir, ev->notify_rx.attr_handle,
-                       (int) OS_MBUF_PKTLEN(ev->notify_rx.om));
+        if (a->estado == E_LISTO) {
+            /* Un informe: a bpvm_hid.c, con su número (el de la referencia de su característica). */
+            uint8_t v[64];
+            int i, n = (int) OS_MBUF_PKTLEN(ev->notify_rx.om);
+            for (i = 0; i < a->nchr; i++) if (a->chr[i].val == ev->notify_rx.attr_handle) break;
+            if (i < a->nchr && n > 0) {
+                if (n > (int) sizeof v) n = (int) sizeof v;
+                if (os_mbuf_copydata(ev->notify_rx.om, 0, n, v) == 0 &&
+                    bpvm_hid_informe(&a->hid, a->chr[i].id_informe, v, n, &a->teclado))
+                    luces_a_todos();   /* han cambiado los bloqueos */
+            }
         }
         return 0;
     case BLE_GAP_EVENT_L2CAP_UPDATE_REQ:

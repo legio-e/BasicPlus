@@ -238,6 +238,11 @@ línea `mem:` del log.
   en la C6, y lo de NimBLE va a la PSRAM.
 - **Encendido, con el teclado y el ratón conectados, otros 22 KB en el peor momento**: la mínima, 148,1 KB; al acabar el
   programa, 203,1 KB libres (con la radio apagada, 209,2). Los búferes de NimBLE, los de por defecto.
+- **Lo que mandan, al teclado y al ratón del SO** (`bpvm_hid.c`, la pieza 2, el mismo día): 3,8 KB de código en la P4 y
+  4 B de RAM fija (los bloqueos). Con cada aparato, lo que dice su descriptor y lo que tenía apretado (unos 430 B), en
+  la tabla de los aparatos de la radio, que va a la PSRAM (8 sitios: 3,4 KB); y el descriptor entero (hasta 1 KB, en la
+  PSRAM), sólo mientras se lee. El estado del ratón del SO, 8 B más (552 B: la pantalla). Con la WiFi y los dos
+  conectados, la mínima de la RAM interna, 144,9 KB (con `HidPrueba`; antes, con `BtMira`, 148,1).
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

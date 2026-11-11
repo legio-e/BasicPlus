@@ -48,7 +48,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_npack_carga.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
           src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_nativa.c \
           src/net.c src/net_host.c \
-          src/bpvm_sonido.c src/sonido_host.c           src/bpvm_wifi.c src/wifi_host.c src/bpvm_bt.c src/bt_host.c src/bpvm_teclado.c src/bpvm_raton.c src/bpvm_red.c src/json_min.c \
+          src/bpvm_sonido.c src/sonido_host.c           src/bpvm_wifi.c src/wifi_host.c src/bpvm_bt.c src/bt_host.c src/bpvm_teclado.c src/bpvm_raton.c src/bpvm_hid.c src/bpvm_red.c src/json_min.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
           third_party/littlefs/bd/lfs_filebd.c
@@ -1193,6 +1193,14 @@ test-sonido: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_sonido.c $(LIBOBJ) -o build/test_sonido.exe $(LDFLAGS)
 	@echo "--- V8/H4 #708 lo comun del sonido (esperado: [status=OK], sin FALLO) ---"
 	./build/test_sonido.exe
+
+# V8/H2, paso 5, la pieza 2 (11-nov) — lo que manda un teclado o un ratón HID (bpvm_hid.c): con los descriptores y
+# los informes de verdad del teclado y del ratón de Eduardo, lo que llega al teclado y al ratón del SO.
+test-hid: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_hid.c $(LIBOBJ) -o build/test_hid.exe $(LDFLAGS)
+	@echo "--- V8/H2 lo que manda un teclado o un raton HID (esperado: [status=OK], sin FALLO) ---"
+	./build/test_hid.exe
 
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.

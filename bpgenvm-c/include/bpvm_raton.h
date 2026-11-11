@@ -8,8 +8,9 @@
  * (BPVM_RATON_*: los valores del enum Mice.Button).
  *
  * QUIÉN LO MUEVE (bpvm_raton_pon, desde cualquier hilo: lleva su cerrojo): en el PC, la ventana de la GUI, si hay un
- * ratón conectado (el simulado), con el punto ya en la pantalla; en las placas, el Bluetooth (el paso 5: un ratón manda
- * desplazamientos, que se sumarán y se limitarán a la pantalla); y las pruebas, con __msInject.
+ * ratón conectado (el simulado), con el punto ya en la pantalla; en las placas, el Bluetooth (el paso 5, con
+ * bpvm_raton_mueve: un ratón manda lo que se ha movido, que se suma sin salirse de la pantalla); y las pruebas, con
+ * __msInject.
  *
  * QUIÉN LO LEE, de dos maneras:
  *   - preguntando (getX, getY, isPressed): tal como está ahora.
@@ -23,8 +24,8 @@
  *     se aprieta), y después el aviso; sin avisos, un BPVM_RATON_MUEVE a la posición del SO, si ha cambiado. UNO en la
  *     cola por ratón como mucho, como los teclados.
  *
- * LA MEMORIA: nada fijo más que un puntero y el cerrojo (12 B en la Pico). El estado (544 B, con los lectores del paso
- * 4) se reserva la primera vez que se usa, con bpvm_malloc_os, como el teclado.
+ * LA MEMORIA: nada fijo más que un puntero y el cerrojo (12 B en la Pico). El estado (552 B, con los lectores del paso
+ * 4 y la pantalla del paso 5) se reserva la primera vez que se usa, con bpvm_malloc_os, como el teclado.
  *
  * El espejo, en la VM-Java: Raton.java (y el reparto, VirtualMachine.repartirRaton). Las dos VMs tienen que repartir lo
  * mismo y en el mismo orden.
@@ -60,6 +61,17 @@ struct bpvm;
 /* Lo que manda un ratón, con el punto en vez del desplazamiento (el PC y las pruebas), desde cualquier hilo: la posición;
  * un aviso por cada botón que se aprieta ahora, del bit bajo al alto; y la rueda, en muescas (0, nada). */
 void     bpvm_raton_pon(int32_t x, int32_t y, uint32_t botones, int32_t rueda);
+
+/* V8/H2, paso 5 (11-nov) — LO QUE MANDA UN RATÓN DE VERDAD (el Bluetooth, bpvm_hid.c): lo que se ha movido, no dónde
+ * está. Se suma al punto de ahora sin salirse de la pantalla, un punto por unidad y sin aceleración; los botones y la
+ * rueda, como bpvm_raton_pon. La pantalla, la que diga bpvm_raton_pantalla o, si nadie la ha dicho, la del driver de la
+ * pantalla ('PANT', su tamaño a 0°), que se le pregunta cuando alguien empieza a usar el ratón (un Mice.Mouse que se
+ * apunta, un lector de C), desde su hilo y no desde la radio; la primera vez que se sabe, el ratón empieza en su centro.
+ * Sin pantalla (la S3), el ratón no hace nada (Eduardo, 8-nov). */
+void     bpvm_raton_mueve(int32_t dx, int32_t dy, uint32_t botones, int32_t rueda);
+/* El tamaño de la pantalla tal como se ve, de quien lo sabe (la GUI, que sabe si está girada; y las pruebas); 0, 0,
+ * ninguna. La primera vez, el ratón va a su centro; después, el punto de ahora se queda dentro. */
+void     bpvm_raton_pantalla(int32_t w, int32_t h);
 
 /* Preguntando (Mouse.getX, getY, isPressed): tal como está. */
 int32_t  bpvm_raton_x(void);

@@ -902,6 +902,40 @@ el ratón funcionando del todo allí, y después la C5, sólo con su memoria.
 
 Lo siguiente, en la P4: la pieza 2, lo que mandan el teclado y el ratón, al teclado y al ratón del SO.
 
+### El paso 5, la pieza 2, hecha en la P4 (11-nov): lo que mandan el teclado y el ratón, al SO
+
+Eduardo, a la propuesta (con las luces de los bloqueos y Bloq Num encendido al empezar): *«Si»*.
+
+- **Lo común, nuevo, `bpvm_hid.c`** (lo usa la radio de las ESP, y un día podría usarlo un USB, que habla el mismo HID):
+  - **El descriptor**, al conectar: de cada informe de entrada, por su número, qué es y dónde está cada cosa, como lo
+    declara el aparato. El ratón de Eduardo manda cuatro: el 1, el ratón (8 botones, X e Y de 16 bits con signo, la
+    rueda); el 2, un teclado; el 3 y el 4, las teclas multimedia y las de encendido, que de momento no se usan. Su
+    teclado, tres: el 1, el teclado; el 2, multimedia; el 3, un ratón. Y el informe de salida de las luces.
+  - **Un informe de teclado** se compara con el anterior: cada tecla que aparece es una pulsación, a `bpvm_teclado_pon`,
+    con su carácter de la tabla del teclado americano y las reglas del PC (sólo las teclas que dan texto; ninguno con
+    Ctrl, Alt, AltGr o Windows). Soltar no avisa, y mantener no repite. Con más teclas de las que caben (ErrorRollOver),
+    el informe no vale.
+  - **Los bloqueos los lleva la placa**: una pulsación de Bloq Mayús, Bloq Num o Bloq Despl los cambia (Bloq Mayús, sólo
+    para las letras), y la radio les manda sus luces a los teclados, también al conectarse. Al arrancar, Bloq Num
+    encendido.
+  - **Un informe de ratón**, al ratón del SO: `bpvm_raton_mueve` suma lo que se ha movido, un punto por unidad y sin
+    aceleración, sin salirse de la pantalla, y empieza en su centro. El tamaño, el del driver de la pantalla (`'PANT'`,
+    a 0°), que se le pregunta cuando alguien empieza a usar el ratón (un `Mice.Mouse`, la GUI), desde su hilo: la
+    tarea de NimBLE, que es la que lo mueve, va con 4 KB de pila, y el `size` del driver de la P4 lee el ENV y escribe
+    en el log. Cuando gire, lo dirá la GUI (`bpvm_raton_pantalla`, la pieza 3). Sin pantalla (la S3), nada.
+- **Probado primero en el PC**: `test-hid`, una prueba de C nueva en la red (79 comprobaciones), con los dos
+  descriptores y los informes de verdad de los registros del 14-oct: qué es cada informe, la tabla, los modificadores,
+  mantener y soltar, los bloqueos y sus luces, y el ratón que suma, se para en los bordes y no se mueve sin pantalla.
+- **En la P4, con la WiFi conectada**: el ratón sale del centro (240, 400), se para en el borde, y llegan los dos
+  botones y la rueda en los dos sentidos; el teclado, cada tecla con su carácter (Eduardo, *«escribí hola123 Mays A
+  Mays»*: llegaron `h o l a 1 2 3`, Bloq Mayús, `A` y Bloq Mayús), y la luz de Bloq Mayús se encendió. Con un
+  diagnóstico provisional de los informes crudos (quitado después), lo que mandó el teclado, tal cual, y nada más.
+- **Lo que salió:** la tecla que despierta al teclado no llega: el teclado se conecta y no la manda (mientras la placa
+  lo preparaba no llegó ningún informe). Y el teclado avisa de su batería cada 19 s (al 100 %), del servicio de la
+  batería, que la placa no mira.
+
+Lo siguiente, en la P4: la pieza 3, la GUI (la tabla `'ENTR'` y `gui_entrada.c` en el pack de la GUI).
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

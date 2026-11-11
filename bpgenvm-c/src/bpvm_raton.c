@@ -6,7 +6,9 @@
 #include "bpvm_raton.h"
 #include "bpvm_internal.h"
 #include "bpvm_alloc.h"
+#include "bpvm_bios.h"
 #include "bpvm_bt.h"
+#include "bpvm_pant.h"
 #include "bpvm_platform.h"
 
 #include <string.h>
@@ -25,6 +27,7 @@ typedef struct {
 typedef struct {
     int32_t    x, y;                         /* tal como está */
     uint32_t   botones;
+    int32_t    w, h;                         /* paso 5: la pantalla de bpvm_raton_mueve (0: aún no se sabe) */
     aviso_t    avisos[BPVM_RATON_AVISOS];    /* los últimos, por su número de orden */
     uint32_t   avisos_fin;                   /* el número del siguiente que llegue */
     apuntado_t ap[BPVM_RATON_OBJETOS];
@@ -61,11 +64,9 @@ static void aviso(raton_t* r, int32_t tipo, int32_t dato) {
     r->avisos_fin++;
 }
 
-void bpvm_raton_pon(int32_t x, int32_t y, uint32_t botones, int32_t rueda) {
-    raton_t* r = estado();
+/* Con el cerrojo cogido: el punto, los botones (un aviso por cada uno que se aprieta ahora) y la rueda. */
+static void pon(raton_t* r, int32_t x, int32_t y, uint32_t botones, int32_t rueda) {
     uint32_t nuevos, b;
-    if (!r) return;
-    coge();
     r->x = x;
     r->y = y;
     botones &= BPVM_RATON_BOTONES;
@@ -74,6 +75,60 @@ void bpvm_raton_pon(int32_t x, int32_t y, uint32_t botones, int32_t rueda) {
         if (nuevos & b) aviso(r, BPVM_RATON_PULSA, (int32_t) b);   /* soltar no avisa, de momento */
     r->botones = botones;
     if (rueda != 0) aviso(r, BPVM_RATON_RUEDA, rueda);
+}
+
+void bpvm_raton_pon(int32_t x, int32_t y, uint32_t botones, int32_t rueda) {
+    raton_t* r = estado();
+    if (!r) return;
+    coge();
+    pon(r, x, y, botones, rueda);
+    suelta();
+}
+
+/* ── V8/H2, paso 5: lo que manda un ratón de verdad, y su pantalla ─────────────────────────────────────────────────── */
+
+static int32_t dentro(int32_t v, int32_t max) { return v < 0 ? 0 : v >= max ? max - 1 : v; }
+
+/* Con el cerrojo cogido: ¿se sabe la pantalla? Si nadie la ha dicho, la del driver ('PANT', a 0°); la primera vez que
+ * se sabe, el ratón va a su centro. Sin driver, no se guarda nada: se vuelve a mirar la próxima vez (en la C5 el driver
+ * es un pack, y se carga con el primer RUN). Se pregunta cuando alguien empieza a usar el ratón (un Mice.Mouse que se
+ * apunta, un lector de C), desde su hilo: NO desde el que lo mueve, la radio, que va con la pila justa (la tarea de
+ * NimBLE, 4 KB) mientras que el driver puede leer el ENV y escribir en el log (el de la P4, p4_panel_select). */
+static int con_pantalla(raton_t* r) {
+    const bpvm_pack_api_t* api;
+    bpvm_pant_t p;
+    int w = 0, h = 0;
+    if (r->w > 0 && r->h > 0) return 1;
+    api = (const bpvm_pack_api_t*) bpvm_bios_busca(BPVM_PANT_MARCA);
+    if (!api || bpvm_pant_resolver(api, &p) != 0 || p.size(&w, &h) != 1 || w <= 0 || h <= 0) return 0;
+    r->w = w;
+    r->h = h;
+    r->x = w / 2;
+    r->y = h / 2;
+    return 1;
+}
+
+void bpvm_raton_mueve(int32_t dx, int32_t dy, uint32_t botones, int32_t rueda) {
+    raton_t* r = estado();
+    if (!r) return;
+    coge();
+    if (r->w > 0 && r->h > 0)   /* sin pantalla (o mientras nadie la ha preguntado), no hace nada (8-nov: la S3) */
+        pon(r, dentro(r->x + dx, r->w), dentro(r->y + dy, r->h), botones, rueda);
+    suelta();
+}
+
+void bpvm_raton_pantalla(int32_t w, int32_t h) {
+    raton_t* r = estado();
+    if (!r) return;
+    coge();
+    if (w > 0 && h > 0) {
+        if (r->w <= 0 || r->h <= 0) { r->x = w / 2; r->y = h / 2; }   /* la primera vez, en su centro */
+        else { r->x = dentro(r->x, w); r->y = dentro(r->y, h); }
+        r->w = w;
+        r->h = h;
+    } else {
+        r->w = r->h = 0;
+    }
     suelta();
 }
 
@@ -108,6 +163,7 @@ int bpvm_raton_apunta(struct bpvm* vm, uint64_t ref, int tid, int slot) {
     (void) vm;
     if (!r) return 0;
     coge();
+    (void) con_pantalla(r);   /* paso 5: alguien va a usar el ratón; la pantalla, desde este hilo */
     for (i = 0; i < BPVM_RATON_OBJETOS; i++) {
         if (r->ap[i].en_uso && r->ap[i].ref == ref) { libre = i; break; }   /* el mismo, otra vez */
         if (!r->ap[i].en_uso && libre < 0) libre = i;
@@ -198,15 +254,17 @@ void bpvm_raton_reparte(struct bpvm* vm) {
 }
 
 void bpvm_raton_fin_de_run(void) {
-    int32_t x, y;
+    int32_t x, y, w, h;
     uint32_t b;
     int i, usado[BPVM_RATON_LECTORES];
     if (!s_r) return;
     coge();
     x = s_r->x; y = s_r->y; b = s_r->botones;   /* la posición y los botones son del ratón, no del programa: se quedan */
+    w = s_r->w; h = s_r->h;                     /* y la pantalla, de la placa */
     for (i = 0; i < BPVM_RATON_LECTORES; i++) usado[i] = s_r->lector[i].usado;
     memset(s_r, 0, sizeof *s_r);                /* lo del programa, fuera: sus ratones y lo que no se avisó */
     s_r->x = x; s_r->y = y; s_r->botones = b;
+    s_r->w = w; s_r->h = h;
     for (i = 0; i < BPVM_RATON_LECTORES; i++) s_r->lector[i].usado = usado[i];   /* los de C siguen, desde cero */
     suelta();
 }
@@ -218,6 +276,7 @@ int bpvm_raton_lector_abre(void) {
     int i, id = -1;
     if (!r) return -1;
     coge();
+    (void) con_pantalla(r);   /* paso 5: la GUI va a leer el ratón; la pantalla, desde su hilo */
     for (i = 0; i < BPVM_RATON_LECTORES; i++) {
         if (!r->lector[i].usado) {
             r->lector[i].usado = 1;
