@@ -894,9 +894,14 @@ el ratón funcionando del todo allí, y después la C5, sólo con su memoria.
 **Lo que salió:**
 - **El ratón tarda en volver.** Queda por ver si es cosa suya o de la WiFi, que en la C6 comparte la antena con el
   Bluetooth (el 14-oct no había WiFi). La prueba: la misma, con la WiFi apagada.
-- **El teclado y el ratón de Eduardo cambian de dirección cada vez que se emparejan** (la suben en uno: el teclado, tres
-  veces el 11-nov; el ratón, dos). Para la radio, emparejarlo otra vez es un aparato nuevo, y el recordado de antes se
-  queda en la lista sin volver nunca: hay que olvidarlo a mano.
+- **El teclado y el ratón de Eduardo usan una dirección nueva cada vez que se emparejan otra vez** (los registros del
+  14-oct y del 11-nov): el ratón lleva la cuenta en el quinto byte (01, 02, 03 y 04, uno por emparejamiento), y el
+  teclado sube en uno el cuarto y el quinto (cinco direcciones, cuatro de ellas el 11-nov). No son MAC de fábrica: su
+  primer byte (0x11 y 0x13) tiene a 1 el bit de las direcciones de grupo, que un código de fabricante nunca tiene; se
+  las genera el aparato. Eduardo: *«el MAC address no cambia es fijo y unico por dispositivo, es lo que hay que
+  utilizar»*: es lo que se usa, y mientras no se empareja otra vez no cambia (los dos volvieron con la de esa mañana).
+  Lo que pasa al emparejarlo otra vez: para la radio es un aparato nuevo, y el recordado de antes se queda en la lista
+  sin volver nunca; hay que olvidarlo a mano.
 - **Un pánico de la P4, una vez** (`#815`): buscando, la segunda vez que se encendía el Bluetooth en el mismo arranque.
   No se ha repetido.
 
