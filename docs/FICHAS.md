@@ -7387,6 +7387,22 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#814` — en el PC, el fin de RUN avisa de una FUGA del programa que no es suya: lo que la GUI del PC pide para sí, el búfer de dibujo sin ventana (`--no-screen`) y el guion de la ventana (abierta el 11-nov, en las pruebas de `#813`)
+
+- **Lo visto** (11-nov): con la VM-C con LVGL, `--no-screen` y un programa con GUI (`GuiGiro`, en el scratchpad, con
+  giro y sin él), al terminar: «[bpvm] fin de RUN: FUGA — 1 bloque(s) del programa sin liberar, 19200 B; el mayor
+  (19200 B) se pidio en src/gui_display_sdl.c linea 576». Es el búfer de diez filas de la pantalla fuera de pantalla
+  (`disp_init_headless`): se pide al arrancar la GUI y se queda, porque es de la pantalla y no del programa. No es de
+  `#813`: sin girar, igual.
+- **Por qué** (leído): se pide con `bpvm_malloc`, que es la familia de la VM, la que el guardián vigila como del
+  programa; lo de la plataforma va con `bpvm_malloc_os` (`bpvm_alloc.h`), que el aviso cuenta aparte. Con ventana no
+  sale: los búferes los pide el driver de SDL de LVGL, fuera del guardián.
+- **Y otro como él**, con ventana: el guion de la ventana (`BPVM_GUI_SCRIPT`, una herramienta de las pruebas). Sus dos
+  búferes (`script_load`) se piden con `bpvm_malloc` al cargarlo, y el fin de RUN dice «FUGA — 2 bloque(s) del
+  programa sin liberar, 1602 B; el mayor (1424 B) se pidio en src/gui_display_sdl.c linea 206». Sin guion, con
+  ventana, «0 bloques sin liberar».
+- **Lo que se haría:** pedirlos con `bpvm_malloc_os`, y mirar si hay más como ellos en la GUI del PC.
+
 #### ✅ `#813` — en el PC, la ventana de la VM-C y del micro simulado con la pantalla girada (`Gui.setRotation(90)`) sale mal: colores pálidos y rayas verticales, sin imagen que se reconozca (abierta el 10-nov, en el paso 4 de H2; lo vio Eduardo · **CERRADA el 11-nov**, el commit de `#813`; Eduardo: *«La opción 2 parece mas razonable»*: la ventana gira con la pantalla)
 
 - **Lo visto** (Eduardo, 10-nov, en las pruebas del ratón con la pantalla girada): *«Sale con los colores pálidos con
