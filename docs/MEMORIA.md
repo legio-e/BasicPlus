@@ -243,6 +243,9 @@ línea `mem:` del log.
   la tabla de los aparatos de la radio, que va a la PSRAM (8 sitios: 3,4 KB); y el descriptor entero (hasta 1 KB, en la
   PSRAM), sólo mientras se lee. El estado del ratón del SO, 8 B más (552 B: la pantalla). Con la WiFi y los dos
   conectados, la mínima de la RAM interna, 144,9 KB (con `HidPrueba`; antes, con `BtMira`, 148,1).
+- **Y en la GUI** (la pieza 3, 12-nov): la tabla `'ENTR'` de la imagen, sólo constantes en la flash; el pack de la GUI,
+  6 KB más de código y 1 KB más de RAM fija, en su bloque de la PSRAM (la flecha del ratón, 912 B, y el estado de la
+  entrada). Con la WiFi, los dos aparatos y una pantalla con controles, la mínima de la RAM interna, 139,5 KB.
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

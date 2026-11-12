@@ -40,9 +40,12 @@
 set -e
 QUE="${1:-imc}"
 VARIANTE="${VARIANTE:-}"
+# V8/H2, paso 5, la pieza 3 (12-nov) — LA ENTRADA: el teclado y el ratón del SO en la GUI (gui_entrada.c, el del PC, y
+# entrada_pack.c, que los pide a la imagen por 'ENTR'), en el pack de siempre. No en la mini: la C6 no tiene Bluetooth y
+# va justa de RAM (Eduardo, 12-nov: «OK»).
 case "$VARIANTE" in
-  "")   POOL_KB="${2:-256}"; TAG=""; PERILLAS="" ;;
-  mini) POOL_KB="${2:-64}";  TAG="_mini"
+  "")   POOL_KB="${2:-256}"; TAG=""; PERILLAS=""; ENTRADA=1; ENTRADA_CF="-DBPVM_GUI_ENTRADA" ;;
+  mini) POOL_KB="${2:-64}";  TAG="_mini"; ENTRADA=0; ENTRADA_CF=""
         NODOS="${NODOS:-256}"; FUENTE_MAX="${FUENTE_MAX:-24}"; BUFS="${BUFS:-1}"; SHOT_KB="${SHOT_KB:-40}"
         PERILLAS="-DGUI_MAX_NODES=$NODOS -DBPVM_FUENTE_MAX_PX=$FUENTE_MAX -DBPVM_PANT_BUFS=$BUFS -DBPVM_SHOT_MAX=$((SHOT_KB * 1024))" ;;
   *)    echo "VARIANTE: vacia (el pack de siempre) o mini (pantallas pequenas)"; exit 1 ;;
@@ -77,7 +80,7 @@ mkdir -p "$OUTD"
 OBJ="$HERE/obj_$SUF$TAG"
 rm -rf "$OBJ"; mkdir -p "$OBJ"
 CF="$ISA -fno-jump-tables -Os -ffunction-sections -fdata-sections -fno-builtin -ffreestanding -Wall -Wno-unused-function \
-    -DBPVM_EN_PACK -DBPVM_GUI -DBPVM_LVGL -DBPVM_PACK_LV_MEM_KB=$POOL_KB $PERILLAS \
+    -DBPVM_EN_PACK -DBPVM_GUI -DBPVM_LVGL -DBPVM_PACK_LV_MEM_KB=$POOL_KB $PERILLAS $ENTRADA_CF \
     -DLV_CONF_INCLUDE_SIMPLE -DLV_CONF_PATH=$BPC/include/lv_conf.h \
     -I$BPC/include -I$BPC/src -I$LVGL"
 LIBGCC=$("$GCC" $ISA -print-libgcc-file-name)
@@ -97,9 +100,14 @@ echo "[2/5] gui.c (el de la VM, bajo BPVM_EN_PACK) + lo publicado + la entrada +
 "$GCC" $CF -c "$HERE/lvgl_pack.c"            -o "$OBJ/lvgl_pack.o"
 "$GCC" $CF -c "$HERE/gui_pack_glue.c"        -o "$OBJ/gui_pack_glue.o"
 "$GCC" $CF -c "$HERE/pant_lvgl.c"            -o "$OBJ/pant_lvgl.o"
+if [ "$ENTRADA" = 1 ]; then
+    "$GCC" $CF -c "$BPC/src/gui_entrada.c"   -o "$OBJ/gui_entrada.o"
+    "$GCC" $CF -c "$HERE/entrada_pack.c"     -o "$OBJ/entrada_pack.o"
+fi
 
 echo "[3/5] la lista de enlace, en UN sitio (la lee el oráculo)"
 { echo "$OBJ/lvgl_pack.o"; echo "$OBJ/gui_pack_publics.o"; echo "$OBJ/gui.o"; echo "$OBJ/gui_pack_glue.o"; echo "$OBJ/pant_lvgl.o"
+  if [ "$ENTRADA" = 1 ]; then echo "$OBJ/gui_entrada.o"; echo "$OBJ/entrada_pack.o"; fi
   ls "$OBJ"/lv_*.o; echo "$LIBGCC"; } > "$HERE/lvgl${TAG}_$SUF.link"
 
 echo "[4/5] enlazando en BASE 0 con --emit-relocs y --gc-sections"

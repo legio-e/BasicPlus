@@ -18,7 +18,10 @@
  * táctil): a_panel deshace la cuenta de indev_pointer_proc (lv_indev.c). En el PC no hace nada: allí LVGL no gira, la
  * ventana gira con la pantalla (#813).
  *
- * Lo usa la ventana de SDL (gui_display_sdl.c: la VM-C y el micro simulado). En las placas, el paso 5, por el pack.
+ * Lo usa la ventana de SDL (gui_display_sdl.c: la VM-C y el micro simulado). EN LAS PLACAS (el paso 5, la pieza 3,
+ * 12-nov), el pack de la GUI: el mismo fichero, que pant_lvgl.c arranca al crear la pantalla si la imagen publica
+ * 'ENTR' (bpvm_entr.h); lo que aquí se le pide al teclado y al ratón del SO, allí lo sirve entrada_pack.c por esa tabla.
+ * Y en la placa, además, el tamaño de la pantalla tal como se ve, al ratón del SO (pantalla_al_raton).
  */
 #ifdef BPVM_LVGL
 #include "gui_entrada.h"
@@ -206,11 +209,29 @@ static void cambia_raton(int con) {
     if (s_cursor_sistema) s_cursor_sistema(!con);
 }
 
+/* V8/H2, paso 5 (la pieza 3, 12-nov) — EN UNA PLACA, el tamaño de la pantalla tal como se ve, al ratón del SO
+ * (bpvm_raton_pantalla), para que no se salga: allí gira el driver y LVGL sólo cambia su resolución (pant_lvgl.c), así
+ * que la de LVGL es la que se ve. Al empezar y cada vez que cambia (un giro). En el PC no: la ventana pone el punto ella
+ * misma (bpvm_raton_pc). */
+static void pantalla_al_raton(void) {
+    static int32_t s_w = -1, s_h = -1;
+    lv_display_t* d = lv_display_get_default();
+    int32_t w, h;
+    if (s_pc || !d) return;
+    w = lv_display_get_horizontal_resolution(d);
+    h = lv_display_get_vertical_resolution(d);
+    if (w == s_w && h == s_h) return;
+    s_w = w;
+    s_h = h;
+    bpvm_raton_pantalla(w, h);
+}
+
 static void leer_raton(lv_indev_t* indev, lv_indev_data_t* data) {
     int32_t x, y, muescas;
     int izq;
     int con = bpvm_bt_hay_raton();
     (void) indev;
+    pantalla_al_raton();
     if (con != s_con_raton) cambia_raton(con);
     if (!con || !bpvm_raton_lector_lee(s_lr, &x, &y, &izq, &muescas)) {
         data->state = LV_INDEV_STATE_RELEASED;   /* sin ratón: suelto y donde estaba (el punto lo pone LVGL) */
@@ -257,6 +278,7 @@ void bpvm_gui_entrada_init(int pc, void (*cursor_sistema)(int visible)) {
     lv_image_set_src(s_flecha_obj, &s_flecha);
     lv_obj_add_flag(s_flecha_obj, LV_OBJ_FLAG_HIDDEN);
     lv_indev_set_cursor(s_raton, s_flecha_obj);
+    pantalla_al_raton();   /* en una placa: el ratón, dentro de esta pantalla desde ya */
 }
 
 #endif /* BPVM_LVGL */

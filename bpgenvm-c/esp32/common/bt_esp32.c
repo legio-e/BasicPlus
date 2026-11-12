@@ -26,7 +26,8 @@
  *
  * LO QUE MANDAN (la pieza 2, 11-nov), al teclado y al ratón del SO: cada informe, con el número de su referencia, a
  * bpvm_hid.c, que lo reparte según el descriptor. Y LAS LUCES DE LOS BLOQUEOS (Bloq Num, Bloq Mayús), que lleva la placa:
- * al conectar un teclado y cuando cambian, a su informe de salida.
+ * al conectar un teclado y cuando cambian, a su informe de salida. Y para la GUI del pack (la pieza 3, 12-nov), al
+ * publicarse, la tabla 'ENTR' (bpvm_entrada.c): con la radio, la placa trae teclado y ratón.
  *
  * LAS CLAVES, en /sys/bluetooth.keys (Eduardo, 11-nov), no en la NVS: una actualización de la imagen la borra (14-oct).
  * NimBLE las guarda en su almacén de la RAM (store/config, sin la NVS); aquí se envuelven sus escrituras y borrados, y al
@@ -42,6 +43,7 @@
 #include "bt_esp32.h"
 #include "bpvm_bios.h"
 #include "bpvm_bt.h"
+#include "bpvm_entr.h"
 #include "bpvm_fs.h"
 #include "bpvm_hid.h"
 #include "bpvm_pack_api.h"
@@ -1229,4 +1231,7 @@ void bt_esp32_publicar(const bt_esp32_enlace_t* enlace) {
     s_enlace = enlace;
     r = bpvm_bios_publica(BPVM_BT_MARCA, &TABLA);
     if (r != 0) log_printf("bt: la radio no se pudo publicar (%d)", r);
+    /* La pieza 3: con la radio, la placa trae teclado y ratón; la tabla 'ENTR', para la GUI del pack. */
+    r = bpvm_entrada_publicar();
+    if (r != 0) log_printf("bt: la entrada ('ENTR') no se pudo publicar (%d)", r);
 }

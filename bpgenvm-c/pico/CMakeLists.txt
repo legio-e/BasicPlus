@@ -113,6 +113,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_teclado.c        # V8/H2, paso 2: el teclado del SO, lo común de la HAL BP
     ${BPVM_C_ROOT}/src/bpvm_raton.c        # V8/H2, paso 3: el ratón del SO, lo común de la HAL BP
     ${BPVM_C_ROOT}/src/bpvm_hid.c          # V8/H2, paso 5: lo que manda un teclado o un ratón HID, al SO
+    ${BPVM_C_ROOT}/src/bpvm_entrada.c      # V8/H2, paso 5: la tabla 'ENTR', el teclado y el ratón para la GUI
     ${BPVM_C_ROOT}/src/bpvm_red.c            # V8/H3: la IP de la placa, lo común
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
     ${BPVM_C_ROOT}/src/bpvm_npack_carga.c    # V7/H7 (Boot 2, fase 2): el cargador comun de los motores

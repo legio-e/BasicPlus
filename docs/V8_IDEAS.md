@@ -941,6 +941,33 @@ Eduardo, a la propuesta (con las luces de los bloqueos y Bloq Num encendido al e
 
 Lo siguiente, en la P4: la pieza 3, la GUI (la tabla `'ENTR'` y `gui_entrada.c` en el pack de la GUI).
 
+### El paso 5, la pieza 3, hecha en la P4 (12-nov): la GUI con el teclado y el ratón
+
+Eduardo, a la propuesta (la tabla `'ENTR'`, el pack de la GUI con `gui_entrada.c`, la mini sin la entrada, los tres
+packs recompilados y sólo el de la P4 grabado): *«OK»*.
+
+- **La tabla `'ENTR'`** (`bpvm_entr.h`, la API de la idea del 14-oct): los lectores del teclado y del ratón del SO, si hay
+  uno conectado y, opcional, el tamaño de la pantalla para el ratón. La publica quien trae teclado y ratón: hoy, la radio
+  del Bluetooth de las ESP (`bt_esp32_publicar`, con `bpvm_entrada.c`, lo común); un día, un USB, con la misma tabla.
+- **El pack de la GUI lleva el mismo `gui_entrada.c` que el PC.** Lo que pide a la imagen se lo sirve `entrada_pack.c`
+  por `'ENTR'`, como `pant_lvgl.c` busca `'PANT'`; y `pant_lvgl.c` lo arranca al crear la pantalla, sólo si la imagen
+  publica la tabla. Sin ella (una imagen de antes, o una placa sin teclado ni ratón), el pack queda como antes. La mini
+  (la C6), sin la entrada.
+- **El ratón, dentro de la pantalla tal como se ve:** en la placa gira el driver y LVGL sólo cambia su resolución
+  (`pant_lvgl.c`), así que la de LVGL es la que se ve. La GUI se la dice al ratón del SO al crearla y cada vez que cambia
+  (`bpvm_raton_pantalla`). En el PC no: la ventana pone el punto ella misma.
+- **Los packs:** recompilados los tres (la P4, la C5 y las ARM; lo único que había cambiado en sus fuentes desde el
+  12-oct, el `#813`, es sólo del PC y el enlace lo quita), y grabado el de la P4, borrando el viejo: 6 KB más de código y
+  1 KB más de RAM fija (la flecha). En las ARM no cambia nada, porque nadie publica `'ENTR'`; el de la C5, cuando se
+  pruebe allí.
+- **Probado en la P4, con la WiFi:** la GUI encontró la tabla (el log: «gui: el teclado y el raton, por 'ENTR'»); la
+  flecha sale y sigue al ratón; los clics en los botones, con el ratón; la rueda desplaza la lista; y el teclado escribe
+  `Hola` en el campo, con su mayúscula, y Tab mueve el foco (Eduardo: *«1) si 2) con el ratón 3) si»*). El Enter no se
+  probó en la placa (*«No puse el Enter»*): va por el mismo camino que las otras teclas, y en el PC pulsa el botón con el
+  foco.
+
+Lo siguiente, en la P4: la pieza 5, el arranque (`bt=1` en el Entorno), y el apagado por falta de uso (`"autoOff"`).
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

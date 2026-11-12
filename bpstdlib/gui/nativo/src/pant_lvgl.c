@@ -14,6 +14,7 @@
  *     de LVGL. El driver pide el formato (`formato`) y aquí se pinta en él, o
  *     se giran los bytes con la rutina de LVGL, antes de pasarle la zona;
  *   · el táctil como `lv_indev`: LVGL lo lee; el driver sólo dice dónde tocan;
+ *   · el teclado y el ratón del SO (V8/H2, la pieza 3), si la imagen publica 'ENTR': gui_entrada.c, el del PC;
  *   · el reloj de LVGL (`lv_tick`): sale de la HAL de la BIOS.
  *
  * ─── EL DRIVER SE BUSCA EN EL PRIMER USO ───
@@ -32,6 +33,10 @@
 #include "lvgl.h"
 #include "src/draw/sw/lv_draw_sw.h"    /* lv_draw_sw_rgb565_swap */
 #include <stdint.h>
+#ifdef BPVM_GUI_ENTRADA
+#include "gui_entrada.h"                /* V8/H2, paso 5, la pieza 3: el teclado y el ratón del SO */
+int bpvm_entrada_pack_hay(void);        /* entrada_pack.c: ¿publica la imagen 'ENTR'? */
+#endif
 
 extern const bpvm_bios_t* g_bios;
 static void di(const char* m) { if (g_bios && g_bios->log) g_bios->log(m); }
@@ -167,6 +172,12 @@ void bpvm_gui_disp_init(int w, int h) {
         lv_indev_set_type(s_touch, LV_INDEV_TYPE_POINTER);
         lv_indev_set_read_cb(s_touch, pant_touch);
     }
+#ifdef BPVM_GUI_ENTRADA
+    /* V8/H2, paso 5, la pieza 3 (12-nov): el teclado y el ratón del SO, el mismo gui_entrada.c del PC, si la imagen
+     * los publica ('ENTR'); si no, la GUI se queda como antes. En la placa la táctil y el ratón son dos aparatos y van
+     * los dos (`pc` 0), y no hay cursor del sistema que esconder. */
+    if (bpvm_entrada_pack_hay()) bpvm_gui_entrada_init(0, 0);
+#endif
     s_open = (r == 0);
     {
         char b[112];
