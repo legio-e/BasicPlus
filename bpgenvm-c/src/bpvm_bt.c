@@ -17,6 +17,11 @@
  * LA MEMORIA: una placa sin radio casi no gasta nada (la C3 y la C6 van justas). Las listas (~1,4 KB) se reservan al
  * encender la primera vez, y el búfer del fichero (1,5 KB), sólo mientras se lee; las dos con bpvm_malloc_os, como el
  * sonido: son de la plataforma, no del programa, y las listas duran de un RUN a otro.
+ *
+ * EL ARRANQUE Y EL APAGADO POR FALTA DE USO (paso 5, la pieza 5, 12-nov), como la WiFi: se enciende al arrancar con `bt=1`
+ * en el Entorno o "autoStart" en el fichero (`bt=0` manda), y se apaga solo a los "autoOff" segundos sin uso (600 por
+ * defecto; 0, nunca; en el PC, nunca). La hora la lleva la tarea: espera a sus encargos hasta entonces, y si llega sin uso,
+ * apaga. Un uso sólo la retrasa, así que no despierta a la tarea: ella la vuelve a mirar al despertarse.
  */
 #include "bpvm_bt.h"
 #include "bpvm.h"
@@ -96,6 +101,10 @@ static bt_listas_t* s_l = NULL;
 static int s_nvistos = 0;
 static int s_ncon = 0;
 static int s_tocado = 0;            /* un programa lo ha encendido o apagado: al acabar, vuelve a lo del fichero */
+static int s_env_bt = -1;           /* la pieza 5: la clave `bt` del Entorno (1, 0, o -1 si no está) */
+static int32_t s_auto_off = BPVM_BT_AUTO_OFF_DEFECTO;   /* s sin uso hasta apagarse (0: nunca); lo del fichero, al encender */
+static int32_t s_auto_off_fijo = -1;                    /* el PC: 0, sin mirar el fichero */
+static int64_t s_actividad_en = 0;  /* lo último que contó como uso (ms) */
 
 /* La tarea y sus encargos (con el cerrojo). */
 enum { BT_E_PASE = 1, BT_E_CONECTAR = 2 };
@@ -160,13 +169,23 @@ static int meter(int que, const char* dir, const char* tipo) {
     return 0;
 }
 
+/* La pieza 5: algo que cuenta como uso. Con el cerrojo cogido. */
+static void uso(void) { s_actividad_en = bpvm_platform_now_ms(); }
+
+/* Con el cerrojo cogido: la hora (ms) a la que se apaga sin uso; 0, ninguna (apagado o encendiéndose, "autoOff" 0, o un
+ * connect de un programa sin acabar, que espera). */
+static int64_t apagado_en(void) {
+    if (s_estado == BPVM_BT_OFF || s_estado == BPVM_BT_STARTING || s_auto_off <= 0 || s_conectando > 0) return 0;
+    return s_actividad_en + (int64_t) s_auto_off * 1000;
+}
+
 /* Lo que cuenta la radio, desde la tarea que sea (en una placa, la de NimBLE): sólo el estado, con el cerrojo un momento.
  * Lo que llama a la radio va a la tarea del Bluetooth: llamarla desde aquí podría esperar a la propia tarea que avisa. */
 static void al_aviso(int aviso, const char* dir, const char* clase) {
     coge();
     if (aviso == BPVM_BT_AV_LISTA && s_estado == BPVM_BT_STARTING) (void) meter(BT_E_PASE, NULL, NULL);
     else if (aviso == BPVM_BT_AV_SE_FUE && dir) quita_conectado(dir);
-    else if (aviso == BPVM_BT_AV_VOLVIO && dir && s_estado != BPVM_BT_OFF) anota_conectado(dir, clase);
+    else if (aviso == BPVM_BT_AV_VOLVIO && dir && s_estado != BPVM_BT_OFF) { anota_conectado(dir, clase); uso(); }
     suelta();
 }
 static void al_visto(const bpvm_bt_aparato_t* a) {
@@ -192,15 +211,22 @@ static int lee_fichero(char* buf, size_t cap, json_obj_t* raiz) {
     return json_parse(buf, (size_t) n, raiz) == 0 ? 0 : -1;
 }
 
-/* ¿Arranca encendido? "autoStart", como en /sys/wifi.json (Eduardo: «como en la wifi»). */
-static int fichero_auto_start(void) {
+/* Lo que dice el fichero de la radio: si arranca encendido ("autoStart", como en /sys/wifi.json; Eduardo: «como en la
+ * wifi»; sin fichero, no) y en cuántos segundos se apaga sin uso ("autoOff", la pieza 5: 600 por defecto y 0, nunca; uno
+ * que no vale, el de por defecto, y se dice, al encender: `avisa`). */
+static void fichero_config(int* auto_start, int32_t* auto_off, int avisa) {
     json_obj_t raiz;
-    int r = 0;
     char* buf = (char*) bpvm_malloc_os(BT_JSON_MAX);   /* sólo mientras se lee */
-    if (!buf) return 0;
-    if (lee_fichero(buf, BT_JSON_MAX, &raiz) == 0) r = json_get_bool(&raiz, "autoStart", 0);
+    *auto_start = 0;
+    *auto_off = BPVM_BT_AUTO_OFF_DEFECTO;
+    if (!buf) return;
+    if (lee_fichero(buf, BT_JSON_MAX, &raiz) == 0) {
+        long off = json_get_long(&raiz, "autoOff", BPVM_BT_AUTO_OFF_DEFECTO);
+        *auto_start = json_get_bool(&raiz, "autoStart", 0);
+        if (off >= 0 && off <= 0x7FFFFFFFL) *auto_off = (int32_t) off;
+        else if (avisa) bpvm_diag("bluetooth: \"autoOff\" son segundos (0: no se apaga solo); se usa %d", BPVM_BT_AUTO_OFF_DEFECTO);
+    }
     bpvm_free(buf);
-    return r;
 }
 
 /* EL PASE: cada recordado, por su dirección, sin esperar a ninguno (`ms` 0): la radio lo conecta si está (en el PC, lo
@@ -232,7 +258,7 @@ static void reconectar_recordados(unsigned gen) {
         clase[0] = '\0';
         if (s_conectar(dir, tipo, 0, clase, sizeof clase, err, sizeof err) != 0) continue;
         coge();
-        if (gen == s_generacion) anota_conectado(dir, clase);
+        if (gen == s_generacion) { anota_conectado(dir, clase); uso(); }
         suelta();
     }
     bpvm_free(buf);
@@ -240,13 +266,36 @@ static void reconectar_recordados(unsigned gen) {
 
 /* ── La tarea del Bluetooth ────────────────────────────────────────────────────────────────────────────────────────── */
 
+static void apagar(void);
+
 static void tarea(void* arg) {
     (void) arg;
     for (;;) {
         bt_encargo_t e;
         unsigned gen;
         coge();
-        while (s_cola_n == 0) bpvm_platform_cond_wait(&s_c, &s_m);
+        /* Un encargo, o la pieza 5: la hora de apagarse sin uso (la mira otra vez cada vez que se despierta: un uso
+         * después la retrasa sin tener que avisar a la tarea). */
+        for (;;) {
+            int64_t apagar_en, ahora;
+            if (s_cola_n > 0) break;
+            apagar_en = apagado_en();
+            ahora = bpvm_platform_now_ms();
+            if (apagar_en && ahora >= apagar_en) break;
+            if (apagar_en) {
+                int64_t ms = apagar_en - ahora;
+                (void) bpvm_platform_cond_timed_wait(&s_c, &s_m, ms > 3600000 ? 3600000 : (int) ms);
+            } else {
+                bpvm_platform_cond_wait(&s_c, &s_m);
+            }
+        }
+        if (s_cola_n == 0) {
+            int32_t s = s_auto_off;
+            suelta();
+            apagar();
+            bpvm_diag("bluetooth: apagado (sin actividad en %ld s)", (long) s);
+            continue;
+        }
         e = s_cola[s_cola_cabeza];
         s_cola_cabeza = (s_cola_cabeza + 1u) % BT_COLA;
         s_cola_n--;
@@ -267,6 +316,7 @@ static void tarea(void* arg) {
             if (gen == s_generacion) {
                 if (r == 0) anota_conectado(e.dir, clase);
                 if (s_conectando > 0) s_conectando--;
+                uso();   /* la pieza 5: un connect, conecte o no, cuenta como uso (y la espera vuelve a contar desde aquí) */
             }
             suelta();
             if (r != 0) bpvm_diag("bluetooth: %s no conecta: %s", e.dir, err[0] ? err : "sin motivo");
@@ -294,6 +344,15 @@ static int encender(char* det, size_t n) {
     if (estaba == BPVM_BT_OFF) s_estado = BPVM_BT_STARTING;
     suelta();
     if (estaba != BPVM_BT_OFF) return 0;   /* ya está, o encendiéndose */
+    {   /* La pieza 5: en cuánto se apaga sin uso, lo del fichero (en el PC, nunca); y encender cuenta como uso. */
+        int as;
+        int32_t off;
+        fichero_config(&as, &off, 1);
+        coge();
+        s_auto_off = s_auto_off_fijo >= 0 ? s_auto_off_fijo : off;
+        uso();
+        suelta();
+    }
     if (s_encender(al_aviso, det, n) != 0) {
         coge(); s_estado = BPVM_BT_OFF; suelta();
         return -1;
@@ -349,6 +408,7 @@ int bpvm_bt_buscar(int ms, char* det, size_t n) {
     s_nvistos = 0;
     s_estado = BPVM_BT_SCANNING;
     s_busca_hasta = bpvm_platform_now_ms() + ms;
+    uso();   /* la pieza 5: una búsqueda cuenta como uso */
     suelta();
     if (s_buscar(ms, al_visto, det, n) != 0) {
         coge(); s_estado = BPVM_BT_ON; suelta();
@@ -384,6 +444,7 @@ int bpvm_bt_conectar(const char* dir, const char* tipo, char* det, size_t n) {
     if (conectado_en(dir) >= 0) r = 1;
     else if (meter(BT_E_CONECTAR, dir, tipo) == 0) { s_conectando++; r = 2; }
     else r = 0;
+    uso();   /* la pieza 5: un connect cuenta como uso */
     suelta();
     return r;
 }
@@ -440,20 +501,46 @@ void bpvm_bt_clase_de(const char* dir, char* out, size_t n) {
 
 /* ── El arranque y el fin de un RUN ────────────────────────────────────────────────────────────────────────────────── */
 
-void bpvm_bt_arranque(void) {
+/* La pieza 5: como la WiFi (bpvm_wifi_arranque). Con `bt=1` o con "autoStart", y `bt=0` manda sobre los dos. */
+void bpvm_bt_arranque(int env_bt) {
     char det[128];
-    if (!radio() || !fichero_auto_start()) return;
-    if (encender(det, sizeof det) != 0) bpvm_diag("bluetooth: no se enciende: %s", det);
+    int as;
+    int32_t off;
+    s_env_bt = env_bt;
+    if (!radio()) {
+        if (env_bt == 1) bpvm_diag("bluetooth: bt=1, pero %s", s_motivo);
+        return;
+    }
+    if (env_bt == 0) { bpvm_diag("bluetooth: apagado (bt=0 del Entorno)"); return; }
+    fichero_config(&as, &off, 0);
+    if (env_bt != 1 && !as) return;   /* sin que nadie lo pida: apagado y sin gastar RAM */
+    if (encender(det, sizeof det) != 0) { bpvm_diag("bluetooth: no se enciende: %s", det); return; }
+    bpvm_diag("bluetooth: se enciende (%s)", env_bt == 1 ? "bt=1" : "autoStart");
 }
 
+/* Vuelve a lo que diga la configuración, si el programa lo ha tocado: encendido con `bt=1`, o con "autoStart" sin `bt=0`. */
 void bpvm_bt_fin_de_run(void) {
     char det[128];
+    int as;
+    int32_t off;
     if (!s_tocado) return;
     s_tocado = 0;
     if (!radio()) return;   /* sin radio, el programa no pudo cambiar nada */
-    if (fichero_auto_start()) {
+    fichero_config(&as, &off, 0);
+    if (s_env_bt == 1 || (s_env_bt != 0 && as)) {
         if (bpvm_bt_estado() == BPVM_BT_OFF && encender(det, sizeof det) != 0) bpvm_diag("bluetooth: no se enciende: %s", det);
     } else {
         apagar();
     }
 }
+
+/* La pieza 5: un uso, de la radio (lo que manda un teclado o un ratón). Sólo retrasa la hora de apagarse: la tarea la
+ * vuelve a mirar al despertarse, y no hace falta despertarla (un ratón manda unos 100 informes por segundo). */
+void bpvm_bt_actividad(void) {
+    if (!s_listo) return;
+    coge();
+    uso();
+    suelta();
+}
+
+void bpvm_bt_auto_off_fijo(int32_t segundos) { s_auto_off_fijo = segundos; }

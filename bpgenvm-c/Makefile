@@ -1202,6 +1202,14 @@ test-hid: $(LIBOBJ)
 	@echo "--- V8/H2 lo que manda un teclado o un raton HID (esperado: [status=OK], sin FALLO) ---"
 	./build/test_hid.exe
 
+# V8/H2, paso 5, la pieza 5 (12-nov) — el arranque y el apagado por falta de uso del Bluetooth (bpvm_bt.c), con la
+# radio simulada del PC: bt=1, bt=0 y "autoStart"; el fin de un RUN; y "autoOff", que un uso retrasa.
+test-bt: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_bt.c $(LIBOBJ) -o build/test_bt.exe $(LDFLAGS)
+	@echo "--- V8/H2 el arranque y el apagado por falta de uso del Bluetooth (esperado: [status=OK], sin FALLO) ---"
+	./build/test_bt.exe
+
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.
 test-mdnv3: $(LIBOBJ)

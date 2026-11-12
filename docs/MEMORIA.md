@@ -246,6 +246,8 @@ línea `mem:` del log.
 - **Y en la GUI** (la pieza 3, 12-nov): la tabla `'ENTR'` de la imagen, sólo constantes en la flash; el pack de la GUI,
   6 KB más de código y 1 KB más de RAM fija, en su bloque de la PSRAM (la flecha del ratón, 912 B, y el estado de la
   entrada). Con la WiFi, los dos aparatos y una pantalla con controles, la mínima de la RAM interna, 139,5 KB.
+- **Y el arranque y el apagado por falta de uso** (la pieza 5, 12-nov): 16 B más de RAM fija en lo común del Bluetooth,
+  en todas las imágenes (medido en la P4, `_heap_start`).
 
 ## La WiFi en la C3 y la C6 (6-nov)
 

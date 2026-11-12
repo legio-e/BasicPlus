@@ -968,6 +968,33 @@ packs recompilados y sólo el de la P4 grabado): *«OK»*.
 
 Lo siguiente, en la P4: la pieza 5, el arranque (`bt=1` en el Entorno), y el apagado por falta de uso (`"autoOff"`).
 
+### El paso 5, la pieza 5, hecha en la P4 (12-nov): el arranque y el apagado por falta de uso
+
+Eduardo, a la propuesta (como la WiFi; en el PC, sin apagarse solo; y probarlo en la P4 con un `"autoOff"` de 60 s):
+*«OK, dejalo»* (`bt=1` se queda en la P4).
+
+- **El arranque, como la WiFi** (`bpvm_bt_arranque(env_bt)`, con la clave `bt` del Entorno): se enciende con `bt=1` o con
+  `"autoStart": true` en `/sys/bluetooth.json`, y `bt=0` manda sobre los dos; sin nada, apagado y sin gastar RAM. Al
+  acabar un programa que lo tocó, vuelve a eso. En el log, «bluetooth: se enciende (bt=1)» o «(autoStart)».
+- **El apagado por falta de uso** (lo decidido el 11-nov): `"autoOff"` en el fichero, en segundos (600 por defecto; 0,
+  nunca; uno que no vale, el de por defecto, y se dice). Cuenta como uso encenderlo, una búsqueda, un connect, un aparato
+  que se conecta o vuelve, y cada informe de un teclado o un ratón (la radio, con `bpvm_bt_actividad`; la batería que
+  avisa el teclado no cuenta, que no es HID). Que haya uno conectado sin tocarlo no cuenta. La hora la lleva la tarea
+  del Bluetooth: espera a sus encargos hasta entonces, y si llega sin uso, apaga; un uso la retrasa sin despertarla (un
+  ratón manda unos 100 informes por segundo). Mientras un programa espera un connect, no se apaga.
+- **En el PC, nunca**, como su WiFi (`"autoOff"` 0, fijo): los aparatos simulados no se desconectan, y la VM-Java
+  tampoco lo hace.
+- **Probado en el PC**: `test-bt`, nueva en la red (15 comprobaciones): `bt=1`, `bt=0` y `"autoStart"`; el fin de un RUN;
+  y con `"autoOff": 1`, se apaga al segundo (medido, 1005 ms), y un uso cada cuarto de segundo, o una búsqueda, lo
+  mantiene.
+- **En la P4**, con `bt=1` y `"autoOff": 60`, sin ningún programa: al reiniciar, el Bluetooth se enciende solo (a los
+  2,8 s) y el teclado vuelve al pulsar una tecla (a los 6,2 s); y 60 s después de que estuviera listo, sin tocar nada, se
+  apaga solo (el log: «bluetooth: apagado (sin actividad en 60 s)»). Después, el fichero como estaba (600 s) y `bt=1`.
+
+Con esto, **el teclado y el ratón Bluetooth funcionan del todo en la P4**: emparejar, volver solos por su MAC, lo que
+mandan en el teclado y el ratón del SO, la GUI, el arranque y el apagado. Lo que queda del paso 5: la C5 (con su memoria:
+recortar los búferes de la WiFi, *«c»*) y la S3.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

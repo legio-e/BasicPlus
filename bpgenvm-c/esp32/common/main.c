@@ -303,9 +303,10 @@ static void esp32_red(void) {
     wire_red_iniciar();
     bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
 #if CHIP_TIENE_BT
-    /* V8/H2, paso 5: y el Bluetooth, si /sys/bluetooth.json lo pide ("autoStart"). Tampoco bloquea. */
+    /* V8/H2, paso 5: y el Bluetooth, con bt=1 en el ENV o si /sys/bluetooth.json lo pide ("autoStart"); bt=0 manda sobre
+     * los dos (la pieza 5). Tampoco bloquea. */
     bt_esp32_publicar(NULL);   /* el controlador del chip */
-    bpvm_bt_arranque();
+    bpvm_bt_arranque(bpvm_env_get_bool(board_mgr_env(), "bt", -1));
 #endif
 }
 #endif

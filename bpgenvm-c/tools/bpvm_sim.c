@@ -1182,7 +1182,8 @@ int main(int argc, char** argv) {
     bpvm_wifi_register_host();     /* V8/H3: la WiFi del PC, como la VM-C de host */
     bpvm_sonido_register_host();   /* V8/H4 (#708): el audio del PC, como en la VM-C host */
     bpvm_bt_register_host();       /* V8/H2: el Bluetooth simulado del PC, como en la VM-C host (Eduardo: «ponlo») */
-    bpvm_bt_arranque();            /* y, como una placa al arrancar, con /sys/bluetooth.json en "autoStart", los recordados */
+    bpvm_bt_arranque(-1);          /* y, como una placa al arrancar, con /sys/bluetooth.json en "autoStart", los recordados
+                                    * (el micro simulado no lee `bt=` de su Entorno, como tampoco `wifi=`) */
 
     /* H10 — el panel simulado. Se fija ANTES de que ningún programa cree el
      * screen; a partir de ahí Gui.Screen() reporta este tamaño y el layout se

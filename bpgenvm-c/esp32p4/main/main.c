@@ -366,7 +366,9 @@ static void p4_red(void) {
     if (bpvm_wifi_hay()) wire_red_iniciar();   /* el cable de la red: el puerto se abre solo, con la IP */
 #endif
     bpvm_wifi_arranque(bpvm_env_get_bool(board_mgr_env(), "wifi", -1));
-    bpvm_bt_arranque();   /* V8/H2, paso 5: y el Bluetooth, si /sys/bluetooth.json lo pide ("autoStart"). No bloquea. */
+    /* V8/H2, paso 5: y el Bluetooth, con bt=1 en el Entorno o si /sys/bluetooth.json lo pide ("autoStart"); bt=0 manda
+     * sobre los dos (la pieza 5). No bloquea. */
+    bpvm_bt_arranque(bpvm_env_get_bool(board_mgr_env(), "bt", -1));
 }
 
 static const bpvm_boot2_familia_t s_boot2 = {

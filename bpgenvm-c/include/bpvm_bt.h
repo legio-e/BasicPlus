@@ -87,11 +87,21 @@ void bpvm_bt_clase_de(const char* dir, char* out, size_t n);   /* "" si no está
 int  bpvm_bt_hay_teclado(void);   /* V8/H2, paso 2: ¿hay un teclado conectado? (en el PC, la puerta de las teclas de la ventana) */
 int  bpvm_bt_hay_raton(void);     /* V8/H2, paso 3: ¿hay un ratón conectado? (en el PC, la puerta del ratón de la ventana) */
 
-/* El arranque y el fin de un RUN, como la WiFi: al arrancar, si el fichero dice "autoStart", se enciende y espera a los
- * recordados (si alguno no está o no conecta, no es un error); al acabar un programa que lo tocó, vuelve a lo que diga el
- * fichero. */
-void bpvm_bt_arranque(void);
+/* El arranque y el fin de un RUN, como la WiFi (V8/H2, paso 5, la pieza 5, 12-nov): al arrancar se enciende con `bt=1` en
+ * el Entorno o con "autoStart" en el fichero, y `bt=0` manda sobre los dos (`env_bt`: la clave `bt` del Entorno, 1, 0, o
+ * -1 si no está); sin nada, apagado y sin gastar RAM. Encendido, espera a los recordados (si alguno no está o no conecta,
+ * no es un error). Al acabar un programa que lo tocó, vuelve a eso. */
+void bpvm_bt_arranque(int env_bt);
 void bpvm_bt_fin_de_run(void);
+
+/* EL APAGADO POR FALTA DE USO (la pieza 5; lo decidido el 11-nov, como la WiFi): "autoOff" en el fichero, en segundos (600
+ * por defecto; 0, nunca). Cuenta como uso encenderlo, una búsqueda, un aparato que se conecta o vuelve, y lo que manda un
+ * teclado o un ratón (eso lo dice la radio, con bpvm_bt_actividad). Que haya uno conectado sin tocarlo no cuenta. */
+#define BPVM_BT_AUTO_OFF_DEFECTO 600
+void bpvm_bt_actividad(void);
+/* El PC no se apaga solo, como su WiFi ("autoOff" 0): los aparatos simulados no se desconectan, y la VM-Java tampoco lo
+ * hace. Con -1, otra vez lo del fichero (las pruebas). */
+void bpvm_bt_auto_off_fijo(int32_t segundos);
 
 /* El PC: la radio simulada (bt_host.c). */
 void bpvm_bt_register_host(void);

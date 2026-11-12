@@ -781,6 +781,7 @@ static int al_gap(struct ble_gap_event* ev, void* arg) {
                 if (os_mbuf_copydata(ev->notify_rx.om, 0, n, v) == 0 &&
                     bpvm_hid_informe(&a->hid, a->chr[i].id_informe, v, n, &a->teclado))
                     luces_a_todos();   /* han cambiado los bloqueos */
+                bpvm_bt_actividad();   /* la pieza 5: una tecla o el ratón cuentan como uso (no la batería: no es HID) */
             }
         }
         return 0;

@@ -58,4 +58,5 @@ static const bpvm_pack_api_t TABLA = { BPVM_BT_MARCA, BPVM_BT_API_VER, 6, SIMBOL
 
 void bpvm_bt_register_host(void) {
     (void) bpvm_bios_publica(BPVM_BT_MARCA, &TABLA);
+    bpvm_bt_auto_off_fijo(0);   /* V8/H2, la pieza 5: en el PC no se apaga solo, como su WiFi; la VM-Java tampoco lo hace */
 }
