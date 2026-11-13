@@ -72,10 +72,16 @@ class Wire:
         self.s.sendall((json.dumps(f) + "\n").encode() + data)
         return self._line()
 
+# V8 #816 (13-nov) — la flash del sim, como la de una placa, trae sus carpetas al montar: /sys, /lib, /app y /data.
+# Ocupan su hueco en la cola del LIST, y vacías no salen como entradas (el listado es de ficheros). Las de la prueba se
+# llaman zNNN para ir DETRÁS en el recorrido (va por orden alfabético): las de la flash entran siempre, lo que se queda
+# fuera es de la prueba, y la cuenta cuadra igual que con la raíz vacía de antes.
+CARPETAS_DE_LA_FLASH = 4
+
 def carpetas(w, desde, hasta):
     """Una carpeta por fichero: en el FS del device el '/' es namespace."""
     for i in range(desde, hasta):
-        w.put("/d%03d/x.txt" % i, b"x")
+        w.put("/z%03d/x.txt" % i, b"x")
 
 def listado(w):
     r = w.call("LIST", path="")
@@ -86,7 +92,7 @@ def main():
     if tope is None or tope < 3:
         print("FAIL: no encuentro REPL_LIST_MAX_DIRS en src/bpvm_repl.c (el instrumento no sabe contra que medir)")
         return 1
-    caben = tope - 1   # la raiz ocupa un hueco de la cola
+    caben = tope - 1 - CARPETAS_DE_LA_FLASH   # la raiz ocupa un hueco de la cola, y las de la flash, los suyos (#816)
     tmp   = tempfile.mkdtemp(prefix="list_trunc_")
     flash = os.path.join(tmp, "sim.flash")
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash,

@@ -748,10 +748,22 @@ static unsigned g_fs_blocks = 0;
  * nuevo con el FS de antes montado —una placa lo dice cuando se reinicia y lo monta—. */
 static unsigned long sim_fs_total(void) { return (unsigned long) g_fs_blocks * SECTOR; }
 
+/* V8 #816 (13-nov) — las carpetas de la flash, como las placas al montar y al formatear su FS (fs_lfs_*.c): /sys, /lib,
+ * /app y /data, la de los datos de los programas (Eduardo: «si»). Hasta hoy el sim no creaba ninguna. 0 si están. */
+static int sim_fs_carpetas(void) {
+    static const char* const carpetas[] = { "/sys", "/lib", "/app", "/data" };
+    int r = 0;
+    for (int i = 0; i < 4; i++) {
+        if (!bpvm_fs_exists(carpetas[i]) && bpvm_fs_mkdir(carpetas[i]) != 0) r = -1;
+    }
+    return r;
+}
+
 static int sim_fs_format(void) {
     bpvm_fs_lfs_filebd_close();
     remove(g_fs_img);                       /* imagen virgen → el mount la formatea */
-    return bpvm_fs_register_lfs_filebd(g_fs_img, SECTOR, g_fs_blocks, 1);
+    if (bpvm_fs_register_lfs_filebd(g_fs_img, SECTOR, g_fs_blocks, 1) != 0) return -1;
+    return sim_fs_carpetas();               /* #816: y sus carpetas, como fs_format_ram de las placas */
 }
 
 /* El scratch del PUT. 64 KB porque aquí no cuesta nada y es lo que había: el
@@ -1127,6 +1139,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "sim: no se pudo montar el FS sobre %s\n", g_fs_img);
         return 1;
     }
+    (void) sim_fs_carpetas();   /* V8 #816: como las placas al montar (lo que falle, lo dirá la primera escritura) */
     /* V7/H7 (Boot 2, fase 1) — la zona, con el FS y por la regla común (como las placas),
      * y el gestor la ve MONTADA. Antes se montaba antes del FS y sin regla. */
     (void) bpvm_pack_montar_arranque(1, sim_montar_packs, sim_log_linea);

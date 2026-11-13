@@ -140,6 +140,7 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     bpvm_fs_mkdir("/sys");
     bpvm_fs_mkdir("/lib");
     bpvm_fs_mkdir("/app");
+    bpvm_fs_mkdir("/data");   /* V8 #816: la de los datos de los programas (el IDE no la toca) */
     /* Igual que el Pico: cuántos ficheros hay y cuánto ocupan. Es la línea que
      * dice de un golpe si la stdlib está o falta, y si el volumen va lleno. */
     log_printf("fs: %d ficheros, %u/%u bytes usados",
@@ -150,9 +151,10 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
 
 int fs_format_ram(void) {
     /* legado "vaciar" → reformateo EN CALIENTE del volumen littlefs.
-     * #473 (466): 0 sólo si formateó Y están las tres carpetas. */
+     * #473 (466): 0 sólo si formateó Y están las carpetas (V8 #816: y /data). */
     if (bpvm_fs_lfs_format() != 0) return -1;
-    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0
+            || bpvm_fs_mkdir("/data") != 0) return -1;
     return 0;
 }
 

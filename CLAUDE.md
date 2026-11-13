@@ -156,7 +156,9 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 - **Versión actual:** **V8, en curso desde el 14-oct-2026, en modo experimentar** (Eduardo:
   se prueban cosas sin obligaciones; lo que funcione se sube al final y lo que no se aplaza).
   **Su alcance se cerró el 6-nov:** no entran temas nuevos; se acaba lo que hay, y después los
-  pendientes, la documentación, las pruebas finales y publicar. Lo nuevo, a V9.
+  pendientes, la documentación, las pruebas finales y publicar. Lo nuevo, a V9. Matiz del 13-nov:
+  los cambios pequeños que resuelven un problema sí entran, aunque sean algo nuevo (*«no abrir temas
+  completamente nuevos, pero si podemos hacer pequeños cambios»*); el código aún no está congelado.
   Su tema: la red y el Bluetooth (el bajo consumo pasó a V9 el 6-nov). Su cuaderno, `docs/V8_IDEAS.md`. V7 se
   publicó el 13-oct (tag `v7.0`; su ZIP en `dist/` es el oráculo de «¿lo he roto yo hoy?»).
   Qué hay abierto, en `docs/FICHAS.md` §ABIERTAS, bloque V8.

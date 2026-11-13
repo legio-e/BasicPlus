@@ -166,6 +166,7 @@ int fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     bpvm_fs_mkdir("/sys");
     bpvm_fs_mkdir("/lib");
     bpvm_fs_mkdir("/app");
+    bpvm_fs_mkdir("/data");                               /* V8 #816: los datos de los programas (el IDE no la toca) */
     clear_lib();                                          /* stdlib siempre fresca del firmware */
     return 0;
 }
@@ -223,9 +224,10 @@ uint32_t fs_used_bytes(void) {
 }
 
 int fs_format(void) {
-    /* #473 (466): 0 sólo si formateó Y están las tres carpetas. */
+    /* #473 (466): 0 sólo si formateó Y están las carpetas (V8 #816: y /data). */
     if (bpvm_fs_lfs_format() != 0) return -1;
-    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0
+            || bpvm_fs_mkdir("/data") != 0) return -1;
     return 0;
 }
 

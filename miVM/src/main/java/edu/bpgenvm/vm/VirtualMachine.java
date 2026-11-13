@@ -1582,7 +1582,14 @@ public class VirtualMachine {
     public void setFlashDir(java.nio.file.Path dir) {
         this.flashDir = (dir == null) ? null : dir.toAbsolutePath().normalize();
         if (flashDir != null) {
-            try { java.nio.file.Files.createDirectories(flashDir); }
+            try {
+                java.nio.file.Files.createDirectories(flashDir);
+                /* #816 (13-nov; Eduardo: «si») — y sus carpetas, como una placa al montar y al formatear (fs_lfs_*.c):
+                 * /sys, /lib, /app y /data, la de los datos de los programas. Sin ellas, un programa que escribe
+                 * "/sys/x" iba en la placa y aquí fallaba. La VM-C hace lo mismo (fs_host.c). */
+                for (String c : new String[] { "sys", "lib", "app", "data" })
+                    java.nio.file.Files.createDirectories(flashDir.resolve(c));
+            }
             catch (java.io.IOException | RuntimeException e) { /* si no se puede, lo dirá la primera escritura */ }
         }
     }

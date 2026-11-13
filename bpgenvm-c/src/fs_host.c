@@ -288,8 +288,19 @@ static int host_mkdir(const char* path) {
     EN_FLASH(path);
     return host_mkdir_pc(path);
 }
-/* #808 — la carpeta de la flash, al fijarla; si no se puede, lo dirá la primera escritura. */
-static void host_crea_carpeta(const char* dir) { (void) host_mkdir_pc(dir); }
+/* #808 — la carpeta de la flash, al fijarla, y sus carpetas, como una placa al montar y al formatear (fs_lfs_*.c; V8
+ * #816, 13-nov, Eduardo: «si»): /sys, /lib, /app y /data, la de los datos de los programas. Sin ellas, un programa que
+ * escribe "/sys/x" iba en la placa y aquí fallaba. Si no se puede, lo dirá la primera escritura. La VM-Java hace lo
+ * mismo (VirtualMachine.setFlashDir). */
+static void host_crea_carpeta(const char* dir) {
+    static const char* const carpetas[] = { "sys", "lib", "app", "data" };
+    char sub[600];   /* la flash cabe en 512 */
+    (void) host_mkdir_pc(dir);
+    for (int i = 0; i < 4; i++) {
+        snprintf(sub, sizeof sub, "%s/%s", dir, carpetas[i]);
+        (void) host_mkdir_pc(sub);
+    }
+}
 
 static int host_rmdir(const char* path) {
     EN_FLASH(path);

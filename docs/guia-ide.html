@@ -302,8 +302,10 @@
 </ul>
 <p>
   <strong>Dónde corre en el PC.</strong> La VM Java tiene su flash, como una
-  placa: la carpeta <code>.basicplus\flash</code> de tu usuario. Una ruta
-  absoluta del programa (<code>"/datos/x.txt"</code>) va dentro de ella. El
+  placa, con sus <code>/sys</code>, <code>/lib</code>, <code>/app</code> y
+  <code>/data</code> (§6): la carpeta <code>.basicplus\flash</code> de tu
+  usuario. Una ruta absoluta del programa
+  (<code>"/data/Termostato/lecturas.csv"</code>) va dentro de ella. El
   programa corre en <code>app\&lt;proyecto&gt;</code> de esa flash, con el
   nombre que le daría la placa (<code>/app/&lt;proyecto&gt;</code>), o en
   <code>app</code> si no hay proyecto, y la carpeta se queda al acabar: lo que
@@ -472,6 +474,12 @@
   <li><code>/sys</code> — configuración: <code>board.json</code>
       (identidad de la placa), <code>device.json</code>,
       <code>auto.txt</code> (autorun, §12).</li>
+  <li><code>/data</code> — los datos de tus programas, cada uno en su
+      carpeta (<code>/data/&lt;proyecto&gt;</code>), como el
+      <code>ProgramData</code> de Windows. El IDE no la toca nunca. En
+      <code>/app/&lt;proyecto&gt;</code>, en cambio, al darle a Run el IDE
+      borra lo que ya no sube: lo que un programa quiera guardar, mejor
+      aquí.</li>
 </ul>
 <p class="warn">
   <strong>No subas copias de la biblioteca estándar a <code>/app</code>.</strong>

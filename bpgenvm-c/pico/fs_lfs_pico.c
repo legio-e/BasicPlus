@@ -125,15 +125,17 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     bpvm_fs_mkdir("/sys");
     bpvm_fs_mkdir("/lib");
     bpvm_fs_mkdir("/app");
+    bpvm_fs_mkdir("/data");   /* V8 #816: la de los datos de los programas (el IDE no la toca) */
     return FS_OK;
 }
 
 int fs_format_ram(void) {
     /* legado: "vaciar". Con littlefs = reformateo EN CALIENTE del volumen.
-     * #473 (466): 0 sólo si formateó Y están las tres carpetas; el motivo de un
-     * fallo queda anotado en la fachada. */
+     * #473 (466): 0 sólo si formateó Y están las carpetas (V8 #816: y /data); el
+     * motivo de un fallo queda anotado en la fachada. */
     if (bpvm_fs_lfs_format() != 0) return -1;
-    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0
+            || bpvm_fs_mkdir("/data") != 0) return -1;
     return 0;
 }
 

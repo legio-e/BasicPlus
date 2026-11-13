@@ -7387,6 +7387,36 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#816` — la flash, con `/data` para los datos de los programas; y la del PC y la del micro simulado, con sus carpetas, como la de una placa (abierta y **CERRADA el 13-nov**, el commit de `#816`; salió en `#808`; Eduardo: *«si»*)
+
+- **Lo que pasaba:** la placa crea `/sys`, `/lib` y `/app` al montar y al formatear su FS (`fs_lfs_*.c`); la flash del
+  PC (`#808`), sólo la carpeta, y el micro simulado, ninguna. Un programa que escribe `/sys/x` iba en la placa y en el
+  PC fallaba, en las dos VMs («writeFile('/sys/prueba808.txt'): error de escritura»). Eduardo: *«si»*, que las creen.
+- **Y `/data`, idea de Eduardo** (13-nov): *«En windows hay una carpeta '/ProgramData' precisamente para que las
+  aplicaciones guarden ahí sus datos. Igual podiamos hacer algo parecido, una carpeta /Data o similar.»* Salió de la
+  pregunta de si, en la placa, el IDE debía dejar de borrar de `/app/<proyecto>` lo que escribe el programa (Eduardo:
+  *«en principio /app es para las aplicaciones no para datos»*): con `/data`, no hace falta. La regla: cada programa,
+  en su carpeta, `/data/<proyecto>/`, y el IDE no la toca nunca. Es pequeño y cabe en V8 (Eduardo: *«Todavía no hemos
+  congelado código, podemos hacer cosas nuevas. Lo que dije es no abrir temas completamente nuevos, pero si podemos
+  hacer pequeños cambios»*).
+- **Lo hecho:** `/sys`, `/lib`, `/app` y `/data` en todas partes. Las placas, `/data` al montar y al formatear
+  (`fs_lfs_esp32.c`, `fs_lfs_pico.c`, `fs_lfs_stm32.c`; formatear da 0 sólo si están las cuatro); las de hoy la tendrán
+  al arrancar con una imagen nueva. Las dos VMs del PC, las cuatro al fijar la flash (`fs_host.c`,
+  `VirtualMachine.setFlashDir`). El micro simulado, las cuatro al montar y al formatear (`sim_fs_carpetas`, en
+  `bpvm_sim.c`), como una placa. La guía del IDE (§5 y §6), al día.
+- **Lo prueba:** `FlashCarpetas`, nuevo en el corpus: las cuatro existen, escribe y lee en `/sys` y en
+  `/data/FlashCarpetas/`, y lo borra. La red le da a cada ejecución una flash nueva y vacía: si falta alguna, acaba con
+  un error y la red lo da en ROJO por el código de salida. En el micro simulado, con una flash nueva, igual (a mano).
+- **En placa:** sin grabar. Al grabar cada placa con una imagen nueva, `/data` aparece sola.
+- **La red:** la parte del micro simulado salió ROJA: `list_trunc_smoke` (`#425`) contaba con la raíz vacía, y ahora
+  trae sus cuatro carpetas, que ocupan su hueco en la cola del LIST. Arreglada la prueba: cuenta las de la flash, y las
+  suyas se llaman `zNNN` para ir detrás en el recorrido (va por orden alfabético), así que lo que se queda fuera es
+  suyo y la cuenta cuadra como antes; si faltara alguna de la flash, «una carpeta más» no dejaría nada fuera y saldría
+  en ROJO. `check-sim`, 14/14. Lo demás, VERDE.
+- **Un efecto a la vista:** el LIST de las placas recorre como mucho 16 carpetas, contando la raíz
+  (`REPL_LIST_MAX_DIRS`). `/data` es una más, y cada `/data/<proyecto>`, otra. Pasado el tope, el listado lo dice
+  (`#425`), no lo calla.
+
 #### 🔵 `#815` — la P4 se reinició con un pánico buscando aparatos Bluetooth, la segunda vez que se encendía la radio en el mismo arranque (abierta el 11-nov, en el paso 5 de H2; una vez, sin repetirse)
 
 - **Lo visto** (11-nov): `BtBusca` encendió el Bluetooth, buscó 10 s y lo apagó; 40 s después, `BtConecta` lo volvió a
@@ -7558,10 +7588,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Run seguidos: lo relativo en la carpeta, lo absoluto en la flash, «vez 2» en el segundo, y un `.mod` que sobraba,
   borrado. `WorkdirSmoke`, `BpvmBackendSmoke` y `BpvmClientSmoke`, igual que antes. La red no pasa por el IDE.
 - **La ventana, por ver con Eduardo.**
-- **Una diferencia con la placa, vista de paso (por decidir, Eduardo):** la placa crea `/sys`, `/lib` y `/app` al
-  formatear y al montar su FS (`fs_lfs_esp32.c`, `fs_lfs_pico.c`); la flash del PC, sólo la carpeta. Un programa que
-  escribe `/sys/x` va en la placa y falla en una flash del PC recién hecha, en las dos VMs (medido:
-  «writeFile('/sys/prueba808.txt'): error de escritura»).
+- **Una diferencia con la placa, vista de paso:** la placa crea `/sys`, `/lib` y `/app` al formatear y al montar su FS
+  (`fs_lfs_esp32.c`, `fs_lfs_pico.c`); la flash del PC, sólo la carpeta. Un programa que escribe `/sys/x` iba en la
+  placa y fallaba en una flash del PC recién hecha, en las dos VMs. **Arreglada en `#816`** (Eduardo: *«si»*), con
+  `/data` para los datos de los programas.
 - **9-nov, un fallo de la red de `#808`** (el commit de la flash por grupo): la carpeta de la flash de la red se
   calculaba una vez, con la `$WORK` común, y los tres grupos de `check` (`#726`), que corren a la vez cada uno con su
   `$WORK`, usaban la misma: la cápsula la borraba mientras el corpus corría `AirBluetooth`, que perdió su fichero a media
