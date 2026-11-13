@@ -7387,6 +7387,22 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#818` — en las ESP con PSRAM, cada refresco de una pantalla SPI pedía a la RAM interna un búfer de rebote del tamaño de la franja de LVGL (11,5 KB en la C5), y con el Bluetooth y la WiFi encendidos no lo había: la pantalla dejaba de refrescarse (abierta y **CERRADA el 13-nov**, el commit de `#818`; salió en H2, en la C5; Eduardo: *«OK»*)
+
+- **Lo que pasaba:** LVGL dibuja en sus búferes, que están en el bloque del pack, en la PSRAM, y el SPI del IDF, sin una
+  marca, no los manda por DMA desde allí: en cada transacción los copiaba a uno interno apto para DMA. En la C5, con el
+  teclado y el ratón conectados y la WiFi: «`spi_common: Failed to allocate priv TX buffer`» en la consola, y en el log
+  «la transferencia de 11472 B falla (ESP_ERR_NO_MEM)», 50 ms después de quedar listo el teclado. Las teclas y los
+  clics llegaban al programa, pero la pantalla no los enseñaba (Eduardo: *«Los botones no funcionaban. El teclado no
+  funcionó»*).
+- **Hecho:** en `esp32_spi_una` (`gpio_esp32.c`), un búfer en la PSRAM va con `SPI_TRANS_DMA_USE_PSRAM`: el DMA lee de
+  la PSRAM, y si el búfer no está alineado a la caché, el de rebote también sale de la PSRAM. Ni un byte de RAM interna
+  por refresco. Pueden la S3, la C5 y la P4 (`SOC_PSRAM_DMA_CAPABLE`); la C3 y la C6 no tienen PSRAM y no compilan esto.
+- **En la C5:** la GUI con el teclado, el ratón y la WiFi, bien (Eduardo: *«Ahora si»*); y `GuiFlushBench`, 71 ms por
+  pantalla entera y 6 por cambio de etiqueta, dos veces: lo mismo que con la copia (unos 70).
+- **Ojo con el «bloque mayor» de la línea `mem:` del log:** en la C5 es la RTC RAM (15.360 B, siempre el mismo número),
+  que está en el montón como interna pero no vale para DMA. No dice si cabe un búfer de DMA.
+
 #### ✅ `#817` — un motor nativo con un hueco de alineación entre `.sbss` y `.bss` decía menos RAM fija de la que ocupa, y el pack siguiente se le ponía encima: en la C5, el driver de la pantalla pisaba el final del montón de LVGL (la pantalla, con puntos y bandas, y la placa se caía) (abierta y **CERRADA el 13-nov**, el commit de `#817`; salió en H2, en la C5; Eduardo: *«si»*)
 
 - **Lo que pasaba:** el empaquetador (`NpackReloc.desdeElf`) SUMABA los tamaños de las secciones que van a cero, y el

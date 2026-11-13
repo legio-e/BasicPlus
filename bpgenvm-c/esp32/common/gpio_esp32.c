@@ -29,6 +29,8 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/spi_master.h"
+#include "esp_memory_utils.h"       /* V8 #818: esp_ptr_external_ram, el búfer que va por DMA desde la PSRAM */
+#include "soc/soc_caps.h"           /* V8 #818: SOC_PSRAM_DMA_CAPABLE */
 #include "driver/i2c_master.h"
 #include "driver/ledc.h"            /* H14: backend PWM */
 #include "esp_adc/adc_oneshot.h"    /* H14: backend ADC */
@@ -561,8 +563,9 @@ static void esp32_spi_cerrar(int bus) {
  *   · hasta 4 bytes, en los búferes de la propia transacción: ni DMA ni búfer de rebote (en
  *     el C3, el C6 y el S3 un byte sin alinear hacía reservar uno POR BYTE);
  *   · hasta SPI_POLL_MAX, polling; por encima, interrupción, en tramos de SPI_DMA_MAX;
- *   · un búfer en PSRAM o sin alinear (el de LVGL vive en el bloque del pack) lo copia el IDF
- *     a uno interno apto para DMA. Si no hay memoria para eso, se dice UNA vez y -1. */
+ *   · un búfer interno sin alinear lo copia el IDF a uno apto para DMA; uno en la PSRAM (el de LVGL
+ *     vive en el bloque del pack), desde #818, va por DMA desde la PSRAM (abajo). Si no hay memoria
+ *     para el de rebote, se dice UNA vez y -1. */
 /* «tx NULL manda ceros», también con DMA. En RAM interna y alineado, NO `const`: el DMA no lee de la flash, y un
  * búfer en .rodata obligaría al IDF a copiarlo a uno de rebote en cada transacción. */
 static uint8_t s_ceros[SPI_POLL_MAX] __attribute__((aligned(4)));
@@ -581,6 +584,15 @@ static esp_err_t esp32_spi_una(int bus, const uint8_t* tx, uint8_t* rx, size_t n
     }
     t.tx_buffer = tx;
     t.rx_buffer = rx;
+#if SOC_PSRAM_DMA_CAPABLE
+    /* V8 #818 (13-nov) — UN BÚFER EN LA PSRAM VA POR DMA DESDE LA PSRAM. Sin la marca, el IDF lo copiaba en cada
+     * transacción a un búfer de rebote INTERNO del tamaño de la zona (11,5 KB con la franja de LVGL en la C5), y con el
+     * Bluetooth y la WiFi encendidos no había un hueco así: «Failed to allocate priv TX buffer» y la pantalla dejó de
+     * refrescarse (las teclas y los clics llegaban al programa). Con ella, el DMA lee de la PSRAM, sin RAM interna; si
+     * el búfer no está alineado a la caché, el de rebote también sale de la PSRAM. Pueden la S3, la C5 y la P4; la C3 y
+     * la C6 no tienen PSRAM y no compilan esto. */
+    if ((tx && esp_ptr_external_ram(tx)) || (rx && esp_ptr_external_ram(rx))) t.flags |= SPI_TRANS_DMA_USE_PSRAM;
+#endif
     return (n <= SPI_POLL_MAX) ? spi_device_polling_transmit(s_spi_dev[bus], &t)
                                : spi_device_transmit(s_spi_dev[bus], &t);
 }
@@ -597,7 +609,7 @@ static int esp32_spi_xfer(int bus, const uint8_t* tx, uint8_t* rx, size_t n) {
             if (!s_spi_dicho) {
                 s_spi_dicho = 1;
                 log_printf("spi: bus %d: la transferencia de %u B falla (%s)%s", bus, (unsigned) trozo,
-                           esp_err_to_name(e), e == ESP_ERR_NO_MEM ? ": no hay memoria interna para el DMA" : "");
+                           esp_err_to_name(e), e == ESP_ERR_NO_MEM ? ": no hay memoria para el rebote del DMA" : "");
             }
             return -1;
         }
