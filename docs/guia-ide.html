@@ -301,6 +301,20 @@
       <code>native</code> larga. El programa termina con código 130.</li>
 </ul>
 <p>
+  <strong>Dónde corre en el PC.</strong> La VM Java tiene su flash, como una
+  placa: la carpeta <code>.basicplus\flash</code> de tu usuario. Una ruta
+  absoluta del programa (<code>"/datos/x.txt"</code>) va dentro de ella. El
+  programa corre en <code>app\&lt;proyecto&gt;</code> de esa flash, con el
+  nombre que le daría la placa (<code>/app/&lt;proyecto&gt;</code>), o en
+  <code>app</code> si no hay proyecto, y la carpeta se queda al acabar: lo que
+  el programa guarda con una ruta relativa (<code>"lecturas.csv"</code>) sigue
+  ahí en el siguiente Run, y lo puedes mirar. Con proyecto, el IDE borra de esa
+  carpeta los <code>.mod</code>, <code>.bpi</code> y <code>.dbg</code> que ya
+  no sube; lo que escribe el programa, nunca. Los <code>resources</code> del
+  proyecto no se copian: si el programa los necesita en el PC, hazlo un pack
+  de aplicación (§10).
+</p>
+<p>
   Al acabar un programa —bien, con un error o con Stop—, sus objetos se
   destruyen y cada uno suelta lo suyo: un PWM se para, los pines y los buses
   quedan libres (<a href="manual.html#destructor">manual §9.4b</a>). Lo que no

@@ -7520,7 +7520,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   que se instale en ella se pierde al cerrar. La VM-Java, por mirar cómo lleva los packs.
 - **Cuándo** (*«la 2) lo puedes hacer mas adelante»*): no hace falta para H2.
 
-#### 🔵 `#808` — la VM del PC, con su flash: una carpeta que no se borra (abierta el 8-nov, en H2)
+#### ✅ `#808` — la VM del PC, con su flash: una carpeta que no se borra (abierta el 8-nov, en H2 · **CERRADA el 13-nov**, el commit de `#808`; Eduardo: *«La b»*)
 
 - **Lo que pasa:** en el PC, una ruta absoluta de un programa (`/sys/bluetooth.json`) va, desde la consola, a la raíz
   del disco (`C:\sys\…`, en las dos VMs: medido el 8-nov), y desde el IDE con la VM local, que trabaja en una carpeta
@@ -7538,6 +7538,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   littlefs (el texto, `#810`). `compat.sh` le da a cada ejecución de `run_vm` una carpeta nueva y vacía.
 - **Falta: el IDE**, que copie los programas a `<flash>/app/<proyecto>`, como en una placa, en vez de a la carpeta
   temporal que borra.
+- **13-nov, lo propuesto:** la carpeta del programa, `<flash>/app/<proyecto>` (el nombre de la placa) o `<flash>/app`
+  sin proyecto, que no se borra al acabar; la VM-Java, con ella y con `--flash-dir`; y con proyecto, los huérfanos
+  (lo que el Run no sube), por decidir. **Los recursos, no** (Eduardo): *«Si hay que subir resources la única manera es
+  hacer un pack de aplicación que los incluya. Eso se queda así.»* La VM local sigue sin copiar `resources/`.
+- **Los huérfanos, decidido (Eduardo, 13-nov: *«La b»*):** se borran sólo los `.mod`, `.bpi` y `.dbg` que sobren, nunca
+  lo que haya escrito el programa: *«Si un programa tiene que crear un fichero de datos y queremos ver lo que ha creado,
+  si lo borra al terminar nunca veriamos nada. Si un programa utiliza un fichero de trabajo y al terminar el programa lo
+  ha de borrar, el programador es libre de hacerlo.»*
+- **Lo hecho en el IDE** (13-nov): con la VM local, Run y Depurar corren el programa en `<flash>/app/<proyecto>` (el
+  nombre de `deviceAppPrefix`, el de la placa) o en `<flash>/app` sin proyecto, y la carpeta se queda al acabar
+  (`CarpetaDelPrograma`; antes, una carpeta temporal que se borraba). La VM-Java arranca con ella y con
+  `--flash-dir=<flash>` (`BpvmClient.setFlashDir`), la misma que usa por defecto. Con proyecto, tras subir, se borran
+  los `.mod`, `.bpi` y `.dbg` que este Run no ha subido, y se dice («sobraba X: borrado»); lo del programa y sus
+  subcarpetas, nunca; los nombres, sin mirar mayúsculas (en Windows, subir `Termostato.mod` encima de un
+  `termostato.mod` deja el nombre viejo, y ése no sobra). Con una VM remota, nada cambia. La guía del IDE (§5), al día.
+- **Lo prueba:** `CarpetaDelProgramaSmoke` (19 comprobaciones): la carpeta, lo que sobra y, con la VM-Java de verdad
+  arrancada como la arranca el IDE, un programa que guarda `cuenta.txt` (relativa) y `/prueba808.txt` (absoluta), dos
+  Run seguidos: lo relativo en la carpeta, lo absoluto en la flash, «vez 2» en el segundo, y un `.mod` que sobraba,
+  borrado. `WorkdirSmoke`, `BpvmBackendSmoke` y `BpvmClientSmoke`, igual que antes. La red no pasa por el IDE.
+- **La ventana, por ver con Eduardo.**
+- **Una diferencia con la placa, vista de paso (por decidir, Eduardo):** la placa crea `/sys`, `/lib` y `/app` al
+  formatear y al montar su FS (`fs_lfs_esp32.c`, `fs_lfs_pico.c`); la flash del PC, sólo la carpeta. Un programa que
+  escribe `/sys/x` va en la placa y falla en una flash del PC recién hecha, en las dos VMs (medido:
+  «writeFile('/sys/prueba808.txt'): error de escritura»).
 - **9-nov, un fallo de la red de `#808`** (el commit de la flash por grupo): la carpeta de la flash de la red se
   calculaba una vez, con la `$WORK` común, y los tres grupos de `check` (`#726`), que corren a la vez cada uno con su
   `$WORK`, usaban la misma: la cápsula la borraba mientras el corpus corría `AirBluetooth`, que perdió su fichero a media

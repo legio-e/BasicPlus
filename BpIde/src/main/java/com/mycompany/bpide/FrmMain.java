@@ -2541,7 +2541,8 @@ public class FrmMain extends javax.swing.JFrame
                 publish("== ejecutando " + entry.getFileName() + " ==\n");
                 final String mainModName = entry.getFileName().toString();
 
-                // A2.5 — flow remote-friendly: workdir temporal, VM en modo
+                // A2.5 — flow remote-friendly: la carpeta del programa en la
+                // flash del PC (V8 #808; antes, un workdir temporal), VM en modo
                 // daemon, subir todos los .mod/.bpi/.dbg del outDir local
                 // por el wire, runModule del main. El stdlib NO se sube:
                 // se asume preinstalado en el dispositivo (--stdlibDir
@@ -3065,26 +3066,40 @@ public class FrmMain extends javax.swing.JFrame
 
     /**
      * A2.5 — Ejecuta un módulo en una VM REMOTE-FRIENDLY:
-     *   1) Crea un workdir temporal local.
-     *   2) Lanza la VM en modo daemon con `--workdir <tmp>`.
+     *   1) V8 #808: la carpeta del programa, en la flash del PC: la que le
+     *      daría la placa, <flash>/app/<proyecto> (CarpetaDelPrograma).
+     *      Antes, un workdir temporal.
+     *   2) Lanza la VM en modo daemon con `--workdir <carpeta>` y
+     *      `--flash-dir=<flash>`.
      *   3) Sube TODOS los .mod / .bpi / .dbg que el outDir local
      *      contenga (la app del usuario y sus dependencias compiladas).
      *      El stdlib NO se sube: vive preinstalado en el dispositivo.
+     *      Con proyecto, borra los .mod / .bpi / .dbg que sobren.
      *   4) Si {@code pauseInitially} es true, hace {@code debug.attach}
      *      ANTES del runModule, así la sesión de debug recibe el primer
      *      PausedEvent. Si es false (Run), libera el paused inicial
      *      automáticamente.
      *   5) Manda {@code runModule(mainModName)}, espera al ExitedEvent
      *      / fin del subproceso.
-     *   6) Limpia el workdir.
+     *   6) V8 #808: la carpeta se queda, con lo que haya guardado el
+     *      programa. Antes se borraba.
      */
     private void runOnVmRemote(Path outDir, String mainModName,
                                boolean pauseInitially,
                                java.util.function.Consumer<String> publish) {
-        Path workdir = null;
+        /* V8 #808 (13-nov): con la VM local, el programa corre en la flash del PC, en la carpeta que le daría la placa,
+         * y la carpeta se queda al acabar: lo que guarda el programa sigue ahí en el siguiente Run. Con una VM remota,
+         * la carpeta es la suya. */
+        final IdePrefs prefs = IdePrefs.load();
+        final boolean remota = prefs.vmHost != null && !prefs.vmHost.isEmpty();
+        final String prefijo = deviceAppPrefix();
+        final Path flash = CarpetaDelPrograma.flashDelPc();
+        final Path carpeta = CarpetaDelPrograma.de(flash, prefijo);
         try {
-            workdir = Files.createTempDirectory("bpide-vm-");
-            publish.accept("[ide] workdir temporal: " + workdir + "\n");
+            if (!remota) {
+                Files.createDirectories(carpeta);
+                publish.accept("[ide] la carpeta del programa: " + carpeta + "\n");
+            }
 
             try (BpvmClient client = new BpvmClient()) {
                 activeRunClient = client;   // P-run-stop (#257): visible para Stop
@@ -3124,11 +3139,9 @@ public class FrmMain extends javax.swing.JFrame
 
                 // A2.6 — si el usuario configuró un endpoint remoto en las
                 // prefs del IDE, NO lanzamos VM local: nos conectamos al
-                // daemon que vive en el dispositivo. El workdir local sigue
-                // creándose pero queda vacío (los .mod viajan por el wire,
-                // como en el flow local).
-                IdePrefs prefs = IdePrefs.load();
-                if (prefs.vmHost != null && !prefs.vmHost.isEmpty()) {
+                // daemon que vive en el dispositivo (los .mod viajan por el
+                // wire, como en el flow local).
+                if (remota) {
                     publish.accept("[ide] conectando a VM remota "
                             + prefs.vmHost + ":" + prefs.vmPort + "\n");
                     client.connectRemote(prefs.vmHost, prefs.vmPort);
@@ -3142,13 +3155,20 @@ public class FrmMain extends javax.swing.JFrame
                     if (stdlibDir != null) {
                         publish.accept("[ide] stdlibDir → " + stdlibDir + "\n");
                     }
-                    client.startDaemon(workdir.toString(), /*waitClient=*/true, stdlibDir);
+                    client.setFlashDir(flash.toString());   // V8 #808: la de CarpetaDelPrograma
+                    client.startDaemon(carpeta.toString(), /*waitClient=*/true, stdlibDir);
                 }
 
                 // Sube los artefactos de la app compilada (o el pack, si lo
                 // que se ejecuta es un pack: #310).
-                int nUploaded = uploadAppArtifacts(client, outDir, mainModName, publish);
+                java.util.Set<String> subidos = new java.util.HashSet<>();
+                int nUploaded = uploadAppArtifacts(client, outDir, mainModName, publish, subidos);
                 publish.accept("[ide] subidos " + nUploaded + " ficheros\n");
+                // V8 #808: con proyecto, lo que sobra del Run anterior, como en la placa; pero sólo lo que sube el
+                // IDE, nunca lo que escribió el programa (Eduardo: «La b»). Sin proyecto, nada, como en la placa.
+                if (!remota && !"/app".equals(prefijo)) {
+                    CarpetaDelPrograma.borraLosQueSobran(carpeta, subidos, publish);
+                }
 
                 if (pauseInitially) {
                     // H6.b.3.b — precarga el .dbg del módulo principal (host-side)
@@ -3175,11 +3195,7 @@ public class FrmMain extends javax.swing.JFrame
                 activeRunClient = null;     // P-run-stop (#257)
             }
         } catch (java.io.IOException ie) {
-            publish.accept("[IDE error creando workdir] " + ie.getMessage() + "\n");
-        } finally {
-            if (workdir != null) {
-                deleteRecursively(workdir);
-            }
+            publish.accept("[IDE error creando la carpeta del programa " + carpeta + "] " + ie.getMessage() + "\n");
         }
     }
 
@@ -3301,8 +3317,10 @@ public class FrmMain extends javax.swing.JFrame
         return out;
     }
 
+    /* V8 #808: `subidos` se lleva el nombre de cada fichero que sube (para ver, después, lo que sobra en la carpeta). */
     private int uploadAppArtifacts(BpvmClient client, Path outDir, String entryName,
-                                   java.util.function.Consumer<String> publish) throws java.io.IOException {
+                                   java.util.function.Consumer<String> publish,
+                                   java.util.Set<String> subidos) throws java.io.IOException {
         if (!Files.isDirectory(outDir)) return 0;
         // #310 — si lo que se ejecuta es un PACK, lo único que viaja es el
         // pack: sus módulos y sus recursos van dentro. Mandar además los .mod
@@ -3315,6 +3333,7 @@ public class FrmMain extends javax.swing.JFrame
             }
             int size = client.uploadFile(pack, entryName, 60_000);
             publish.accept("[ide] up " + entryName + " (" + size + " bytes, pack)\n");
+            subidos.add(entryName);
             return 1;
         }
         int n = 0;
@@ -3339,6 +3358,7 @@ public class FrmMain extends javax.swing.JFrame
                 try {
                     int size = client.uploadFile(p, name, 10_000);
                     publish.accept("[ide] up " + name + " (" + size + " bytes)\n");
+                    subidos.add(name);
                     n++;
                 } catch (java.io.IOException ue) {
                     publish.accept("[ide] upload " + name + " falló: " + ue.getMessage() + "\n");
@@ -3350,18 +3370,6 @@ public class FrmMain extends javax.swing.JFrame
                     + " artefactos stdlib (los resuelve la VM via --stdlibDir)\n");
         }
         return n;
-    }
-
-    private static void deleteRecursively(Path root) {
-        if (!Files.exists(root)) return;
-        try {
-            Files.walk(root)
-                    .sorted(java.util.Comparator.reverseOrder())
-                    .forEach(p -> {
-                        try { Files.deleteIfExists(p); }
-                        catch (java.io.IOException ignored) {}
-                    });
-        } catch (java.io.IOException ignored) {}
     }
 
     /**

@@ -220,6 +220,12 @@ public final class BpvmClient implements AutoCloseable {
     public void setEventListener(DebugListener listener)   { this.eventListener = listener; }
     public void setDiagSink(Consumer<String> sink)         { this.diagSink = sink; }
 
+    /** V8 #808 (13-nov) — la flash del PC que se le da a la VM que arranca este cliente (--flash-dir): donde van las
+     *  rutas absolutas del programa ("/sys/x"). null: la que la VM tenga por defecto. La pone el IDE, que es quien
+     *  sabe dónde corre el programa (CarpetaDelPrograma), antes de start/startDaemon. */
+    private volatile String flashDir;
+    public void setFlashDir(String dir)                    { this.flashDir = dir; }
+
     // ---- Lifecycle ----
 
     /**
@@ -1998,6 +2004,9 @@ public final class BpvmClient implements AutoCloseable {
         if (workdir != null) {
             argv.add("--workdir");
             argv.add(workdir);
+        }
+        if (flashDir != null && !flashDir.isEmpty()) {
+            argv.add("--flash-dir=" + flashDir);   // V8 #808: la VM-Java sólo lo admite con '='
         }
         if (stdlibDir != null && !stdlibDir.isEmpty()) {
             argv.add("--stdlibDir");
