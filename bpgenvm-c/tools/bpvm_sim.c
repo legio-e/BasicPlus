@@ -45,6 +45,9 @@
  *   --runs=N: los runs permanentes (V7/H12, etapa 2b), como `vm.runs` en el ENV de una placa; lo pisa.
  *   --sabotaje-despertar: SÓLO PRUEBAS (run_tarea_smoke): el KILL no despierta a la cola, y un
  *   programa dormido no se para hasta que vence su sueño (la prueba tiene que cazarlo).
+ *   --ensayo-io=MS y --sabotaje-aviso: SÓLO PRUEBAS (run_tarea_smoke, V8 #812): `io` tarda MS en
+ *   ponerse a esperar (un programa vacío acaba y avisa antes), y el aviso sin su marca, como antes
+ *   de #812: se pierde, y `io` espera su plazo entero (la prueba tiene que cazarlo).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -1027,6 +1030,7 @@ int main(int argc, char** argv) {
     int port = 5099;
     int run_viejo = 0, ensayo_hecho_ms = 0, sabotaje_cierre = 0;   /* V7/H12: la tarea `run` y sus pruebas */
     int run_etapa1 = 0;   /* V7/H12, etapa 2a.2: el interruptor (el relevo de la etapa 1) */
+    int ensayo_io_ms = 0; /* V8 #812: SÓLO PRUEBAS, `io` llega tarde a su espera */
     long runs_arg = 0;    /* V7/H12, etapa 2b: --runs=N pisa el `vm.runs` del ENV (las pruebas) */
 
     for (int i = 1; i < argc; i++) {
@@ -1048,6 +1052,8 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--runs=", 7))       runs_arg = atol(a + 7);   /* V7/H12, 2b: los runs permanentes */
         else if (!strcmp(a, "--run-etapa1"))     run_etapa1 = 1;   /* V7/H12, 2a.2: `run` espera el «trabajo», como en la etapa 1 */
         else if (!strcmp(a, "--sabotaje-despertar")) bpvm_la_cola.sabotaje_despertar = 1;   /* V7/H12, 2a.2: SÓLO PRUEBAS */
+        else if (!strncmp(a, "--ensayo-io=", 12)) ensayo_io_ms = atoi(a + 12);   /* V8 #812: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--sabotaje-aviso"))  bpvm_oq_sabotaje_aviso = 1;    /* V8 #812: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */
@@ -1155,6 +1161,7 @@ int main(int argc, char** argv) {
     if (!run_viejo) {
         static bpvm_platform_thread_handle_t s_run_hilos[2];
         bpvm_repl_run_tarea_ensayo(ensayo_hecho_ms, sabotaje_cierre);
+        bpvm_repl_run_tarea_ensayo_io(ensayo_io_ms);   /* V8 #812 */
         if (run_etapa1) bpvm_repl_run_tarea_en_cola(0);   /* V7/H12, 2a.2: el interruptor, ANTES de prepararla */
         /* 2b: un run por cada uno de `vm.runs` —con el relevo de la etapa 1, uno—, cada uno con su número */
         int n = run_etapa1 ? 1 : bpvm_runs();

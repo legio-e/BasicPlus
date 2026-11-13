@@ -48,10 +48,17 @@ typedef struct bpvm_output_queue {
     /* V7/H12, 2b (la revisión) — un productor a mitad de una línea que NO CABE en la cola (va a trozos, soltando el
      * cerrojo entre uno y otro): los demás esperan a que acabe, o se colarían entre dos trozos (#600). */
     bool escribiendo;
+    /* V8 #812 (13-nov) — un aviso (bpvm_oq_despertar) que llegó sin nadie esperando: la próxima espera no se duerme.
+     * Sin la marca, el aviso se perdía si `run` acababa justo antes de que `io` se pusiera a esperar, y `io` esperaba
+     * su plazo entero (5 ms; en Windows, hasta 15,6). */
+    bool despierta;
 } bpvm_output_queue_t;
 
 /* SÓLO PRUEBAS (test_cola): sin esperar al que escribe una línea a trozos, como antes (comm_common.c). */
 extern int bpvm_oq_sabotaje_lineas;
+/* SÓLO PRUEBAS (run_tarea_smoke, el caso L; el micro simulado, --sabotaje-aviso): el aviso sin la marca, como antes de
+ * #812: si nadie espera, se pierde (comm_common.c). */
+extern int bpvm_oq_sabotaje_aviso;
 
 /* El aviso a quien colgó un programa, cuando acaba (lo da el último run que sale, ya descolgado). */
 typedef void (*bpvm_cola_al_acabar_fn)(struct bpvm* vm, int rs, void* user);

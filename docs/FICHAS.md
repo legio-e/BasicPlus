@@ -7488,7 +7488,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   simulado», con la flecha en su sitio. Sin ventana, la captura (`Gui.shot`) mide 320×480. Y la ventana de la VM-Java,
   igual que la de la VM-C. Compilado el micro simulado con GUI.
 
-#### 🔵 `#812` — el caso G de `run_tarea_smoke` está en el filo: 200 RUN de un programa vacío tardan 1,17–1,23 s con la tarea `run`, con el tope en ~1,22 (el doble de `--run-viejo` más 0,3), y el 4-oct un RUN eran 1,2 ms (abierta el 9-nov, en la red del paso 3 de H2)
+#### ✅ `#812` — el caso G de `run_tarea_smoke` está en el filo: 200 RUN de un programa vacío tardan 1,17–1,23 s con la tarea `run`, con el tope en ~1,22 (el doble de `--run-viejo` más 0,3), y el 4-oct un RUN eran 1,2 ms (abierta el 9-nov, en la red del paso 3 de H2 · **CERRADA el 13-nov**, el commit de `#812`; Eduardo: *«#812 a»*, cerrar la ventana)
 
 - **Lo medido** (9-nov, por la noche): la red del paso 3 salió con el sim en ROJO por este caso (1,41 s contra 0,47);
   solo, 1,20, 1,16 y 1,23 s (el último, ROJO). **No es el ratón:** el sim de `HEAD` (sin él, de `git archive`) y el
@@ -7511,6 +7511,16 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `io` hasta que espera), y en las placas `run` va a la misma prioridad que `io`, así que sólo un tick que caiga justo
   ahí. Con el arreglo de manual (el aviso deja una marca y la espera la mira; probado y deshecho), con un núcleo y con
   veinte, lo mismo que sin él: no es lo del 9-nov.
+- **Decidido (Eduardo, 13-nov: *«#812 a»*):** cerrar la ventana ya, con una prueba que la ensanche. El caso G se queda
+  como está: no es el código, y si vuelve a salir en ROJO, se repite con la máquina quieta antes de buscar.
+- **Lo hecho:** el aviso deja una marca en la cola (`despierta`, en `bpvm_output_queue_t`), y la espera de `io`
+  (`bpvm_oq_pop_timed`) no se duerme si la encuentra; la borra al pasar. En lo común de todas las familias
+  (`comm_common.c`). `bpvm_t` no cambia (sólo apunta a la cola), así que los `.mdn` tampoco.
+- **Lo prueba:** el caso L, nuevo en `run_tarea_smoke`. Con `--ensayo-io=20`, `io` se entretiene antes de su primera
+  espera y un programa vacío acaba y avisa antes; con `--sabotaje-aviso`, el aviso sin la marca, como antes. Treinta
+  RUN de cada: con la marca, 38,6 ms por RUN (la espera de prueba, que en Windows dura ~31); saboteado, 53,6: 15 ms de
+  más, la espera de `io` perdida (la prueba pide 3 o más, porque son 5 ms en cualquier sistema). Sin el ensayo, las
+  dos, 1,5 ms.
 
 #### ✅ `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2 · **CERRADA el 8-nov**, el commit de `#811`; Eduardo: *«si»*, arreglarlo ya)
 

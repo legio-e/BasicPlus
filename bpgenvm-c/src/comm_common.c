@@ -21,6 +21,7 @@
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
 int bpvm_oq_sabotaje_lineas = 0;   /* SÓLO PRUEBAS (bpvm_smp.h) */
+int bpvm_oq_sabotaje_aviso  = 0;   /* SÓLO PRUEBAS (bpvm_smp.h): #812, el aviso sin marca */
 
 int bpvm_oq_init(bpvm_output_queue_t* q, size_t cap) {
     q->buf = (char*) bpvm_malloc(cap);
@@ -29,6 +30,7 @@ int bpvm_oq_init(bpvm_output_queue_t* q, size_t cap) {
     q->head = q->tail = q->used = 0;
     q->closed = false;
     q->escribiendo = false;
+    q->despierta = false;   /* #812 */
     if (bpvm_platform_mutex_init(&q->mtx) != 0) {
         bpvm_free(q->buf); q->buf = NULL; return -1;
     }
@@ -145,9 +147,12 @@ size_t bpvm_oq_pop_timed(bpvm_output_queue_t* q, char* dst, size_t max,
                          int ms, int* eof) {
     if (eof) *eof = 0;
     bpvm_platform_mutex_lock(&q->mtx);
-    if (q->used == 0 && !q->closed) {
+    /* V8 #812 — un aviso que llegó sin nadie esperando (la marca) no se pierde: no se duerme, y quien llama mira por
+     * qué le despertaban (en `io`, el `fin` del programa). */
+    if (q->used == 0 && !q->closed && !q->despierta) {
         (void) bpvm_platform_cond_timed_wait(&q->not_empty, &q->mtx, ms);
     }
+    q->despierta = false;
     size_t to_read = q->used < max ? q->used : max;
     if (to_read > 0) {
         size_t first = q->cap - q->tail;
@@ -174,6 +179,7 @@ void bpvm_oq_close(bpvm_output_queue_t* q) {
 
 void bpvm_oq_despertar(bpvm_output_queue_t* q) {
     bpvm_platform_mutex_lock(&q->mtx);
+    if (!bpvm_oq_sabotaje_aviso) q->despierta = true;   /* #812: si nadie espera todavía, la espera siguiente lo ve */
     bpvm_platform_cond_broadcast(&q->not_empty);
     bpvm_platform_mutex_unlock(&q->mtx);
 }

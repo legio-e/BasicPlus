@@ -32,6 +32,12 @@ Y desde la etapa 2b (5-oct), DOS runs permanentes (`--runs=2`, como `vm.runs=2` 
   K. A, B, C y H con dos runs, y un programa de dos hilos que se reparten un contador bajo un Mutex (los dos runs
      trabajan a la vez): el total exacto en cada RUN.
 
+Y desde V8 (#812, 13-nov), el aviso que llega antes de que `io` espere:
+
+  L. con `io` tarde a su espera (`--ensayo-io=20`: el programa acaba y avisa antes), el aviso no se pierde: deja su
+     marca y `io` no espera su plazo. Saboteado (`--sabotaje-aviso`: sin la marca, como antes), lo espera en cada RUN,
+     y la prueba lo caza comparando los dos.
+
     python tools/run_tarea_smoke.py [--vueltas=N]      (desde bpgenvm-c; BPVM_SIM= para otro simulador)
 """
 import os, shutil, sys, tempfile, time
@@ -409,6 +415,25 @@ def main():
               % ("" if not malos else " — mal: %r" % malos))
     finally:
         para(proc, sock)
+
+    # L (V8 #812): el aviso de `run` no se pierde aunque `io` llegue tarde a su espera. Con --ensayo-io, `io` se
+    # entretiene antes de esperar y el programa (que no imprime) acaba y avisa antes; el aviso deja su marca, y `io`
+    # no espera su plazo. Saboteado (--sabotaje-aviso: el aviso sin la marca, como antes de #812), lo espera entero en
+    # cada RUN: 5 ms en cualquier sistema, hasta 15,6 en Windows (medido el 13-nov: 34 ms por RUN con la marca, 52,6
+    # sin ella). Se comparan los dos con la misma espera de `io`, así que la del sistema se va en la resta.
+    t_l = {}
+    for nombre, extra in (("con la marca", ["--ensayo-io=20"]), ("saboteado", ["--ensayo-io=20", "--sabotaje-aviso"])):
+        proc, sock, c = arranca(os.path.join(tmp, "l.flash"), extra)
+        try:
+            check(subir(c, mods), "L. PUT (%s)" % " ".join(extra))
+            t_l[nombre] = cuanto_vacio(c, 30)
+        finally:
+            para(proc, sock)
+    de_mas = (t_l["saboteado"][0] - t_l["con la marca"][0]) * 1000.0 / 30
+    check(t_l["con la marca"][1] == 0 and t_l["saboteado"][1] == 0 and de_mas >= 3.0,
+          "L. con `io` tarde a su espera (20 ms), el aviso de `run` no se pierde: 30 RUN, %.1f ms cada uno con la marca "
+          "y %.1f saboteado (el aviso sin marca): %.1f ms de más, la espera de `io` (tiene que ser 3 o más)"
+          % (t_l["con la marca"][0] * 1000.0 / 30, t_l["saboteado"][0] * 1000.0 / 30, de_mas))
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("[status=OK]" if fails == 0 else "[status=FAIL: %d]" % fails)

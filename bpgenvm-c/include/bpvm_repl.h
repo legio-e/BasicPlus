@@ -336,6 +336,9 @@ int  bpvm_repl_runs(void);
  *  de `run` (como `#609`); `sabotaje` hace que `io` cierre la cola de salida sin esperar a `run` —se pierde la salida
  *  tardía, y la prueba tiene que cazarlo—. */
 void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje);
+/** SÓLO PRUEBAS (V8 #812): `espera_ms` > 0 hace que `io` tarde en ponerse a esperar, con el programa ya colgado en la
+ *  cola: uno que no imprime acaba y avisa antes. El aviso no se tiene que perder (bpvm_oq_despertar deja su marca). */
+void bpvm_repl_run_tarea_ensayo_io(int espera_ms);
 
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia

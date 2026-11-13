@@ -59,7 +59,9 @@ size_t bpvm_oq_pop_timed(bpvm_output_queue_t* q, char* dst, size_t max,
 void   bpvm_oq_close(bpvm_output_queue_t* q);
 
 /* V7/H12 — despierta al consumidor SIN cerrar: el productor ha acabado y quiere
- * que el lazo de `io` lo vea ya, no al vencer su espera (ver bpvm_io_despertar). */
+ * que el lazo de `io` lo vea ya, no al vencer su espera (ver bpvm_io_despertar).
+ * V8 #812: y si el consumidor aún no espera, deja una marca, y su próxima espera
+ * (bpvm_oq_pop_timed) no se duerme: el aviso no se pierde. */
 void   bpvm_oq_despertar(bpvm_output_queue_t* q);
 
 #endif /* BPVM_COMM_QUEUE_INTERNAL_H */

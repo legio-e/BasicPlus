@@ -1920,7 +1920,8 @@ static struct {
     long         pila_libre;    /* lo que le sobró de pila tras el último programa (-1: no lo sabe) */
     int          ensayo_ms;     /* SÓLO PRUEBAS: la ventana ensanchada entre el final del programa y `fin` */
     int          sabotaje;      /* SÓLO PRUEBAS: io cierra la cola sin esperar a `fin` */
-} s_tarea = { NULL, NULL, NULL, 0, 0, 0, 0, -1, 0, 0 };
+    int          ensayo_io_ms;  /* SÓLO PRUEBAS (#812): io tarda en ponerse a esperar; el programa acaba antes */
+} s_tarea = { NULL, NULL, NULL, 0, 0, 0, 0, -1, 0, 0, 0 };
 
 int  bpvm_repl_run_en_cola(void) { return s_run_en_cola; }
 void bpvm_repl_run_tarea_en_cola(int si) { s_run_en_cola = si ? 1 : 0; }
@@ -2004,6 +2005,10 @@ int bpvm_repl_runs(void) { return s_tarea.en_cola; }
 void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje) {
     s_tarea.ensayo_ms = espera_ms > 0 ? espera_ms : 0;
     s_tarea.sabotaje  = sabotaje ? 1 : 0;
+}
+
+void bpvm_repl_run_tarea_ensayo_io(int espera_ms) {
+    s_tarea.ensayo_io_ms = espera_ms > 0 ? espera_ms : 0;
 }
 
 /* La salida del programa: la llaman `io` (por líneas) y la VM si `io` no arrancó. El sink común (wire_v1_proto.c). */
@@ -2337,6 +2342,8 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
             rs = (bpvm_status_t) ps;               /* no se publicó (un fallo de enlace…): nadie más la ha tocado */
         } else {
             static volatile int ya = 1;   /* el sabotaje de las pruebas: cerrar la cola sin esperar a `run` */
+            /* #812, SÓLO PRUEBAS: `io` llega tarde a su espera, y el programa (uno vacío) acaba y avisa antes */
+            if (s_tarea.ensayo_io_ms > 0) bpvm_platform_thread_sleep_ms(s_tarea.ensayo_io_ms);
             bpvm_io_lazo(vm, s_tarea.sabotaje ? &ya : &s_tarea.fin);
             bpvm_platform_sem_take(&s_tarea.hecho);   /* `run` ha soltado la VM: desde aquí, es de esta tarea */
             rs = (bpvm_status_t) s_tarea.rs;
