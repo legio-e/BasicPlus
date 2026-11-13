@@ -197,13 +197,15 @@ static void script_load(void) {
     if (!f) { printf("[gui] guion: no se puede abrir %s" BPVM_EOL, path); fflush(stdout); return; }
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     if (n <= 0) { fclose(f); return; }
-    g_script_buf = (char*) bpvm_malloc((size_t) n + 1);
+    /* #814: el guion es de la ventana, no del programa (dura lo que ella): memoria de la plataforma. Con la del programa,
+     * el fin de RUN avisaba de una fuga que no era suya. */
+    g_script_buf = (char*) bpvm_malloc_os((size_t) n + 1);
     if (!g_script_buf) { fclose(f); return; }
     size_t rd = fread(g_script_buf, 1, (size_t) n, f);
     fclose(f);
     g_script_buf[rd] = '\0';
     /* Trocear en lineas (in-place) y quedarnos con las utiles. */
-    g_script = (char**) bpvm_malloc(sizeof(char*) * (rd + 1));
+    g_script = (char**) bpvm_malloc_os(sizeof(char*) * (rd + 1));
     if (!g_script) return;
     char* p = g_script_buf;
     while (*p) {
@@ -569,11 +571,12 @@ static void headless_flush(lv_display_t* d, const lv_area_t* a, uint8_t* px) {
 static void disp_init_headless(int w, int h) {
     lv_tick_set_cb(SDL_GetTicks);   /* el tick sirve igual; SDL no abre nada por sí solo */
     lv_display_t* d = lv_display_create(w, h);
-    /* Buffer parcial de 10 líneas: LVGL renderiza por trozos y lo tira. */
+    /* Buffer parcial de 10 líneas: LVGL renderiza por trozos y lo tira. Es de la pantalla y dura lo que ella (#814):
+     * memoria de la plataforma, no del programa, o el fin de RUN avisa de una fuga que no es suya. */
     static uint8_t* buf = NULL;
     size_t bytes = (size_t) w * 10u * 4u;   /* ARGB8888, el formato por defecto */
     bpvm_free(buf);
-    buf = (uint8_t*) bpvm_malloc(bytes);
+    buf = (uint8_t*) bpvm_malloc_os(bytes);
     if (!buf) { printf("[gui] headless: sin memoria para el buffer de dibujo" BPVM_EOL); return; }
     lv_display_set_flush_cb(d, headless_flush);
     lv_display_set_buffers(d, buf, NULL, (uint32_t) bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);

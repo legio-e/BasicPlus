@@ -7400,7 +7400,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   leerlo con `addr2line` sobre el `.elf` de esa imagen; y probar a propósito lo que lo distinguía: encender, apagar y
   volver a encender, y buscar con aparatos en modo de emparejar.
 
-#### 🔵 `#814` — en el PC, el fin de RUN avisa de una FUGA del programa que no es suya: lo que la GUI del PC pide para sí, el búfer de dibujo sin ventana (`--no-screen`) y el guion de la ventana (abierta el 11-nov, en las pruebas de `#813`)
+#### ✅ `#814` — en el PC, el fin de RUN avisa de una FUGA del programa que no es suya: lo que la GUI del PC pide para sí, el búfer de dibujo sin ventana (`--no-screen`) y el guion de la ventana (abierta el 11-nov, en las pruebas de `#813` · **CERRADA el 13-nov**, el commit de `#814`; Eduardo: *«si»*)
 
 - **Lo visto** (11-nov): con la VM-C con LVGL, `--no-screen` y un programa con GUI (`GuiGiro`, en el scratchpad, con
   giro y sin él), al terminar: «[bpvm] fin de RUN: FUGA — 1 bloque(s) del programa sin liberar, 19200 B; el mayor
@@ -7415,6 +7415,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   programa sin liberar, 1602 B; el mayor (1424 B) se pidio en src/gui_display_sdl.c linea 206». Sin guion, con
   ventana, «0 bloques sin liberar».
 - **Lo que se haría:** pedirlos con `bpvm_malloc_os`, y mirar si hay más como ellos en la GUI del PC.
+- **Hecho el 13-nov:** el búfer de la pantalla fuera de pantalla y los dos del guion, con `bpvm_malloc_os`
+  (`gui_display_sdl.c`): son de la pantalla y de la ventana, y duran lo que ellas. Antes, con la VM-C con LVGL y
+  `GuiGiro`, las dos fugas, como el 11-nov (19 200 B en la línea 576; 1602 B en la 206); después, «0 bloques sin
+  liberar» en los dos casos, y la plataforma, con uno y dos bloques más. **No hay más como ellos:** lo del modelo de
+  la GUI (`gui.c`: los nodos y las imágenes) es del programa y se suelta en `bpvm_gui_reset` al acabar; lo de
+  `Gui.shot`, al acabar cada captura; y la captura PNG de la ventana pide y suelta en la misma llamada, también en sus
+  caminos de error.
 
 #### ✅ `#813` — en el PC, la ventana de la VM-C y del micro simulado con la pantalla girada (`Gui.setRotation(90)`) sale mal: colores pálidos y rayas verticales, sin imagen que se reconozca (abierta el 10-nov, en el paso 4 de H2; lo vio Eduardo · **CERRADA el 11-nov**, el commit de `#813`; Eduardo: *«La opción 2 parece mas razonable»*: la ventana gira con la pantalla)
 
