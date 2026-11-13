@@ -37,6 +37,9 @@ void        bpvm_mods_resync(void)        { }
 /* V7 #671 — los motores «cargados», a mano: bpvm_npack_carga.c no entra en esta prueba. */
 static int g_cargados = 0;
 int bpvm_npack_motores_cargados(void) { return g_cargados; }
+/* V8 #798 — y los avisos de que la zona cambió, contados. */
+static int g_cambios = 0;
+void bpvm_npack_zona_cambiada(void) { g_cambios++; }
 
 static int g_fail = 0;
 #define CHECK(cond, msg) do { \
@@ -394,11 +397,13 @@ int main(void) {
         (void) bpvm_bmgr_wire_reinicio_pendiente();   /* limpio */
 
         g_cargados = 0;
+        g_cambios = 0;
         memset(&rq, 0, sizeof rq);
         snprintf(rq.type, sizeof rq.type, "PACK_FORMAT"); rq.id = 31; rq.confirm_yes = 1;
         int nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
         CHECK(nn > 0 && strstr(rep, "PACK_FORMAT_REPLY") && !strstr(rep, "reinicia") && !bpvm_bmgr_wire_reinicio_pendiente(),
               "#671: sin motores cargados, PACK_FORMAT no reinicia (los de la zona nueva, en el siguiente INFO)");
+        CHECK(g_cambios == 1, "#798: ...y se lo dice al cargador, que en el siguiente INFO vuelve a mirar la zona");
 
         g_cargados = 1;
         pon_pack_con_motor(zona2.b, 4096u, 0x48000000u, 6916u, 1368u);
@@ -409,17 +414,20 @@ int main(void) {
               "#671: con motores cargados, PACK_DEL lo dice en la respuesta (\"reinicia\":true)");
         CHECK(bpvm_bmgr_wire_reinicio_pendiente() == 1 && bpvm_bmgr_wire_reinicio_pendiente() == 0,
               "#671: ...y deja el reinicio pendiente UNA vez (el REPL lo hace tras mandarla)");
+        CHECK(g_cambios == 2, "#798: PACK_DEL tambien se lo dice al cargador");
 
         memset(&rq, 0, sizeof rq);
         snprintf(rq.type, sizeof rq.type, "PACK_FORMAT"); rq.id = 33; rq.confirm_yes = 0;
         nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
         CHECK(nn > 0 && strstr(rep, "falta confirm=YES") && !bpvm_bmgr_wire_reinicio_pendiente(),
               "#671: un PACK_FORMAT rechazado (sin confirm) no reinicia nada");
+        CHECK(g_cambios == 2, "#798: ...ni le dice nada al cargador (la zona no cambio)");
 
         rq.confirm_yes = 1; rq.id = 34;
         nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
         CHECK(nn > 0 && strstr(rep, "\"reinicia\":true") && bpvm_bmgr_wire_reinicio_pendiente() == 1,
               "#671: con motores cargados, PACK_FORMAT tambien");
+        CHECK(g_cambios == 3, "#798: PACK_FORMAT, con motores, tambien se lo dice al cargador");
 
         /* y PACK_BURN_END: un pack entero por el wire (BEGIN, DATA y END), en la zona recién formateada */
         pon_pack_con_motor(img, (uint32_t) sizeof img, 0x48000000u, 6916u, 1368u);
@@ -434,12 +442,14 @@ int main(void) {
             nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
             bien = nn > 0 && strstr(rep, "PACK_BURN_DATA_REPLY") != NULL;
         }
+        CHECK(g_cambios == 3, "#798: PACK_BURN_BEGIN y PACK_BURN_DATA no cambian la cadena: no se lo dicen al cargador");
         memset(&rq, 0, sizeof rq);
         snprintf(rq.type, sizeof rq.type, "PACK_BURN_END"); rq.id = 37;
         if (bien) nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
         CHECK(bien && nn > 0 && strstr(rep, "PACK_BURN_END_REPLY") && strstr(rep, "\"reinicia\":true")
               && bpvm_bmgr_wire_reinicio_pendiente() == 1,
               "#671: con motores cargados, PACK_BURN_END tambien");
+        CHECK(g_cambios == 4, "#798: y PACK_BURN_END se lo dice al cargador");
         if (!bien) printf("    (el pack no llego entero: %s)\n", rep);
         g_cargados = 0;
     }

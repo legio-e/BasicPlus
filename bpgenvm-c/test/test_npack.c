@@ -547,6 +547,7 @@ int main(void) {
         { bpvm_npack_hdr_t h = motor(RAM_BASE, 0, 8);
           h.arch = (uint16_t) (h.arch ^ 0x5Au);
           arma("Otro", 1, "otro", &h, 190); }
+        bpvm_npack_zona_cambiada();   /* V8 #798: lo que hace el wire tras grabarlo */
         g_log[0] = '\0';
         CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH
               && strstr(g_log, "'Otro' (motor 'otro') NO se carga")
@@ -555,9 +556,31 @@ int main(void) {
               "cargador comun: un motor de otra arquitectura no se salta, y se dice con los dos arch");
         CHECK(bpvm_pack_aviso_motor_de(av, sizeof av) && strstr(av, "'Otro' no carga su motor"),
               "cargador comun: y deja el casi, con el nombre del pack");
+
+        /* V8 #798 (13-nov): sin saltar a ninguno no marca, pero sin cambios no repite. Cada INFO lo intentaba y
+         * escribía sus líneas (con uno por segundo, el anillo del log se llenó de eso en 30 s). */
         g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH && g_log[0] == '\0',
+              "cargador comun (#798): con nada cambiado, el mismo resultado y nada en el log");
+        CHECK(bpvm_pack_aviso_motor_de(av, sizeof av) && strstr(av, "'Otro' no carga su motor"),
+              "cargador comun (#798): y el casi se queda");
+        { bpvm_npack_hdr_t h = motor(RAM_BASE, 0, 8);
+          h.arch = (uint16_t) (h.arch ^ 0x5Au);
+          arma("Otra", 1, "otra", &h, 190); }
+        g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH && g_log[0] == '\0',
+              "cargador comun (#798): la zona sólo la cambia el wire; sin su aviso, no se mira");
+        bpvm_npack_zona_cambiada();   /* el wire, tras grabarlo */
+        g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH
+              && strstr(g_log, "'Otro' (motor 'otro') NO se carga")
+              && strstr(g_log, "'Otra' (motor 'otra') NO se carga"),
+              "cargador comun (#798): grabado otro pack, lo intenta otra vez y lo dice: el siguiente RUN lo reintenta");
+        g_log[0] = '\0';
+        f.ram_bytes = RAM_TAM / 2u;
         CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH && strstr(g_log, "NO se carga"),
-              "cargador comun: sin saltar a ninguno NO marca: el siguiente RUN lo reintenta");
+              "cargador comun (#798): con otro bloque de RAM, también");
+        f.ram_bytes = RAM_TAM;
 
         /* El STATE: la zona está lista, así que el casi que dice es el del motor. */
         static uint8_t eA[4096], eB[4096], eS[4096];

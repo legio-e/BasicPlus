@@ -19,6 +19,28 @@ static int     s_hecho     = 0;   /* la guarda: se saltó a algún motor (ver bp
 static int32_t s_resultado = 0;
 static int     s_sin_bloque = 0;  /* V7 #682: el último intento no cargó nada por no haber bloque de RAM */
 
+/* V8 #798 (13-nov) — LO QUE DECIDE si un motor carga, tal como lo encontró el último intento sin salto. Si el
+ * siguiente lo encuentra igual, el resultado sería el mismo, y no se repite ni se escribe nada. La zona no se
+ * recorre para saberlo: sólo la cambia el wire (grabar, borrar o formatear un pack), que lo dice con
+ * bpvm_npack_zona_cambiada. Contar sus packs no bastaba: formatear y volver a grabar los mismos tamaños da las
+ * mismas cuentas, con otros motores. */
+typedef struct {
+    const uint8_t*           zona;
+    uint32_t                 zbytes;
+    const uint8_t*           ram;
+    uint32_t                 ram_bytes;
+    const struct bpvm_bios*  bios;
+    uint32_t                 cambios;
+} firma_t;
+static uint32_t s_cambios = 0;    /* cuántas veces ha cambiado la zona desde el arranque */
+static int      s_firmado = 0;    /* hay un intento sin salto con su firma */
+static firma_t  s_firma;
+
+static int misma_firma(const firma_t* a, const firma_t* b) {
+    return a->zona == b->zona && a->zbytes == b->zbytes && a->ram == b->ram && a->ram_bytes == b->ram_bytes
+        && a->bios == b->bios && a->cambios == b->cambios;
+}
+
 static void di(const bpvm_npack_familia_t* f, const char* fmt, ...) {
     if (!f->log) return;
     char l[256];
@@ -207,14 +229,27 @@ void bpvm_npack_carga_reinicia(void) {
     s_hecho = 0;
     s_resultado = 0;
     s_sin_bloque = 0;
+    s_firmado = 0;
     bpvm_pack_aviso_motor(NULL);
 }
+
+void bpvm_npack_zona_cambiada(void) { s_cambios++; }   /* V8 #798: lo dice el wire */
 
 int32_t bpvm_npack_cargar_zona(const bpvm_npack_familia_t* f) {
     if (!f) return -(int32_t) BPVM_NPACK_E_MAGIC;
     if (s_hecho) return s_resultado;              /* ya se saltó: volver a saltar republicaría sus marcas */
+    firma_t ahora;
+    ahora.zona      = bpvm_pack_mounted(&ahora.zbytes);
+    ahora.ram       = f->ram;
+    ahora.ram_bytes = f->ram_bytes;
+    ahora.bios      = f->bios;
+    ahora.cambios   = s_cambios;
+    if (s_firmado && misma_firma(&ahora, &s_firma))
+        return s_resultado;                       /* #798: nada ha cambiado; el mismo resultado, sin repetirlo en el log */
     bpvm_pack_aviso_motor(NULL);
     s_resultado = cargar(f);
-    if (s_resultado >= 1) s_hecho = 1;            /* si no se saltó a ninguno, el siguiente RUN lo reintenta */
+    if (s_resultado >= 1) s_hecho = 1;            /* si no se saltó a ninguno, el siguiente RUN lo reintenta, */
+    s_firma   = ahora;                            /* si algo cambia */
+    s_firmado = 1;
     return s_resultado;
 }

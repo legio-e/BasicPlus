@@ -249,7 +249,7 @@ uint32_t bpvm_npack_entry_addr(const bpvm_npack_hdr_t* h, uint32_t aqui_flash);
  * BIOS apuntaba al cargador SIN ella: una segunda carga copiaría otra vez la `.data` y la
  * `.bss` encima de un motor vivo. Marca cuando se saltó a ALGUNO, como hacían las tres: si
  * no se saltó a ninguno, el siguiente RUN lo reintenta —lo que se quiere tras grabar el
- * primer pack, sin reiniciar—. Un motor que no carga deja el «casi» de Eduardo
+ * primer pack, sin reiniciar—, si algo ha cambiado (V8 #798). Un motor que no carga deja el «casi» de Eduardo
  * (30-sep), con su nombre y el porqué (bpvm_pack_aviso_motor). Vive en
  * bpvm_npack_carga.c y no aquí: este fichero sólo decide, no salta. */
 struct bpvm_bios;
@@ -266,8 +266,17 @@ typedef struct {
 
 /* Carga TODOS los motores de la zona montada. Tras saltar a alguno, las siguientes llamadas
  * devuelven lo mismo sin tocar nada. >= 1: a cuántos saltó; < 0: -peldaño del último
- * rechazado, o MAGIC si no había ninguno. El detalle, al log. */
+ * rechazado, o MAGIC si no había ninguno. El detalle, al log.
+ * V8 #798 (13-nov): si no saltó a ninguno, la siguiente lo reintenta SÓLO si ha cambiado algo de
+ * lo que lo decide: la zona (bpvm_npack_zona_cambiada), su montaje, el bloque de RAM o la BIOS. Si
+ * no, el resultado sería el mismo: lo devuelve sin repetirlo en el log, y el «casi» se queda. */
 int32_t bpvm_npack_cargar_zona(const bpvm_npack_familia_t* f);
+
+/* V8 #798 (13-nov) — la zona de packs ha cambiado: se ha grabado, borrado o formateado un pack. La
+ * llama el wire tras cada cambio (bpvm_bmgr_wire.c), que es lo único que escribe la zona. Sin
+ * motores cargados, el siguiente intento vuelve a mirarla. Sin cambios no la mira: cada INFO
+ * repetía sus líneas en el log, y con uno por segundo el anillo se llenó de eso en 30 s. */
+void bpvm_npack_zona_cambiada(void);
 
 /* Olvida la guarda y el aviso: SÓLO para las pruebas de host. En placa, cargar otra vez es
  * reiniciar la placa (lo que ya hay en RAM no se descarga). */

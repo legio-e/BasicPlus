@@ -34,8 +34,10 @@ static void sb_long(sb_t* s, long v) { char t[24]; snprintf(t, sizeof t, "%ld", 
  * los de la zona nueva se cargan en el siguiente INFO o RUN. */
 static int s_reinicio = 0;
 int bpvm_bmgr_wire_reinicio_pendiente(void) { int r = s_reinicio; s_reinicio = 0; return r; }
-/* «,"reinicia":true» en la respuesta, y pendiente, si había motores cargados. */
+/* «,"reinicia":true» en la respuesta, y pendiente, si había motores cargados. Y, con ellos o sin ellos, el cargador lo
+ * sabe (V8 #798): sin motores cargados, el siguiente intento vuelve a mirar la zona, y sin cambios no la mira. */
 static void tras_cambiar_la_zona(sb_t* s) {
+    bpvm_npack_zona_cambiada();
     if (!bpvm_npack_motores_cargados()) return;
     s_reinicio = 1;
     sb_raw(s, ",\"reinicia\":true");

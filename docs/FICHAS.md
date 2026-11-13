@@ -7468,6 +7468,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   ~5,9 ms, y ~2,3 con `--run-viejo`. Por acotar si es la máquina (había un juego abierto; el temporizador de Windows) o
   un cambio de después del 4-oct. El sim del 5-oct que queda en `build/` no vale de referencia: no carga los `.mod` de
   hoy.
+- **13-nov: no es un cambio del código.** Cada RUN cronometrado por separado (`mide_run.py`, en el scratchpad: del RUN
+  a su RUN_REPLY y de ahí al EXITED), 300 por pasada, con la máquina quieta: el sim de hoy, 1,1 ms con la tarea `run` y
+  1,35 con `--run-viejo` (200 RUN, 0,22 y 0,27 s); el de la V7 publicada (13-oct, con su compilador y su librería de
+  packs), 1,17 y 1,37. Todos en el mismo montón (1–2 ms): es lo del 4-oct. **Lo del 9-nov no se reproduce:** con los 20
+  núcleos ocupados por bucles vacíos, al revés que aquel día (la tarea, 12 ms; `--run-viejo`, 45); con el sim en un
+  solo núcleo, como siempre (1,24 y 1,51).
+- **Una ventana que sí existe, sin verla pasar:** `run`, al acabar, despierta a `io` con `bpvm_oq_despertar`, que sólo
+  avisa a quien ya espera, y la espera de `io` (`bpvm_oq_pop_timed`) no mira si hubo un aviso antes. Si `run` acaba
+  y avisa justo antes de que `io` se ponga a esperar, `io` espera sus 5 ms enteros (en Windows, hasta 15,6). Hace falta
+  que `run` le quite la CPU a `io` en esas pocas instrucciones: en el PC, ni con un núcleo pasa (Windows deja seguir a
+  `io` hasta que espera), y en las placas `run` va a la misma prioridad que `io`, así que sólo un tick que caiga justo
+  ahí. Con el arreglo de manual (el aviso deja una marca y la espera la mira; probado y deshecho), con un núcleo y con
+  veinte, lo mismo que sin él: no es lo del 9-nov.
 
 #### ✅ `#811` — en la VM-Java, un clic de verdad en un `Gui.Button` no llega al programa: `__guiBindClick` lee mal sus argumentos y no enlaza el botón, sin decir nada (abierta el 8-nov, al preparar el paso 2 de H2 · **CERRADA el 8-nov**, el commit de `#811`; Eduardo: *«si»*, arreglarlo ya)
 
@@ -7673,9 +7686,25 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Lo que parece, sin confirmar:** una raíz falsa del GC conservador. Con `Core` en un pack, el heap empieza abajo, y un entero sin `TAG` puede caer justo en un objeto ([[heap-abajo-con-core-en-pack]], la misma familia que `#786`): el objeto se retiene una colecta de más. Lo sostiene que el programa con un `byte[]` delante, de 1, 17, 65 o 201 bytes, que mueve el heap, pasa las cuatro veces, y `Sc2`, con el `try` en otra función, también. Falta mirar quién lo retiene (un `fopen` temporal en `gc_marca_uno`, en el sim).
 - **Por qué importa:** el programa está mal escrito sólo si `gc()` no promete nada: `#668` dice que lo que muere se destruye, y aquí un entero cualquiera lo retrasa. Lo que `#786` hizo al descargar un overlay (fiarse sólo de los handles) es la pista. **Sin hacer: por decidir (Eduardo).**
 
-#### 🔵 `#798` — con un motor que no carga, cada `INFO` repite sus seis líneas en el log (abierta el 6-nov, en H3)
+#### ✅ `#798` — con un motor que no carga, cada `INFO` repite sus seis líneas en el log (abierta el 6-nov, en H3 · **CERRADA el 13-nov**, el commit de `#798`; Eduardo: *«OK»*)
 
-Un pack cuyo motor no carga («realojado para OTRA dirección») no se marca como hecho, a propósito: el siguiente `Run` lo reintenta, y así un pack recién grabado entra sin reiniciar. Pero el `INFO` también lo intenta (`esp32_repl_info`), y cada intento escribe sus seis líneas: pidiendo un `INFO` por segundo, el anillo del log se llenó de eso en 30 s y se llevó lo demás (se vio el 6-nov probando la WiFi en la P4, con `Gui` y `SQLite` sin resellar). Se arregla diciéndolo una vez hasta que cambie la zona. **Sin hacer.**
+Un pack cuyo motor no carga («realojado para OTRA dirección») no se marca como hecho, a propósito: el siguiente `Run` lo reintenta, y así un pack recién grabado entra sin reiniciar. Pero el `INFO` también lo intenta (`esp32_repl_info`), y cada intento escribe sus seis líneas: pidiendo un `INFO` por segundo, el anillo del log se llenó de eso en 30 s y se llevó lo demás (se vio el 6-nov probando la WiFi en la P4, con `Gui` y `SQLite` sin resellar). Se arregla diciéndolo una vez hasta que cambie la zona.
+
+- **Lo hecho** (13-nov), en lo común de las tres familias (`bpvm_npack_carga.c`): el cargador apunta lo que decide si un
+  motor carga —la zona montada, el bloque de RAM, la BIOS y cuántas veces ha cambiado la zona—. Si el siguiente intento
+  lo encuentra igual, devuelve el mismo resultado sin escribir nada, y el «casi» se queda. La zona sólo la cambia el
+  wire (grabar, borrar o formatear un pack), que se lo dice al cargador (`bpvm_npack_zona_cambiada`) desde el mismo
+  sitio que el reinicio de `#671` (`tras_cambiar_la_zona`). Lo que se habló era contar los packs de la cadena, los vivos
+  y lo libre; no bastaba: formatear y volver a grabar los mismos tamaños da las mismas cuentas, con otros motores. Con
+  la P4 del 6-nov: el primer `INFO` escribe sus seis líneas y los siguientes, nada; al regrabar `Gui`, el siguiente
+  `INFO` o RUN lo intenta y lo dice.
+- **Lo prueban:** `test-npack` (con nada cambiado, el mismo resultado, el log vacío y el casi; grabado otro pack, lo
+  intenta y lo dice; con otro bloque de RAM, también; cambia la comprobación que pedía justo lo contrario, que se
+  repitiera) y `test-bmgr` (las tres órdenes avisan al cargador, con motores cargados o sin ellos; un `PACK_FORMAT`
+  rechazado, `PACK_BURN_BEGIN` y `PACK_BURN_DATA`, no). Saboteados, el cargador sin el «no repite» y el wire sin el
+  aviso, salen en ROJO.
+- **En placa:** sin probar aparte. Se verá en la primera placa con un motor que no cargue (la C5, si su pack de la GUI
+  no casa con la imagen nueva).
 
 #### ✅ `#797` — JC: `(Caja) x` no convierte si el constructor de `Caja` acepta `x`, ni si `x` ya es un `Caja` (abierta y **CERRADA** el 5-nov, el commit de `#797`; Eduardo: *«en JC los constructores van con new Caja(x)»*)
 
