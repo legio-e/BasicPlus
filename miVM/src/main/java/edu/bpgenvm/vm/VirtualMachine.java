@@ -3229,8 +3229,8 @@ public class VirtualMachine {
     /** V8 #805 — LA LECTURA DE BAJO NIVEL (Eduardo: la del GC, «y ahí si no existe no salta un error»): ¿existe todavía el
      *  objeto de esta referencia? Con la referencia ENTERA, la de la pila o un campo (8 bytes, con su generación): la de 32
      *  bits que circula dentro de un builtin no la lleva. La de alto nivel la llama y, si dice que no, lanza:
-     *  requireAlive (los opcodes) y la entrada de un builtin (dispatchBuiltin, sus parámetros string). Espejo de
-     *  bpvm_ref_dead (VM-C). */
+     *  requireAlive (los opcodes) y la entrada de un builtin (dispatchBuiltin: sus parámetros string, y desde #807 los
+     *  demás referencia). Espejo de bpvm_ref_dead (VM-C). */
     private boolean refViva(long ref) {
         if ((ref & HANDLE_TAG) == 0) return true;           // null/constante: siempre vivo
         int idx = handleIdx(ref);
@@ -5647,6 +5647,14 @@ public class VirtualMachine {
             } else if (!refViva(s)) {
                 throwBpError(tc, CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
             }
+        }
+        // V8 #807 (13-nov; Eduardo: «OK») — y los demás parámetros referencia (los arrays, any, Object): sólo que sigan
+        // vivos, «referencia a objeto eliminado», como los opcodes; el null lo trata cada builtin. Antes, fromBytes leía
+        // el hueco de un array soltado —con él ya de otro, el otro— y move copiaba de él o escribía en él. La tabla, la
+        // misma generada de Core.bp (Builtin.referencias(); la VM-C, bpvm_builtin_referencias).
+        for (int off : b.referencias()) {
+            long r = refLoad(memory, tc.sp - off);
+            if (r != 0 && !refViva(r)) throwBpError(tc, CLASE_NULA, "referencia a objeto eliminado (use-after-free)");
         }
         switch (b) {
             case STRLEN: {

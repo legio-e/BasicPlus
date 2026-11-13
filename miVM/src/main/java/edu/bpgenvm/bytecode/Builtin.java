@@ -382,6 +382,66 @@ public enum Builtin {
         }
     }
 
+    /** #807 — dónde está cada parámetro referencia que no es un string (los arrays, any, Object) al llamarlo (bytes
+     *  bajo sp): una referencia caducada ahí es «objeto eliminado», antes de entrar; el null lo trata cada builtin.
+     *  Sin los de SIN_MIRAR_REFERENCIAS en el generador (el compilador los apila a su manera, o son de los
+     *  destructores). La misma tabla que bpvm_builtin_referencias en builtin_cadenas.h. */
+    public int[] referencias() { return REFERENCIAS[ordinal()]; }
+
+    private static final int[] NINGUNA = {};
+    private static final int[][] REFERENCIAS = new int[values().length][];
+    static {
+        java.util.Arrays.fill(REFERENCIAS, NINGUNA);
+        REFERENCIAS[45] = new int[] { 12 };   // __growRefArray(old: integer[], newCap: integer)
+        REFERENCIAS[46] = new int[] { 12 };   // __growIntArray(old: integer[], newCap: integer)
+        REFERENCIAS[47] = new int[] { 12 };   // __charsToString(chars: integer[], len: integer)
+        REFERENCIAS[49] = new int[] { 8 };   // __threadStart(t: any)
+        REFERENCIAS[50] = new int[] { 8 };   // __threadJoin(t: any)
+        REFERENCIAS[53] = new int[] { 8 };   // __mutexLock(m: any)
+        REFERENCIAS[54] = new int[] { 8 };   // __mutexUnlock(m: any)
+        REFERENCIAS[55] = new int[] { 28, 20 };   // move(src: any, dst: any, srcStart: integer, dstStart: integer, count: integer)
+        REFERENCIAS[83] = new int[] { 12 };   // __i2cWrite(bus: integer, addr: integer, data: integer[], count: integer)
+        REFERENCIAS[84] = new int[] { 12 };   // __i2cRead(bus: integer, addr: integer, data: integer[], count: integer)
+        REFERENCIAS[87] = new int[] { 12 };   // __spiWrite(bus: integer, data: integer[], count: integer)
+        REFERENCIAS[88] = new int[] { 12 };   // __spiRead(bus: integer, data: integer[], count: integer)
+        REFERENCIAS[89] = new int[] { 20, 12 };   // __spiTransfer(bus: integer, tx: integer[], rx: integer[], count: integer)
+        REFERENCIAS[91] = new int[] { 12 };   // __uartWrite(bus: integer, data: integer[], count: integer)
+        REFERENCIAS[92] = new int[] { 16 };   // __uartRead(bus: integer, data: integer[], count: integer, timeoutMs: integer)
+        REFERENCIAS[120] = new int[] { 8 };   // fromBytes(b: byte[])
+        REFERENCIAS[125] = new int[] { 12 };   // __npShow(pin: integer, grb: integer[], count: integer)
+        REFERENCIAS[127] = new int[] { 8 };   // writeFileBytes(path: string, data: byte[])
+        REFERENCIAS[132] = new int[] { 8 };   // __tcpSend(h: integer, data: byte[])
+        REFERENCIAS[151] = new int[] { 8 };   // __guiBindClick(handle: integer, self: any)
+        REFERENCIAS[152] = new int[] { 8 };   // __guiClick(w: any)
+        REFERENCIAS[165] = new int[] { 8 };   // __guiChange(w: any)
+        REFERENCIAS[206] = new int[] { 24, 8 };   // __guiInvokeByName(host: Object, name: string, sender: Object)
+        REFERENCIAS[207] = new int[] { 20, 8 };   // __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
+        REFERENCIAS[223] = new int[] { 16 };   // __guiSlotOf(obj: Object, name: string)
+        REFERENCIAS[241] = new int[] { 20 };   // __fopen(st: byte[], path: string, mode: integer)
+        REFERENCIAS[242] = new int[] { 8 };   // __fclose(st: byte[])
+        REFERENCIAS[243] = new int[] { 24, 16 };   // __fread(st: byte[], dst: byte[], off: integer, n: integer)
+        REFERENCIAS[244] = new int[] { 24, 16 };   // __fwrite(st: byte[], src: byte[], off: integer, n: integer)
+        REFERENCIAS[245] = new int[] { 12 };   // __fseek(st: byte[], pos: integer)
+        REFERENCIAS[246] = new int[] { 8 };   // __ftell(st: byte[])
+        REFERENCIAS[247] = new int[] { 8 };   // __fsize(st: byte[])
+        REFERENCIAS[248] = new int[] { 8 };   // __fflush(st: byte[])
+        REFERENCIAS[249] = new int[] { 8 };   // __freadLine(st: byte[])
+        REFERENCIAS[259] = new int[] { 24, 12 };   // __spiDevXfer(bus: integer, cs: integer, baudrate: integer, mode: integer, op: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer)
+        REFERENCIAS[260] = new int[] { 28, 16, 8 };   // __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[])
+        REFERENCIAS[261] = new int[] { 24, 12 };   // __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer)
+        REFERENCIAS[262] = new int[] { 28, 16, 8 };   // __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[])
+        REFERENCIAS[263] = new int[] { 12 };   // __strCopy(src: string, dst: byte[], pos: integer)
+        REFERENCIAS[283] = new int[] { 8 };   // __strNace(b: byte[])
+        REFERENCIAS[284] = new int[] { 12 };   // __fromBytesI(b: byte[], ignorarError: boolean)
+        REFERENCIAS[286] = new int[] { 12 };   // __freadLineI(st: byte[], ignorarError: boolean)
+        REFERENCIAS[301] = new int[] { 8 };   // __className(o: any)
+        REFERENCIAS[325] = new int[] { 8 };   // __kbOpen(t: any)
+        REFERENCIAS[326] = new int[] { 8 };   // __kbClose(t: any)
+        REFERENCIAS[332] = new int[] { 8 };   // __msOpen(t: any)
+        REFERENCIAS[333] = new int[] { 8 };   // __msClose(t: any)
+        REFERENCIAS[339] = new int[] { 8 };   // __guiKeyTarget(t: any)
+    }
+
     private static final Map<String, Builtin> BY_NAME = new HashMap<>();
     static {
         for (Builtin b : values()) BY_NAME.put(b.bpName, b);

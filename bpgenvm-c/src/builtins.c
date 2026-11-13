@@ -1569,6 +1569,20 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
         }
     }
+    /* V8 #807 (13-nov; Eduardo: «OK») — y los demás parámetros referencia (los arrays, any, Object): sólo que sigan vivos,
+     * «referencia a objeto eliminado», como los opcodes; el null lo trata cada builtin. Antes, fromBytes leía el hueco de
+     * un array soltado —con él ya de otro, el otro— y move copiaba de él o escribía en él. La tabla, generada de Core.bp
+     * (builtin_cadenas.h: bpvm_builtin_referencias), sin los que el compilador apila a su manera ni los de los
+     * destructores; miVM mira lo mismo (Builtin.referencias()). */
+    if ((unsigned) id < (unsigned) BUILTIN__CUANTOS && bpvm_builtin_referencia_de[id] != 0u) {
+        const uint8_t* off = bpvm_builtin_referencias[bpvm_builtin_referencia_de[id]].off;
+        int k;
+        for (k = 0; k < 3 && off[k] != 0u; k++) {
+            bpref_t r = bpref_load(vm, tc->sp - off[k]);
+            if (!bpref_is_null(r) && bpvm_ref_dead(vm, r))
+                return builtin_throw_nula(vm, tc, "referencia a objeto eliminado (use-after-free)");
+        }
+    }
     switch (id) {
 
     case BUILTIN_STRLEN: {

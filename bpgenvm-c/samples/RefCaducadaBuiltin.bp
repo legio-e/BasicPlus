@@ -1,0 +1,66 @@
+// RefCaducadaBuiltin.bp — V8 #807 (13-nov): una referencia caducada que se pasa a un builtin da el error en la entrada,
+// como en los opcodes («referencia a objeto eliminado (use-after-free)»), en las dos VMs. Antes la entrada sólo miraba
+// los parámetros string (#774, #805), y un array soltado se leía como si nada: fromBytes devolvía lo que hubiera en su
+// hueco —con el hueco ya de otro array, el otro: «XY»—, y move copiaba de él o escribía en él. Ahora la misma tabla,
+// generada de Core.bp, mira también los arrays, any y Object: sólo que la referencia siga viva; el null lo trata cada
+// builtin, como antes. Se comprueba solo: si un builtin no da el error, una línea «FALLO» pone la red en rojo, aunque
+// las dos VMs lo hagan igual de mal (y antes lo hacían).
+//
+// Salida esperada (las dos VMs):
+//   vivo: AB
+//   fromBytes: referencia a objeto eliminado (use-after-free)
+//   move (origen): referencia a objeto eliminado (use-after-free)
+//   move (destino): referencia a objeto eliminado (use-after-free)
+//   len: referencia a objeto eliminado (use-after-free)
+//   fin
+module RefCaducadaBuiltin
+  import Core
+
+  public class Caja
+    public property owner datos: byte[]
+    public function Caja(d: byte[])
+      this.datos := d
+    end Caja
+    public function cambia(d: byte[])
+      this.datos := d   // suelta el de antes
+    end cambia
+  end Caja
+
+  function Main()
+    var b: byte[] := newByteArray(2)
+    b[0] := 65
+    b[1] := 66
+    var owner c: Caja := Caja(b)
+    var v: byte[] := c.datos              // el mismo array que tiene la caja
+    print "vivo: " + fromBytes(v)
+    c.cambia(newByteArray(2))             // la caja suelta el suyo: v ya no vale
+    var otro: byte[] := newByteArray(2)   // y su hueco puede ser ya de otro
+    otro[0] := 88
+    otro[1] := 89
+
+    try
+      var s: string := fromBytes(v)
+      print "FALLO: fromBytes leyó un array soltado (" + s + ")"
+    catch e1: NullReferenceError
+      print "fromBytes: " + e1.msg
+    endtry
+    try
+      move(v, otro, 0, 0, 1)
+      print "FALLO: move copió de un array soltado"
+    catch e2: NullReferenceError
+      print "move (origen): " + e2.msg
+    endtry
+    try
+      move(otro, v, 0, 0, 1)
+      print "FALLO: move escribió en un array soltado"
+    catch e3: NullReferenceError
+      print "move (destino): " + e3.msg
+    endtry
+    try
+      print "FALLO: len de un array soltado: " + intToString(len(v))
+    catch e4: NullReferenceError
+      print "len: " + e4.msg
+    endtry
+    print "fin"
+  end Main
+end RefCaducadaBuiltin

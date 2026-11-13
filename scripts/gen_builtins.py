@@ -19,6 +19,9 @@ null vale, pero no una referencia caducada.
 #805 (V8, 7-nov) — Y UNA REFERENCIA A UNA CADENA QUE YA NO EXISTE: la misma tabla, «referencia a objeto eliminado
 (use-after-free)» antes de entrar, en todos (Eduardo: la lectura de alto nivel llama a la de bajo nivel, y si le dice
 que el string no existe, salta el error).
+#807 (V8, 13-nov) — Y LOS DEMÁS PARÁMETROS REFERENCIA (los arrays, any, Object): dónde está cada uno, en otra tabla
+(Builtin.referencias() en miVM, bpvm_builtin_referencias en builtin_cadenas.h), para mirar sólo que siga vivo; el null
+lo trata cada builtin. Fuera, los de SIN_MIRAR_REFERENCIAS, cada uno con su porqué.
 Reglas: el id es el número escrito; la primera declaración con ese número es la CANÓNICA (su
 nombre es el nombre BP del builtin) y las siguientes con el mismo número son alias (`newObjArray`
 de `__newRefArray`); la constante Java/C es el nombre BP sin `__` en MAYÚSCULAS_CON_GUIONES;
@@ -42,6 +45,17 @@ CC   = os.path.join(RAIZ, "bpgenvm-c", "src", "builtin_cadenas.h")
 NULL_ES_VACIA = {
     "__strCopy": "la concatenación (los __strconcat del compilador): un null se concatena como \"\"",
     "__avisaDestructor": "escribe el mensaje de un destructor que lanzó (e.msg, que puede ser null)",
+}
+# #807 — los builtins cuyos parámetros referencia que no son string (los arrays, any, Object) NO se miran a la entrada.
+# Los demás, sí: sólo que la referencia siga viva —una caducada es «referencia a objeto eliminado (use-after-free)», como
+# en los opcodes—; el null lo trata cada builtin.
+SIN_MIRAR_REFERENCIAS = {
+    "__eventRaise": "el compilador lo apila a su manera (recv arriba y dest con 4 B, #811): su firma no dice dónde están",
+    "__liberaSiSinDestructores": "la maquinaria de los destructores (Core.__destruye): trabaja con lo que se destruye",
+    "__ordenDestruccion": "la maquinaria de los destructores (Core.__destruye): trabaja con lo que se destruye",
+    "__preparaDestructor": "la maquinaria de los destructores (Core.__destruye): trabaja con lo que se destruye",
+    "__liberaSolo": "la maquinaria de los destructores (Core.__destruye): trabaja con lo que se destruye",
+    "__avisaDestructor": "la maquinaria de los destructores (Core.__destruye): trabaja con lo que se destruye",
 }
 # #774 — el nombre del mensaje, cuando el del builtin despista (lo llama la stdlib por otro, con el mismo string)
 NOMBRE_DE_ERROR = {
@@ -79,8 +93,8 @@ def tamano(tipo):
     if tipo in TAM_8: return 8
     return None
 
-def cadenas(nombre, params):
-    """#774 — dónde está cada parámetro string al llamar al builtin: bytes bajo sp, del primero al último."""
+def posiciones(nombre, params):
+    """[(bytes bajo sp, tipo)] de cada parámetro al llamar al builtin, del primero al último (el último, arriba)."""
     ps = [p.strip() for p in params.split(",") if p.strip()]
     if any(":" not in p for p in ps):
         print("  ✗ %s(%s): un parámetro sin tipo" % (nombre, params)); sys.exit(1)
@@ -88,7 +102,17 @@ def cadenas(nombre, params):
     tams = [tamano(t) for t in tipos]
     if None in tams:
         print("  ✗ %s(%s): un tipo sin tamaño conocido en la pila (%s)" % (nombre, params, tipos[tams.index(None)])); sys.exit(1)
-    return [sum(tams[k:]) for k, t in enumerate(tipos) if t == "string"]   # #805: también los de NULL_ES_VACIA
+    return [(sum(tams[k:]), t) for k, t in enumerate(tipos)]
+
+def cadenas(nombre, params):
+    """#774 — dónde está cada parámetro string al llamar al builtin: bytes bajo sp, del primero al último."""
+    return [off for off, t in posiciones(nombre, params) if t == "string"]   # #805: también los de NULL_ES_VACIA
+
+def referencias(nombre, params):
+    """#807 — dónde está cada parámetro referencia que no es string (un array, any, Object), salvo en los de
+    SIN_MIRAR_REFERENCIAS: bytes bajo sp, del primero al último."""
+    if nombre in SIN_MIRAR_REFERENCIAS: return []
+    return [off for off, t in posiciones(nombre, params) if t.endswith("[]") or t in ("any", "Object")]
 
 def nombre_de_error(nombre):
     """El del mensaje, «referencia nula: <nombre> de un string null»: el nombre BP sin los __ (o el de NOMBRE_DE_ERROR)."""
@@ -161,6 +185,22 @@ def java(tabla, alias):
         o.append("            case %s: return true;" % constante(nombre))
     o.append("            default: return false;")
     o.append("        }")
+    o.append("    }")
+    o.append("")
+    o.append("    /** #807 — dónde está cada parámetro referencia que no es un string (los arrays, any, Object) al llamarlo (bytes")
+    o.append("     *  bajo sp): una referencia caducada ahí es «objeto eliminado», antes de entrar; el null lo trata cada builtin.")
+    o.append("     *  Sin los de SIN_MIRAR_REFERENCIAS en el generador (el compilador los apila a su manera, o son de los")
+    o.append("     *  destructores). La misma tabla que bpvm_builtin_referencias en builtin_cadenas.h. */")
+    o.append("    public int[] referencias() { return REFERENCIAS[ordinal()]; }")
+    o.append("")
+    o.append("    private static final int[] NINGUNA = {};")
+    o.append("    private static final int[][] REFERENCIAS = new int[values().length][];")
+    o.append("    static {")
+    o.append("        java.util.Arrays.fill(REFERENCIAS, NINGUNA);")
+    for i, (nombre, params, ret) in enumerate(tabla):
+        refs = referencias(nombre, params)
+        if refs:
+            o.append("        REFERENCIAS[%d] = new int[] { %s };   // %s(%s)" % (i, ", ".join(str(x) for x in refs), nombre, params))
     o.append("    }")
     o.append("")
     o.append("    private static final Map<String, Builtin> BY_NAME = new HashMap<>();")
@@ -243,6 +283,40 @@ def c_cadenas(tabla):
         o.append("    " + " ".join("%2d," % x for x in indice[k:k + 16]) + "   /* %d.. */" % k)
     o.append("};")
     o.append("")
+    # #807 — los demás parámetros referencia
+    rfilas = []; rindice = []
+    for i, (nombre, params, ret) in enumerate(tabla):
+        offs = referencias(nombre, params)
+        if not offs: rindice.append(0); continue
+        if len(offs) > 3:
+            print("  ✗ %s: más de 3 parámetros referencia (la tabla de C tiene sitio para 3)" % nombre); sys.exit(1)
+        if max(offs) > 255:
+            print("  ✗ %s: un parámetro referencia a más de 255 bytes de sp (la tabla de C usa un byte)" % nombre); sys.exit(1)
+        rfilas.append((offs, i, "%s(%s)%s" % (nombre, params, (": " + ret) if ret else "")))
+        rindice.append(len(rfilas))
+    if len(rfilas) > 255:
+        print("  ✗ %d builtins con parámetros referencia: la tabla de C indexa con un byte" % len(rfilas)); sys.exit(1)
+    o.append("/* #807 (V8, 13-nov) — LOS DEMÁS PARÁMETROS REFERENCIA DE CADA BUILTIN (los arrays, any, Object): dónde están al")
+    o.append(" * llamarlo (bytes bajo sp). Una referencia caducada ahí es «referencia a objeto eliminado (use-after-free)», antes")
+    o.append(" * de entrar (bpvm_call_builtin); el null lo trata cada builtin. Sin los de SIN_MIRAR_REFERENCIAS en el generador")
+    o.append(" * (el compilador los apila a su manera, o son de los destructores). Lo mismo que Builtin.referencias() en miVM. */")
+    o.append("typedef struct {")
+    o.append("    uint8_t off[3];   /* bytes bajo sp; 0, no hay más */")
+    o.append("} bpvm_builtin_referencias_t;")
+    o.append("")
+    o.append("static const bpvm_builtin_referencias_t bpvm_builtin_referencias[%d] = {" % (len(rfilas) + 1))
+    o.append("    { { 0, 0, 0 } },")
+    for offs, i, firma in rfilas:
+        o3 = (offs + [0, 0, 0])[:3]
+        o.append("    { { %3d, %3d, %3d } },   /* [%d] %s */" % (o3[0], o3[1], o3[2], i, firma))
+    o.append("};")
+    o.append("")
+    o.append("/* La fila de arriba de cada builtin, por su id (0: ningún parámetro referencia que mirar). */")
+    o.append("static const uint8_t bpvm_builtin_referencia_de[BUILTIN__CUANTOS] = {")
+    for k in range(0, len(rindice), 16):
+        o.append("    " + " ".join("%2d," % x for x in rindice[k:k + 16]) + "   /* %d.. */" % k)
+    o.append("};")
+    o.append("")
     o.append("#endif")
     return "\n".join(o) + "\n"
 
@@ -252,9 +326,9 @@ def main():
     hoy = generados_hoy()
     mal = 0
     canonicos = set(nombre for nombre, params, ret in tabla)
-    for k in sorted(set(NULL_ES_VACIA) | set(NOMBRE_DE_ERROR)):
+    for k in sorted(set(NULL_ES_VACIA) | set(NOMBRE_DE_ERROR) | set(SIN_MIRAR_REFERENCIAS)):
         if k not in canonicos:
-            print("  ✗ %s (en NULL_ES_VACIA o NOMBRE_DE_ERROR) no es un builtin de Core.bp" % k); mal += 1
+            print("  ✗ %s (en NULL_ES_VACIA, NOMBRE_DE_ERROR o SIN_MIRAR_REFERENCIAS) no es un builtin de Core.bp" % k); mal += 1
     for i, (nombre, params, ret) in enumerate(tabla):
         c = constante(nombre)
         if c in hoy and hoy[c] != i:

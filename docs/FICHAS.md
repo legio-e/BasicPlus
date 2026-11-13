@@ -7608,7 +7608,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   ejecución (la red, roja: la VM-C escribió el fichero sin el `"autoStart"` que ya tenía). Las tres redes del 8-nov
   pasaron por suerte. Ahora cada grupo, la suya (`flash_red`).
 
-#### 🔵 `#807` — una referencia caducada a un array (u otro objeto) que se pasa a un builtin no da error (abierta el 7-nov; salió en `#805`)
+#### ✅ `#807` — una referencia caducada a un array (u otro objeto) que se pasa a un builtin no da error (abierta el 7-nov; salió en `#805` · **CERRADA el 13-nov**, el commit de `#807`; Eduardo: *«OK»*)
 
 - **Lo que pasa:** medido con un `byte[]` en una property `owner` que se cambia: `fromBytes(v)` y `move(v, otro, …)` lo
   leen sin decir nada, en las dos VMs (con su hueco ya reutilizado, leerían otro objeto). Los opcodes (`len(v)`,
@@ -7616,6 +7616,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Por qué:** la entrada de un builtin (`#774`, `#805`) sólo mira sus parámetros string.
 - **Lo natural:** la misma tabla, con los parámetros referencia (los arrays y los objetos). **Sin hacer: por decidir
   (Eduardo).**
+- **Medido otra vez el 13-nov, peor de lo que decía:** con el hueco del array soltado ya ocupado por otro array,
+  `fromBytes(v)` devolvía el contenido del otro («XY» en vez de un error), en las dos VMs.
+- **Lo hecho (13-nov; Eduardo: *«OK»*):** `gen_builtins.py` saca de las firmas de `Core.bp` una segunda tabla, dónde
+  está cada parámetro referencia que no es string (los arrays, `any` y `Object`): `Builtin.referencias()` en miVM y
+  `bpvm_builtin_referencias` en `builtin_cadenas.h`. A la entrada de cada builtin (`dispatchBuiltin`,
+  `bpvm_call_builtin`), sólo que la referencia siga viva: si no, «referencia a objeto eliminado (use-after-free)», un
+  `NullReferenceError`, como en los opcodes. El `null` no se mira: lo trata cada builtin, como antes. Son 48 builtins.
+  Fuera, `SIN_MIRAR_REFERENCIAS`, cada uno con su porqué: `__eventRaise` (el compilador lo apila a su manera: `recv`
+  arriba y `dest` con 4 B, así que su firma no dice dónde está cada cosa) y los cinco de los destructores
+  (`__liberaSolo`, `__preparaDestructor`, `__ordenDestruccion`, `__liberaSiSinDestructores` y `__avisaDestructor`, que
+  trabajan con lo que se está destruyendo). Desde una native, `call_builtin` le pone los argumentos regenerados: vivos.
+- **Lo prueba:** `RefCaducadaBuiltin`, nuevo en el corpus: un `byte[]` que suelta su dueña (una property `owner`), con
+  su hueco ya de otro: `fromBytes`, `move` desde él y `move` hacia él dan el error, como `len`; si alguno no, una línea
+  `FALLO` pone la red en ROJO, aunque las dos VMs lo hagan igual (antes lo hacían: las tres, `FALLO`). `BUILTINS.md` y
+  `PENDIENTES.md`, al día.
 
 #### ✅ `#806` — `throw` de una excepción null no se atrapa, ni con un `catch` sin tipo (abierta el 7-nov; salió en H7.5 · **CERRADA el 7-nov**, el commit de `#806`)
 

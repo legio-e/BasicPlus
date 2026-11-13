@@ -363,10 +363,9 @@ número, un array de tamaño negativo, y un `path demasiado largo` de `pathAbsol
 de antes (una placa sin la imagen de V8/H7.5), todo sale como `RuntimeError`, con el mismo mensaje. (El `throw` de una
 excepción `null`, que no se atrapaba, es desde el 7-nov un `NullReferenceError` del propio `throw`: `#806`.) Una
 referencia a un objeto que ya no existe (caducada: no es null, su objeto se soltó) da un `NullReferenceError` «referencia
-a objeto eliminado (use-after-free)» al usarla: en los opcodes, a la entrada de un builtin (sus parámetros string) y a la
-entrada de una native (`#805`). Lo que todavía no: un parámetro de un builtin que no es string, un array o un objeto
-(`#807`); y, dentro de una native, una referencia que no venga de sus argumentos (un campo leído allí: circula sin su
-generación).
+a objeto eliminado (use-after-free)» al usarla: en los opcodes, a la entrada de un builtin (sus parámetros string, `#805`,
+y desde el 13-nov también los arrays y los objetos, `#807`) y a la entrada de una native (`#805`). Lo que todavía no:
+dentro de una native, una referencia que no venga de sus argumentos (un campo leído allí: circula sin su generación).
 
 ## ⏭️ Para V8 — lo que conviene saber al programar hoy
 

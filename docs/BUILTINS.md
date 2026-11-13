@@ -333,8 +333,12 @@ contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 287 entradas; en V6, 
    a objeto eliminado (use-after-free)», un `NullReferenceError`, con la misma tabla. Es la lectura a dos niveles de
    Eduardo: la de bajo nivel dice si el objeto existe (`bpvm_ref_dead`, `refViva`), con la referencia entera de la pila,
    y la de alto nivel, aquí, lanza. Los cuatro atajos del AOT no pueden mirarlo (reciben la referencia en 32 bits, sin
-   su generación): lo mira la entrada de la native, al leer sus argumentos (`read_ref`). Los parámetros que no son
-   `string` (un array, un objeto), todavía no: `#807`.
+   su generación): lo mira la entrada de la native, al leer sus argumentos (`read_ref`).
+   Y desde `#807` (V8, 13-nov), **los demás parámetros referencia** (los arrays, `any` y `Object`): sólo que sigan vivos,
+   con el mismo error; el `null` lo trata cada builtin, como antes. Es otra tabla, generada igual (`Builtin.referencias()`
+   en miVM, `bpvm_builtin_referencias` en `builtin_cadenas.h`). Fuera, los de `SIN_MIRAR_REFERENCIAS` en el generador,
+   cada uno con su porqué: `__eventRaise` (el compilador lo apila a su manera: su firma no dice dónde está cada cosa) y
+   los cinco de los destructores (`__liberaSolo` y compañía, que trabajan con lo que se está destruyendo).
 
 ---
 
