@@ -406,11 +406,10 @@ public final class NpackReloc {
         byte[] flash = concatenar(e, d.flashSecs, "flash");
         byte[] data  = concatenar(e, d.dataSecs,  "datos");
         int baseFlash = baseDe(e, d.flashSecs, 0);
-        int bss = 0;
-        for (String n : d.bssSecs) {
-            Elf32.Section s = seccion(e, n);
-            if (s != null) bss += s.size;
-        }
+        List<Elf32.Section> deRam = new ArrayList<>();
+        for (String n : d.dataSecs) deRam.add(seccion(e, n));
+        for (String n : d.bssSecs)  deRam.add(seccion(e, n));
+        int bss = bytesACero(umbralRam, data.length, deRam);
 
         List<Sitio> sitios = new ArrayList<>();
         List<String> viajan = new ArrayList<>(d.flashSecs);
@@ -448,6 +447,31 @@ public final class NpackReloc {
             throw new RelocException(String.format("la seccion %s esta en 0x%08x, POR ENCIMA del"
                 + " umbral de RAM (0x%08x): se tomaria por RAM siendo flash.",
                 nombre, s.addr, umbralRam));
+    }
+
+    /**
+     * V8 #817 (13-nov) — LO QUE VA A CERO, POR DIRECCIÓN: desde el final de los datos que se copian (en el umbral de
+     * RAM) hasta el final de la sección de RAM más alta, con los huecos de alineación dentro.
+     *
+     * <p>Antes se SUMABAN los tamaños de `.sbss` y `.bss`, y el enlazador las alinea: en el motor de la GUI del 12-nov,
+     * `.sbss` acaba en 0x2000014c y `.bss` (alineada a 16) empieza en 0x20000150. El motor ocupaba 4 B más de los que
+     * decía, la placa puso la RAM del pack siguiente (el driver de la pantalla de la C5) en esos 4 B, y allí guarda LVGL
+     * el final de su montón: el driver lo pisó al arrancar, la pantalla salió con basura y la placa se cayó en el
+     * primer `lv_malloc` (un `assert` de TLSF). La misma lección que {@link #concatenar} con los datos.
+     *
+     * @param umbralRam    la dirección de enlazado de la RAM (donde empiezan los datos)
+     * @param bytesDeDatos lo que se copia (la imagen de datos, ya con sus huecos)
+     * @param deRam        las secciones de RAM, de datos y a cero (las que no están, null)
+     */
+    static int bytesACero(int umbralRam, int bytesDeDatos, List<Elf32.Section> deRam) {
+        long finDatos = Integer.toUnsignedLong(umbralRam) + bytesDeDatos;
+        long fin = finDatos;
+        for (Elf32.Section s : deRam) {
+            if (s == null || s.size == 0) continue;
+            long f = Integer.toUnsignedLong(s.addr) + Integer.toUnsignedLong(s.size);
+            if (f > fin) fin = f;
+        }
+        return (int) (fin - finDatos);
     }
 
     private static Elf32.Section seccion(Elf32 e, String nombre) {

@@ -7387,6 +7387,28 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#817` — un motor nativo con un hueco de alineación entre `.sbss` y `.bss` decía menos RAM fija de la que ocupa, y el pack siguiente se le ponía encima: en la C5, el driver de la pantalla pisaba el final del montón de LVGL (la pantalla, con puntos y bandas, y la placa se caía) (abierta y **CERRADA el 13-nov**, el commit de `#817`; salió en H2, en la C5; Eduardo: *«si»*)
+
+- **Lo que pasaba:** el empaquetador (`NpackReloc.desdeElf`) SUMABA los tamaños de las secciones que van a cero, y el
+  enlazador las alinea. En el motor de la GUI del 12-nov, `.sbss` acaba en 0x2000014c y `.bss`, alineada a 16, empieza
+  en 0x20000150: ocupa 392.948 B y decía 392.944. La placa puso la RAM del pack siguiente, el driver de la pantalla de
+  la C5, en esos 4 B, donde LVGL guarda el tamaño del bloque centinela de su montón (TLSF); el driver escribió allí su
+  variable al arrancar, y la primera reserva de LVGL encontró un bloque libre con los enlaces a cero: el `assert` de
+  `lv_tlsf.c:589` y un `Store access fault` en 0xC (visto con los pánicos por el USB, y el log). Antes del 12-nov no
+  había hueco (las variables nuevas de la entrada movieron la alineación); y en la P4 la GUI es el último pack grabado,
+  sin nada encima.
+- **Los motores afectados**, medidos en sus `.elf`: los cuatro de LVGL (las tres familias, 4 B; el de `GuiMini`, 12 B).
+  El de SQLite y los drivers, no.
+- **Hecho:** lo que va a cero, POR DIRECCIÓN, desde el final de los datos hasta el final de la sección de RAM más alta
+  (`NpackReloc.bytesACero`): la misma lección que con los datos en V7 (`concatenar`: «el enlazador ALINEA»). Los cuatro
+  `.npk`, reempaquetados desde sus `.elf`, sin recompilar (cambia un byte de la cabecera en cada uno: +4 y +12), y
+  `Gui.pack` y `GuiMini.pack`, rehechos. Lo prueba `NpackRamTest`: cinco casos con las secciones de los motores de
+  verdad; con la suma de antes, fallan los dos que tienen hueco.
+- **En la C5:** la GUI y el driver, borrados y grabados otra vez; la RAM del driver empieza ahora en 0x42210F00, por
+  encima del final de la GUI (0x42210EF4). `GuiClickDemo`, bien, y la pantalla se ve (Eduardo: *«Se ve bien»*).
+- **Lo que queda:** las demás placas con GUI reciben los packs arreglados en el lote final. La C6 tiene el mismo solape
+  con `GuiMini` (12 B) si su driver está grabado encima: mirarla entonces.
+
 #### ✅ `#816` — la flash, con `/data` para los datos de los programas; y la del PC y la del micro simulado, con sus carpetas, como la de una placa (abierta y **CERRADA el 13-nov**, el commit de `#816`; salió en `#808`; Eduardo: *«si»*)
 
 - **Lo que pasaba:** la placa crea `/sys`, `/lib` y `/app` al montar y al formatear su FS (`fs_lfs_*.c`); la flash del
