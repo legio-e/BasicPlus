@@ -2405,7 +2405,16 @@ public class VirtualMachine {
      *  desplazamiento de una vtable de Core, la vuelta de un marco) lo retiene de más, y ahí sería un «sigue vivo» falso.
      *  Como gc_marca_uno. */
     private void scanRegion(int start, int endExclusive, Set<Integer> valid) {
-        boolean soloHandles = moduleManager != null && moduleManager.overlayCerrado();
+        scanRegion(start, endExclusive, valid, false);
+    }
+
+    /** V8 #799 (13-nov; Eduardo: «OK») — {@code pila}: es la pila de un hilo BP, y ahí una palabra sin TAG nunca es una
+     *  referencia a un objeto del heap (las referencias van como handles; una dirección cruda sólo vive en las pilas de C
+     *  de las natives, y miVM no tiene). Se ignoran: un entero que caía justo en un objeto lo retenía (con Core en un
+     *  pack, el heap empieza donde viven los enteros pequeños; medido en el micro simulado, un File en la 2944 y un
+     *  entero 2944 en la pila). La VM-C, lo mismo (gc_mark_phase, paso 1). Al descargar un overlay, en todas (#786). */
+    private void scanRegion(int start, int endExclusive, Set<Integer> valid, boolean pila) {
+        boolean soloHandles = pila || (moduleManager != null && moduleManager.overlayCerrado());
         for (int p = start; p + 4 <= endExclusive; p += 4) {
             int candidate = readInt32(p);
             if (soloHandles && (candidate & HANDLE_TAG) == 0) continue;
@@ -2452,7 +2461,7 @@ public class VirtualMachine {
                 else System.err.println("[gc] !! la pila del hilo t" + t.id + " (" + t.stackBase
                         + ") no es un bloque vivo del heap (#740)");   // no pasa; si pasa, que se oiga (gc_marca_pila)
             }
-            scanRegion(t.stackBase, t.sp, valid);
+            scanRegion(t.stackBase, t.sp, valid, /*pila=*/true);   // V8 #799: en la pila, sólo los handles
             // Ancla de heapAlloc: el objeto recién alocado pero todavía no
             // publicado al stack queda referenciado por t.allocAnchor.
             // Lo tratamos como un root extra para evitar que se libere en
@@ -3982,6 +3991,10 @@ public class VirtualMachine {
                         throwBpRuntimeError(tc, "desbordamiento de pila (el hilo tiene "
                                 + (tc.stackTop - tc.stackBase) + " B)");
                     }
+                    // V8 #799 (13-nov; Eduardo: «OK») — las locales, a cero: hasta escribirlas, un hueco guardaba lo que
+                    // dejó la llamada anterior, y una referencia de verdad ahí la tomaba el GC por viva (un File muerto no
+                    // se destruía en ese gc()). Ahora una local empieza a cero (null). La VM-C, lo mismo (OP_ENTER).
+                    java.util.Arrays.fill(mem, sp, sp + localsBytes, (byte) 0);
                     sp += localsBytes;
                     break;
                 }

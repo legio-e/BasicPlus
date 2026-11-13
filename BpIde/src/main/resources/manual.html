@@ -863,7 +863,9 @@ gpio.pin[<span class="num">3</span>] := <span class="kw">true</span>        <spa
   compilador comprueba que, por <em>todos</em> los caminos que llegan a una lectura —las ramas de un
   <code>if</code>, los <code>case</code> de un <code>switch</code>, un <code>while</code> que puede no
   ejecutarse, un <code>catch</code>…—, la variable ya tiene valor. Declararla sin valor y asignarla después
-  está bien (<code>#540</code>, V7).
+  está bien (<code>#540</code>, V7). (Desde <code>#799</code>, V8, las dos VMs ponen a cero las locales al entrar en
+  una función, para que el recolector no tome por viva una referencia vieja que quedara en la pila; pero el lenguaje
+  no lo promete: leer una local sin valor sigue siendo un error de compilación.)
 </p>
 <pre><code><span class="kw">var</span> total: <span class="type">integer</span>          <span class="comment">// sin valor todavía</span>
 <span class="kw">if</span> n &gt; <span class="num">0</span> <span class="kw">then</span>

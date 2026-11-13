@@ -1418,6 +1418,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * La misma cuenta que miVM: la excepción sale en la misma instrucción en las dos. */
             if (sp + bytes + BPVM_PILA_ZONA_ROJA > tc->stack_top)
                 BPVM_RT_THROW("desbordamiento de pila (el hilo tiene %u B)", (unsigned) (tc->stack_top - tc->stack_base));
+            /* V8 #799 (13-nov; Eduardo: «OK») — LAS LOCALES, A CERO. Las reservaba con lo que hubiera: hasta escribirlas,
+             * un hueco guardaba lo que dejó la llamada anterior, y si era una referencia de verdad (con su marca y su
+             * generación), el GC la tomaba por viva y el objeto no se destruía en ese gc(). Medido: un File muerto en
+             * sinCerrar() se retenía si la función que llamaba a gc() tenía un parámetro entero (su hueco de trabajo
+             * caía sobre la vieja `f`), y no sin él. Ahora una local empieza a cero (null). miVM, lo mismo (ENTER). */
+            memset(mem + sp, 0, bytes);   /* medido: fib(27), de 31 a 33,6 ms (un bucle de palabras, lo mismo) */
             sp += bytes;
             if (sp > tc->pila_max) tc->pila_max = sp;   /* la marca: cuánta pila llegó a usar (sin los operandos) */
             break;

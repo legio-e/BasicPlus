@@ -1449,6 +1449,9 @@ void bpvm_overlay_sale(bpvm_t* vm, const bpvm_thread_t* tc);
 extern int bpvm_sabotaje_overlay;
 /* SÓLO PRUEBAS (test_heapdescarrilado): el mapa del GC, a la medida de lo usado, como antes de #787. */
 extern int bpvm_sabotaje_mapa;
+/* SÓLO PRUEBAS (raices_smoke, en el micro simulado: --sabotaje-raices): en la pila de un hilo BP, un entero que cae justo
+ * en un objeto vuelve a retenerlo, como antes de #799 (heap.c, gc_mark_phase, paso 1). */
+extern int bpvm_sabotaje_raices;
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);

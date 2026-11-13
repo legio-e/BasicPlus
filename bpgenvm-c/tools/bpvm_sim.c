@@ -48,6 +48,8 @@
  *   --ensayo-io=MS y --sabotaje-aviso: SÓLO PRUEBAS (run_tarea_smoke, V8 #812): `io` tarda MS en
  *   ponerse a esperar (un programa vacío acaba y avisa antes), y el aviso sin su marca, como antes
  *   de #812: se pierde, y `io` espera su plazo entero (la prueba tiene que cazarlo).
+ *   --sabotaje-raices: SÓLO PRUEBAS (raices_smoke, V8 #799): en la pila de un hilo BP, un entero que
+ *   cae justo en un objeto vuelve a retenerlo, como antes de #799 (la prueba tiene que cazarlo).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -1054,6 +1056,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(a, "--sabotaje-despertar")) bpvm_la_cola.sabotaje_despertar = 1;   /* V7/H12, 2a.2: SÓLO PRUEBAS */
         else if (!strncmp(a, "--ensayo-io=", 12)) ensayo_io_ms = atoi(a + 12);   /* V8 #812: SÓLO PRUEBAS */
         else if (!strcmp(a, "--sabotaje-aviso"))  bpvm_oq_sabotaje_aviso = 1;    /* V8 #812: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--sabotaje-raices")) bpvm_sabotaje_raices = 1;      /* V8 #799: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */

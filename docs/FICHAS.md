@@ -7765,12 +7765,35 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   más en el mismo heap fijo, fallaba mucho más, porque lo vivo ya no cabía. La VM no cambia: el gancho y el sabotaje son
   sólo de prueba.
 
-#### 🔵 `#799` — `SleepCede` falla con `Core` en un pack: el `File` que murió sin cerrar no se recoge en el primer `gc()` (abierta el 6-nov; se vio en la tanda de H3)
+#### ✅ `#799` — `SleepCede` falla con `Core` en un pack: el `File` que murió sin cerrar no se recoge en el primer `gc()` (abierta el 6-nov; se vio en la tanda de H3 · **CERRADA el 13-nov**, el commit de `#799`; Eduardo: *«OK»* a los dos arreglos)
 
 - **Lo que pasa:** en la P4 y en la S3, siempre, `tras sleep(0): File('sleepcede_test.bin', "w"): ya está abierto`, y luego `removeFile`, lo mismo. El 3-nov salía IDÉNTICA en las nueve placas.
 - **Lo que no es:** ni la WiFi ni el cable: falla igual con `wifi=0` y con `vm.runs=1`, y **se reproduce sin placa**, con `bpvm-sim --pack=packs/Stdlib.pack`. Sin el pack (en el sim y en el PC), bien.
 - **Lo que parece, sin confirmar:** una raíz falsa del GC conservador. Con `Core` en un pack, el heap empieza abajo, y un entero sin `TAG` puede caer justo en un objeto ([[heap-abajo-con-core-en-pack]], la misma familia que `#786`): el objeto se retiene una colecta de más. Lo sostiene que el programa con un `byte[]` delante, de 1, 17, 65 o 201 bytes, que mueve el heap, pasa las cuatro veces, y `Sc2`, con el `try` en otra función, también. Falta mirar quién lo retiene (un `fopen` temporal en `gc_marca_uno`, en el sim).
 - **Por qué importa:** el programa está mal escrito sólo si `gc()` no promete nada: `#668` dice que lo que muere se destruye, y aquí un entero cualquiera lo retrasa. Lo que `#786` hizo al descargar un overlay (fiarse sólo de los handles) es la pista. **Sin hacer: por decidir (Eduardo).**
+- **13-nov: dos causas, las dos confirmadas.** `SleepCede` ya no fallaba en el micro simulado (el código de después del
+  6-nov mueve las direcciones), así que se provocó a propósito: un `File` muere en `sinCerrar()`, y la función que llama
+  a `gc()` tiene en la pila un entero `x`, el argumento de ejecución (seis cifras: nada se mueve de un RUN a otro).
+  1. **Un hueco de la pila sin escribir:** `ENTER` reservaba las locales sin ponerlas a cero, y hasta escribirlas
+     guardaban lo que dejó la llamada anterior. Si ahí quedaba una referencia de verdad (con su marca y su generación),
+     el GC no la podía distinguir de una viva. Acotado en las dos VMs, en el PC: si la función que llama a `gc()` tiene
+     un parámetro entero, su hueco de trabajo (`[BP+0]`, donde tira lo que devuelve `gc`) cae sobre la mitad baja de la
+     vieja `f`, y el `File` no se destruye; sin el parámetro (4 bytes antes), sí. Con `ENTER` a cero (probado de
+     manual), pasa.
+  2. **Un entero que coincide con la dirección:** con el hueco a cero, el barrido de `x` en el micro simulado con
+     `Core` en el pack dio `x=2944`: el `File` vivía en la 2944 (el heap empieza en unos 3 KB) y un entero 2944 en la
+     pila lo retenía. Es la sospecha del 6-nov.
+- **Lo hecho (Eduardo: *«OK»*), en las dos VMs:** (1) `ENTER` pone a cero las locales que reserva (`OP_ENTER` en
+  `interp.c`; el `0x0F` de miVM): una local empieza a cero (`null`). El lenguaje no lo promete: leer una local sin
+  valor sigue siendo un error de compilación (`#540`); el manual (§5.1) lo dice. Medido con `fib(27)`, el peor caso
+  (una función que sólo llama): la VM-C, de 31 a 33,6 ms (un 8 %; un bucle de palabras en vez de `memset`, lo mismo);
+  miVM, de 907 a 922 (un 1,7 %). (2) En la pila de los hilos BP, sólo cuentan las palabras con `TAG`, como `#786` al
+  descargar, siempre (`gc_mark_phase`, paso 1; `scanRegion` de las pilas en miVM); las pilas de C de las natives y los
+  bloques de datos, como antes.
+- **Lo prueban:** `GcHuecoPila`, nuevo en el corpus (las dos estructuras del hueco: un parámetro entero y una local sin
+  escribir; con la VM-C sin el `memset`, `FALLO`); y `raices_smoke`, nuevo en el micro simulado de la red: con
+  `--sabotaje-raices` (el recorrido de antes) barre `x` hasta dar con el que retiene el `File` (2944), y sin sabotaje
+  ese mismo `x` ya no lo retiene. Las seis variantes del acotado (`SleepCede` y cinco más), bien en las dos VMs.
 
 #### ✅ `#798` — con un motor que no carga, cada `INFO` repite sus seis líneas en el log (abierta el 6-nov, en H3 · **CERRADA el 13-nov**, el commit de `#798`; Eduardo: *«OK»*)
 

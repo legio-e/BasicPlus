@@ -143,6 +143,7 @@ static size_t mapa_bytes(uint32_t span) {
 }
 
 int bpvm_sabotaje_mapa = 0;   /* SÓLO PRUEBAS (test_heapdescarrilado): el mapa, a la medida de lo usado, como antes de #787 */
+int bpvm_sabotaje_raices = 0; /* SÓLO PRUEBAS (raices_smoke): en la pila, un entero vuelve a retener, como antes de #799 */
 
 static void build_gc_valid_map(bpvm_t* vm) {
     /* V8 #787 (4-nov) — EL MAPA SE PIDE UNA VEZ, PARA TODO EL HEAP, en la primera colecta. Desde el 7-jul se medía por el
@@ -464,6 +465,13 @@ static void gc_mark_phase(bpvm_t* vm) {
         for (uint32_t addr = lo; addr + 4 <= hi; addr += 4) {
             uint32_t v = bpvm_read_u32_be(vm->memory + addr);
             palabras++;
+            /* V8 #799 (13-nov; Eduardo: «OK») — EN LA PILA DE UN HILO BP, SÓLO LOS HANDLES. Una palabra sin TAG nunca es
+             * ahí una referencia a un objeto del heap: las referencias van como handles, y una dirección cruda sólo vive
+             * en las pilas de C de las natives (los pasos 2d-2f, que siguen conservadores). Un entero que caía justo en
+             * un objeto lo retenía: con Core en un pack el heap empieza donde viven los enteros pequeños (medido en el
+             * micro simulado: un File en la 2944, y un entero 2944 en la pila). Lo de #786 al descargar, siempre.
+             * miVM, lo mismo (scanRegion de las pilas). */
+            if ((v & BPVM_HANDLE_TAG) == 0u && !bpvm_sabotaje_raices) continue;
             {   /* ¿esta palabra apunta a un bloque real del heap? */
                 bpref_t rr; rr.v = v;
                 uint32_t ur = bpref_deref(vm, rr);
