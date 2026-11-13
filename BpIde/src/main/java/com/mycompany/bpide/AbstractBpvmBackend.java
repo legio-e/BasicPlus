@@ -205,8 +205,7 @@ public abstract class AbstractBpvmBackend implements Backend {
                 // V8 #582 — dónde: la placa da posiciones, y el .dbg las hace líneas.
                 java.util.List<String> donde = TrazaError.traduce(e.stackTrace);
                 if (lineSink != null)
-                    for (int i = 0; i < donde.size(); i++)
-                        lineSink.accept((i == 0 ? "  en " : "  llamado desde ") + donde.get(i));
+                    for (String l : TrazaError.lineas(donde)) lineSink.accept(l);   // V8 #788: el mismo formato que la VM local
                 // BpvmClient.handleMessage ya consolidó reason desde
                 // {errorMessage → reason → status}. "(OK)" en éxito,
                 // "(detalle)" en fallo, "" si peer no envió ninguno.

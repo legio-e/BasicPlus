@@ -7896,7 +7896,7 @@ recetas (mirado en el ensamblador). Con `-fwrapv`, la comparación vuelve.
 - **Sin decidir, por si interesa:** que JC calcule él las cuentas constantes, como Java y C#. Hoy `const int X = 1 + 2;` es un error,
   bien dicho.
 
-#### 🔵 `#788` — un error en la consola del IDE: dentro de la stdlib y con la VM local sale la posición, no la línea (abierta el 4-nov, al ver `#582` con Eduardo en el IDE; SUELTA · Eduardo: *«Dejalo pendiente, ya lo miraremos mas adelante»*)
+#### ✅ `#788` — un error en la consola del IDE: dentro de la stdlib y con la VM local sale la posición, no la línea (abierta el 4-nov, al ver `#582` con Eduardo en el IDE; SUELTA · Eduardo: *«Dejalo pendiente, ya lo miraremos mas adelante»* · **CERRADA el 13-nov**, el commit de `#788`; Eduardo: *«1) OK»*, y lo de la stdlib, no hace falta)
 
 Visto en la ventana, con la imagen de `35297826` en la Metro. Con el error en el programa y corriendo en la placa, sale su línea
 (`IdeFallaStd.bp:8`). En dos casos sale la posición: el dato no se pierde, pero no le dice nada a quien programa.
@@ -7921,6 +7921,23 @@ Visto en la ventana, con la imagen de `35297826` en la Metro. Con el error en el
 
 **Para repetirlo:** un `Map.put(null, null)` y una división por cero entre dos módulos, con `Run on Device` y con `Run`. Los
 programas de hoy, en `C:\tmp\ide694`, fuera del repo. La prueba nueva tiene que ir por el camino real, sin darle las carpetas.
+
+- **Lo decidido (13-nov):** la 1, sí (Eduardo: *«1) OK»*). La 2 y la 3 (las líneas de dentro de la stdlib), no hace
+  falta: *«en Java ya pasa que un error de programación muchas veces salta en un error dentro de una librería estandard.
+  En realidad si tienes la traza, contando que las librerías estandar normalmente no tienen errores, normalmente con
+  conocer en que línea de nuestro código se produjo el error, es mas sencillo encontrarlo, ya que la mayoría de ves es
+  por un índice fuera de rango, un null, etc.»* Los marcos de la stdlib siguen con su posición
+  (`Collections+1815`); los del programa, con su línea, porque su `.dbg` sí está.
+- **Lo hecho (13-nov), la 1:** con la VM local, Run y Depurar dicen dónde falló, con sus líneas, como con la placa:
+  `TrazaDeLaVmLocal` pasa el `stackTrace` del EXITED por `TrazaError` a la consola, **una vez**: con un error, la
+  VM-Java manda dos EXITED, con la misma traza (medido). Las líneas «en…» y «llamado desde…», en un sitio
+  (`TrazaError.lineas`), el mismo para la placa (`AbstractBpvmBackend.run`) y para la VM local. La línea en bruto de la
+  VM («[vm] === traza: … ===») sigue saliendo, como antes.
+- **Lo prueba:** `TrazaVmLocalSmoke`, por el camino real (compila como el IDE, con `TrazaError.conoce`; corre en la
+  VM-Java como la arranca el IDE): una división por cero en una librería, llamada desde el programa: «en
+  IdeFallaLib.bp:7», «llamado desde IdeFalla.bp:7» y «llamado desde IdeFalla.bp:11», una vez, con los dos EXITED
+  recibidos. `BpvmBackendSmoke`, `WorkdirSmoke` y `CarpetaDelProgramaSmoke`, igual que antes. La ventana, por ver con
+  Eduardo.
 
 #### ✅ `#787` — la Metro no llena sus 6 MB de heap: hacia los 4,7 MB el GC se queda sin memoria para su mapa y el programa muere con «heap descarrilado» (abierta el 4-nov, en las pruebas de H9 en placa; preexistente: el mapa crece así desde el 7-jul; SUELTA · **CERRADA el 4-nov**, `35297826`)
 

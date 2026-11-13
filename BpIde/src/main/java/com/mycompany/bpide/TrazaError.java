@@ -64,6 +64,14 @@ final class TrazaError {
         return salida;
     }
 
+    /** V8 #788 — las líneas de la consola: «  en X» el primero y «  llamado desde Y» los demás. Las mismas en el
+     *  camino de la placa (AbstractBpvmBackend.run) y en el de la VM local (TrazaDeLaVmLocal). */
+    static List<String> lineas(List<String> donde) {
+        List<String> out = new ArrayList<>(donde.size());
+        for (int i = 0; i < donde.size(); i++) out.add((i == 0 ? "  en " : "  llamado desde ") + donde.get(i));
+        return out;
+    }
+
     private static DbgFile busca(String mod, List<Path> donde) {
         for (Path c : donde) {
             Path p = c.resolve(mod + ".dbg");

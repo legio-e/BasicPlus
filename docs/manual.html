@@ -2505,9 +2505,12 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
       (<code>"División por cero"</code>), sin la clase ni el stack trace. Las dos dan además
       <strong>dónde</strong>, en cualquiera de los casos: la cadena de llamadas, hasta 8, en posiciones
       (<code>=== traza: Prueba+50 Prueba+72 ===</code> por stderr en el PC; en el <code>EXITED</code>
-      con una placa), y el IDE la traduce con el <code>.dbg</code>: <code>en Prueba.bp:5</code>,
-      <code>llamado desde Prueba.bp:9</code>. Si el error nace dentro de una función
-      <code>native</code>, la línea es la de quien la llamó.</li>
+      con una placa), y el IDE la traduce con el <code>.dbg</code>, con la placa y con la VM
+      local: <code>en Prueba.bp:5</code>, <code>llamado desde Prueba.bp:9</code>. Los marcos
+      de dentro de la biblioteca estándar se quedan en posiciones
+      (<code>Collections+1815</code>): la línea que sirve es la de tu código, que sí sale. Si
+      el error nace dentro de una función <code>native</code>, la línea es la de quien la
+      llamó.</li>
 </ul>
 
 <!-- =========================================================== -->

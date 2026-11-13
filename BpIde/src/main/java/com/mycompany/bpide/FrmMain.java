@@ -1835,10 +1835,16 @@ public class FrmMain extends javax.swing.JFrame
             } else if (e instanceof edu.bpgenvm.vm.debug.ResumedEvent) {
                 SwingUtilities.invokeLater(this::onDebugResumed);
             } else if (e instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
+                TrazaDeLaVmLocal t = trazaDepurando;   // V8 #788: depurando con la VM local, dónde falló
+                if (t != null) t.alAcabar((edu.bpgenvm.vm.debug.ExitedEvent) e);
                 SwingUtilities.invokeLater(this::onDebugResumed);
             }
         });
     }
+
+    /** V8 #788 — la traza de la sesión de depuración con la VM local (runOnVmRemote la pone al hacer attach y la quita
+     *  al soltarla); null, sin sesión. */
+    private volatile TrazaDeLaVmLocal trazaDepurando;
 
     /** H6.b.3.b — `.dbg` del módulo en depuración cuando la sesión es contra una
      *  VM DEVICE-role (VM-C host / Pico): el server no manda símbolos, así que el
@@ -3126,6 +3132,8 @@ public class FrmMain extends javax.swing.JFrame
                     // No ponemos listener aquí; debug.attach pone el suyo.
                 } else {
                     // Run: auto-continue al primer paused.
+                    // V8 #788: y dónde falló, con sus líneas, como con la placa (una vez: la VM-Java manda dos EXITED).
+                    final TrazaDeLaVmLocal traza = new TrazaDeLaVmLocal(l -> publish.accept(l + "\n"));
                     client.setEventListener(ev -> {
                         if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                             client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.CONTINUE);
@@ -3133,6 +3141,8 @@ public class FrmMain extends javax.swing.JFrame
                             edu.bpgenvm.vm.debug.ExceptionEvent e =
                                     (edu.bpgenvm.vm.debug.ExceptionEvent) ev;
                             publish.accept("[exception tid=" + e.tid + "] " + e.message + "\n");
+                        } else if (ev instanceof edu.bpgenvm.vm.debug.ExitedEvent) {
+                            traza.alAcabar((edu.bpgenvm.vm.debug.ExitedEvent) ev);
                         }
                     });
                 }
@@ -3179,6 +3189,8 @@ public class FrmMain extends javax.swing.JFrame
                             ? mainModName.substring(0, mainModName.length() - 4) : mainModName;
                     this.deviceDbg = edu.bpgenvm.vm.debug.DbgFile.load(
                             outDir.resolve(base + ".dbg").toString());
+                    // V8 #788: al depurar, lo mismo que con Run: dónde falló, con sus líneas (el oyente de la sesión)
+                    this.trazaDepurando = new TrazaDeLaVmLocal(l -> publish.accept(l + "\n"));
                     debug.attach(client);
                 }
                 try {
@@ -3187,7 +3199,7 @@ public class FrmMain extends javax.swing.JFrame
                     client.runModuleConRespuesta(mainModName, null, 10_000L);
                     client.waitForExit();
                 } finally {
-                    if (pauseInitially) { debug.detach(); this.deviceDbg = null; }
+                    if (pauseInitially) { debug.detach(); this.deviceDbg = null; this.trazaDepurando = null; }
                 }
             } catch (Throwable t) {
                 publish.accept("[VM error] " + t.getMessage() + "\n");
