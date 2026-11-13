@@ -995,6 +995,45 @@ Con esto, **el teclado y el ratón Bluetooth funcionan del todo en la P4**: empa
 mandan en el teclado y el ratón del SO, la GUI, el arranque y el apagado. Lo que queda del paso 5: la C5 (con su memoria:
 recortar los búferes de la WiFi, *«c»*) y la S3.
 
+### El paso 5 en la C5 (13-nov): la RAM interna, y dos fallos que no eran del Bluetooth
+
+Eduardo, con las placas delante, *«OK»* al plan: la imagen de ese día tal cual, como punto de partida; después la *«c»*;
+y si no bastaba, sacar el código de la WiFi de la RAM interna. En cada paso, la misma prueba con la WiFi conectada, y lo
+que cuesta: subir y bajar 1 MB por la WiFi.
+
+- **El punto de partida:** con la imagen del día y la WiFi conectada, ni el primer aparato emparejaba: el cifrado fallaba
+  con el 6 de NimBLE, sin memoria (un búfer de mensajes del protocolo de emparejar). Con la WiFi apagada emparejaban los
+  dos, y quedaban 45,7 KB libres. La imagen del 11-nov sí emparejaba uno a uno: la de hoy gasta algo más.
+- **La *«c»*, 6 búferes de recepción y 16 de envío** (eran 10 y 32): los dos emparejan y vuelven solos por su MAC con la
+  WiFi conectada (lo que fallaba el 11-nov), pero al usarlos el driver de la WiFi no tenía sitio para las balizas del
+  router y las tiraba (`wifi:m f null` en la consola, una por baliza), y la placa se reinició una vez con un pánico.
+- **Y el código de la WiFi fuera de la IRAM** (`ESP_WIFI_IRAM_OPT`, `EXTRA_IRAM_OPT` y `RX_IRAM_OPT`; la del sueño, que
+  ahorra energía, se queda): 13,4 KB fijos menos, medidos compilando. Es lo que hace el IDF de serie en el ESP32 con
+  Bluetooth y PSRAM. Con las dos cosas, ni avisos ni pánico: la mínima de la RAM interna tras arrancar, de 28,6 a 49 KB,
+  y con los dos aparatos en uso, 31,4 KB libres al acabar.
+- **El coste:** ninguno que se vea. Subir 1 MB, 10,9–11,1 s con los recortes y 12,0–14,5 s sin ellos; bajarlo,
+  3,2–4,2 s y 3,5–4,7 s: medido el mismo rato, tres veces cada uno, lo que varía de una vez a otra es más que la
+  diferencia.
+- **Una trampa del IDF 6.1, al preparar las variantes:** la `sdkconfig` marca con `# default:` las opciones que llevan su
+  valor de serie, y con la marca no respeta un número cambiado a mano (salió el mínimo de su rango, 2 y 1, y la
+  comprobación del propio IDF paró la compilación). Sin la marca, sí. La `sdkconfig.defaults`, que es la que se
+  versiona, no tiene marcas.
+- **La pieza 2, sin GUI:** `hola123` entero. La tecla que despierta al teclado, y las que van mientras se prepara (0,8 s),
+  se pierden, como en la P4.
+- **La pieza 3, la GUI:** salieron dos fallos que no eran del Bluetooth. El motor de la GUI, pisado por el driver de la
+  pantalla (`#817`: la pantalla, con puntos y bandas, y una caída); y cada refresco pedía un búfer de 11,5 KB a la RAM
+  interna, que con todo encendido no había (`#818`: la pantalla no se refrescaba, aunque las teclas y los clics
+  llegaban). Arreglados los dos, en la C5: la flecha, los clics en A y en B, `hola` en el campo, el Enter y Fin (Eduardo:
+  *«Ahora si»*); y la pantalla, igual de rápida (`GuiFlushBench`, 71 ms por pantalla).
+- **La pieza 5:** con `bt=1`, el Bluetooth se enciende solo al arrancar y vuelven los dos. Después, `bt=1` fuera de la C5
+  (Eduardo: *«Quitalo para evitar que la P4 y la C5 entren en conflicto para emparejar el ratón y el teclado. Damos
+  preferencia a la P4»*).
+- **Lo que sigue igual:** el ratón tarda en volver (de 1,3 a 48 s ese día, y una vez ni en 150 s), y el teclado una vez
+  tardó 21 s.
+
+Lo siguiente (Eduardo: *«La S3 mañana»*): la S3; y volver a emparejar el teclado y el ratón con la P4, porque al
+emparejarlos con la C5 cambiaron de dirección (*«Mañana»*).
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

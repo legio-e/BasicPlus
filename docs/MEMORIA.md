@@ -230,6 +230,24 @@ WiFi conectada y la línea `mem:` del log (el final de cada RUN, con un programa
   segundo (con la WiFi apagada, 46 KB, sí). La tarea del Bluetooth de lo común, 6 KB más. **Decidido** (Eduardo): para
   la C5, recortar los búferes de la WiFi en la RAM interna (*«c»*); se hará después de dejar el Bluetooth funcionando en
   la P4, que no tiene este problema.
+- **Hecho el 13-nov** (`esp32c5/sdkconfig.defaults`; `V8_IDEAS` §E1, «El paso 5 en la C5»). Con la imagen de ese día y la
+  WiFi conectada, ni el primer aparato emparejaba (el cifrado, sin memoria). La *«c»* sola —6 búferes de recepción en vez
+  de 10, 6,4 KB menos con la WiFi encendida, y 16 tramas de envío en vez de 32— no bastó: emparejaban y volvían los dos,
+  pero al usarlos el driver de la WiFi tiraba las balizas por falta de memoria (`wifi:m f null`) y hubo un pánico. Con
+  ella, el código de la WiFi fuera de la IRAM (tres de sus optimizaciones de velocidad; la del sueño se queda):
+  **13,4 KB fijos más**, aunque la WiFi no se encienda (`_heap_start`, de `0x4083f660` a `0x4083c0e0`).
+
+  | la C5, con la WiFi conectada | la mínima tras arrancar (`INFO`) | libre al acabar, con los dos aparatos en uso |
+  |---|---|---|
+  | la imagen del 13-nov, sin recortes | 28,6 KB | — (no empareja) |
+  | con la *«c»* | 35,7 KB | 18,7 KB, y la WiFi sin sitio para las balizas |
+  | con la *«c»* y el código de la WiFi fuera de la IRAM | **49,3 KB** | **31,4 KB** (27 KB con la GUI) |
+
+  Subir y bajar 1 MB por la WiFi tarda lo mismo con los recortes que sin ellos (tres veces cada uno, el mismo rato).
+- **La pantalla SPI, sin RAM interna** (`#818`, el mismo día): cada refresco pedía un búfer de rebote interno de hasta
+  11,5 KB, y con el Bluetooth y la WiFi no lo había. Ahora el DMA lee de la PSRAM (en la S3, la C5 y la P4).
+- **Ojo con el «bloque mayor» de la línea `mem:`:** en la C5 es la RTC RAM (15.360 B, siempre el mismo número), que está
+  en el montón como interna pero no vale para DMA. Para saber si cabe un búfer de DMA, ese número no sirve.
 
 **La radio del Bluetooth en la P4** (el mismo `bt_esp32.c`, con el controlador en su C6, por `esp_hosted`; el paso 5,
 11-nov), medida en la placa con la WiFi conectada: la mínima desde el arranque (`rtosHeapMinFreeBytes`, del `INFO`) y la

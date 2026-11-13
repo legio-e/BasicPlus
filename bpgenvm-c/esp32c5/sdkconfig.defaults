@@ -137,3 +137,22 @@ CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=12
 CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=12
 CONFIG_BT_NIMBLE_TRANSPORT_ACL_FROM_LL_COUNT=12
 CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=16
+
+# V8/H2, paso 5 (13-nov): LA RAM INTERNA CON LA WIFI Y EL BLUETOOTH A LA VEZ (Eduardo: «c», recortar los búferes de la
+# WiFi). Con la WiFi conectada no llegaba: el teclado y el ratón ni emparejaban (el cifrado fallaba con el 6 de NimBLE,
+# sin memoria; con la WiFi apagada, sí). Con sólo los búferes recortados emparejaban y volvían los dos, pero al usarlos el
+# driver de la WiFi tiraba las balizas del router por falta de memoria («wifi:m f null», una por baliza) y la placa se
+# reinició una vez con un pánico. Con las dos cosas, ni lo uno ni lo otro:
+#  - 6 búferes de recepción en vez de 10 (6,4 KB menos mientras está encendida; el IDF exige que sean al menos la mitad
+#    de la ventana de AMPDU, que es 6), y como mucho 16 tramas en cola para enviar en vez de 32 (acota el pico);
+#  - el código de la WiFi fuera de la RAM interna (tres de sus optimizaciones de velocidad; la del sueño, que ahorra
+#    energía, se queda): 13,4 KB fijos menos, aunque no se encienda. Es lo que hace el IDF de serie en el ESP32 cuando
+#    lleva Bluetooth y PSRAM.
+# Medido en la placa: tras arrancar, la mínima de la RAM interna pasa de 28,6 a 49 KB; con la WiFi y los dos aparatos en
+# uso, al acabar quedan 31,4 KB libres (18,7 con sólo los búferes); y subir y bajar 1 MB por la WiFi tarda lo mismo que
+# sin recortar, dentro de lo que varía de una vez a otra. Como las demás: aquí Y en el sdkconfig.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_EXTRA_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
