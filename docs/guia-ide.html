@@ -903,7 +903,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   esa cantidad de opcodes de un hilo y entonces cede el turno — a los demás
   hilos del programa y al sistema del micro, que es lo que deja respirar a
   las comunicaciones en un chip de un solo núcleo. Con 1024 nadie debería
-  tener que tocarlo; sirve para medir, no para afinar.
+  tener que tocarlo; sirve para medir, no para afinar. Salvo un caso
+  (<code>#801</code>): un builtin largo cuenta como un opcode, así que un hilo
+  que pasa el rato en ellos —escribir y leer ficheros en la SD, por
+  ejemplo— hace esperar a los demás hasta gastar sus 1024, que pueden ser tres
+  ficheros. En la C5, una etiqueta de la GUI que otro hilo cambiaba iba cuatro
+  veces más despacio que en septiembre (41 cambios en vez de 176; 155&nbsp;ms el
+  peor hueco). Con <code>quantum=256</code> le toca antes (99 cambios y
+  87&nbsp;ms), a cambio de un 20&nbsp;% menos de ficheros. En una placa de dos
+  núcleos con dos runs (<code>vm.runs</code>, abajo), mientras uno está en el
+  fichero, el otro atiende a los demás hilos.
 </p>
 
 <p>

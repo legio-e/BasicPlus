@@ -7723,7 +7723,7 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Medido** (`V8_IDEAS` §E14): el código se separa limpio, por contratos; en medio quedan la stdlib, la red, el AOT, lo que usa el IDE y los documentos; y en V8, uno de cada tres commits de código toca Java y C a la vez.
 - **Sin hacer: por decidir (Eduardo)**, y nada en GitHub sin su palabra. La recomendación, en §E14: la organización al publicar V8, y la división no antes de empezar V9.
 
-#### 🔵 `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi)
+#### ✅ `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi · **CERRADA el 13-nov** sin cambiar el código, el commit de `#801`; Eduardo: *«Yo haría a)»*, documentarlo)
 
 - **Lo que pasa:** `C5SdGui`, con un hilo que escribe y relee ficheros en la SD y otro que cambia una etiqueta. El 24-sep, 176 cambios de la etiqueta, 63 ms de peor hueco y 30 ficheros; el 6-nov, 41, unos 155 ms y 124. Sale `RESULT: OK` y la pantalla se ve bien (Eduardo): no se rompe nada, pero la etiqueta va cuatro veces más despacio.
 - **No es la WiFi** (6-nov, por el cable y alternando; la tabla, en `V8_IDEAS` §E3): con ella encendida y apagada, 41 cambios en las seis pasadas, y el mismo peor hueco.
@@ -7731,6 +7731,13 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Tampoco es el bus que comparten la pantalla y la SD** (Eduardo: *«En la C5 la SD y la pantalla comparten el bus SPI (creo)»*: las dos van en el SPI 2). El mismo programa con los ficheros en la flash, que no pasa por ese bus: 45, 46 y 45 cambios, de 136 a 139 ficheros y un peor hueco de 204 a 234 ms, seguramente los borrados de la flash; y con `quantum=128`, 86 y 126 cambios, como con la SD. El árbitro del bus no avisó de ningún turno largo.
 - **Por qué con el turno corto no vuelve a 188:** los dos hilos se alternan uno a uno (99 cambios y 99 ficheros, 86 y 87, 125 y 126). La etiqueta espera a que acabe cada `writeFile` o `readFile`, que ocupa la tarea de la VM.
 - **Sin hacer: por decidir (Eduardo).** Quien lo necesite hoy tiene `quantum=256` en el Entorno, a cambio de un 20 % menos de ficheros. Lo de fondo sería que un builtin largo cuente para el turno, como en la VM-Java, que lo mide en tiempo: eso llegaría a esos 100 cambios. Para pasar de ahí, el fichero tendría que dejar de ocupar la tarea de la VM.
+- **13-nov, una premisa desfasada:** la VM-Java ya no mide el turno en tiempo. Desde `#531` (27-sep) lo cuenta en
+  opcodes, como la VM-C, para que el corte caiga en la misma instrucción en las dos (la paridad con hilos, `EvDos`):
+  medirlo en tiempo no es una opción. Se propuso que un builtin de E/S lenta acabara el turno (determinista).
+- **Decidido (Eduardo, 13-nov):** *«En una placa con 2 cores, si un core va mas lento y no cede el turno todavía queda
+  el otro, así que el problema queda mitigado. Yo haría a) o en todo caso medirlo»*. Queda así, documentado: la guía
+  del IDE (§9.3, `quantum`), con el caso medido y `quantum=256`, y el manual (§14.2). Donde se nota es en las placas de
+  un núcleo (la C3, la C5, la C6, las STM32). La medida con dos núcleos (`vm.runs=2`), si se quiere, sin hacer.
 
 #### ✅ `#800` — el caso 21 de `test-cola` falla de vez en cuando: `sin sitio: 1` con basura en el heap, con dos runs (abierta el 6-nov; se vio en la red de H3 · **CERRADA el 7-nov**, el commit de `#800`)
 

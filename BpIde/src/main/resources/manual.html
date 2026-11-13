@@ -2621,7 +2621,10 @@ pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
   instrucciones en la VM Java y en la VM-C (antes la Java usaba un temporizador
   de 10&nbsp;ms, y el orden de la salida cambiaba de una ejecución a otra). La
   VM-C cede además el turno al sistema, y así un <code>stop</code> del IDE llega
-  aunque el programa no duerma.
+  aunque el programa no duerma. Un builtin cuenta como un opcode, por largo que
+  sea: un thread que pasa el turno escribiendo ficheros en una SD hace esperar a
+  los demás hasta gastar el suyo; si se nota, <code>quantum=256</code> (la guía
+  del IDE, §9.3, tiene el caso medido).
 </p>
 <p>
   En paralelo a la preempción, el código BP puede ceder CPU
