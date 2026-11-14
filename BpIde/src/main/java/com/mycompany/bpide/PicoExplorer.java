@@ -537,6 +537,17 @@ public final class PicoExplorer extends JPanel {
             case "cd":
                 consoleCwd = arg.isEmpty() ? "/" : resolvePath(arg);
                 return;                                     // el prompt lo refresca FrmMain
+            case "kill": case "stop":
+                /* V8 #822 (14-nov) — el `stop` de la línea de comandos hace lo que el botón (FrmMain.onStopRun): para
+                 * lo que esté en marcha, también la VM local del Run de la barra. Antes iba sólo a la placa, y sin placa
+                 * conectada ni llegaba: «no conectado — pulsa Connect.», y el programa del PC seguía (Eduardo: «el stop
+                 * que no para y saca el mensaje es el de la línea de comandos»). Va antes de mirar la conexión. Sin el
+                 * IDE (el explorador suelto), la placa, abajo. */
+                if (stopDelIde != null) {
+                    SwingUtilities.invokeLater(stopDelIde);
+                    return;
+                }
+                break;
             default:
                 break;
         }
@@ -717,6 +728,10 @@ public final class PicoExplorer extends JPanel {
                             emitLine("       manda el valor por defecto que declare Main");
                             break;
                         }
+                        if (programaEnElPc.getAsBoolean()) {   // V8 #822: un programa a la vez
+                            emitLine("  ya hay un programa en marcha en el PC: páralo con stop antes de ejecutar otro");
+                            break;
+                        }
                         // V6/#412 — el argumento de ejecucion se pasa AQUI, en la linea de
                         // comandos. partirDos ya es consciente de las comillas (#437): el
                         // primer token es el fichero y el RESTO es el argumento, entre
@@ -734,6 +749,7 @@ public final class PicoExplorer extends JPanel {
                         // P-run-stop (#257) — el run en curso (otro hilo
                         // bpconsole o el pipeline Run on Device) desbloquea
                         // al llegar su EXITED con status KILLED.
+                        // (con el IDE, el `stop` ya lo ha llevado arriba: V8 #822)
                         killRunning();
                         break;
                     case "sd": {
@@ -964,6 +980,32 @@ public final class PicoExplorer extends JPanel {
      * local no tenía path, así los .mod de usuario quedan agrupados en
      * /app y se distinguen de la stdlib en /lib.
      */
+    /** V8 #822 (14-nov) — un uploadAndRun de este explorador en curso: la subida y el programa (lo pone y lo quita la
+     *  propia tarea). */
+    private volatile boolean ejecutandoEnLaPlaca = false;
+
+    /** V8 #822 — el Stop del IDE (FrmMain.onStopRun), para el `stop` de la línea de comandos: para lo que esté en
+     *  marcha, en el PC o en la placa. Sin él (el explorador suelto), la placa. */
+    private Runnable stopDelIde = null;
+    /** V8 #822 — ¿hay un programa del IDE en marcha en el PC (la VM local, Run Window, depurar)? Para el `run` de la
+     *  línea de comandos: un programa a la vez. */
+    private java.util.function.BooleanSupplier programaEnElPc = () -> false;
+
+    public void setStopDelIde(Runnable r) { this.stopDelIde = r; }
+
+    public void setProgramaEnElPc(java.util.function.BooleanSupplier s) {
+        this.programaEnElPc = (s != null) ? s : () -> false;
+    }
+
+    /** V8 #822 — ¿hay un programa en marcha en la placa que lanzó el IDE? La subida y el RUN de uploadAndRun, o un RUN
+     *  del backend en vuelo. Lo pregunta FrmMain antes de ejecutar otro (Eduardo: «mientras se ejecuta un programa no
+     *  debería dejar ejecutar otro»). */
+    public boolean hayUnProgramaEnLaPlaca() {
+        Backend b = this.backend;
+        return ejecutandoEnLaPlaca
+                || (b instanceof AbstractBpvmBackend && ((AbstractBpvmBackend) b).isRunActive());
+    }
+
     /** P-run-stop (#257) — aborta el programa que corre en la placa: manda
      *  KILL por la conexión activa. El uploadAndRun en curso desbloquea al
      *  llegar el EXITED (status KILLED). Sin conexión, solo avisa. */
@@ -1157,7 +1199,7 @@ public final class PicoExplorer extends JPanel {
             outputSink.accept("[Explorer] subiendo " + remoteName + " (" + modFile.length() + " bytes)"
                     + (deps.isEmpty() ? "" : " + " + deps.size() + " dep(s)"));
         }
-        runAsync(() -> {
+        final IOAction<String> tarea = () -> {
             // 0) Sondea LS para saber qué hay ya en el FS remoto (tamaño + CRC real).
             java.util.Map<String, Long> remote = new java.util.HashMap<>();
             java.util.Map<String, Long> remoteCrc = new java.util.HashMap<>();
@@ -1421,6 +1463,12 @@ public final class PicoExplorer extends JPanel {
                     SwingUtilities.invokeLater(() -> outputSink.accept(line));
                 }
             });
+        };
+        /* V8 #822 (14-nov) — mientras se sube y se ejecuta, el IDE no lanza otro programa (hayUnProgramaEnLaPlaca); la
+         * marca se suelta al acabar la tarea, vaya bien o mal. */
+        ejecutandoEnLaPlaca = true;
+        runAsync(() -> {
+            try { return tarea.run(); } finally { ejecutandoEnLaPlaca = false; }
         }, statusStr -> {
             if ("(debug)".equals(statusStr)) {
                 // Sesión de debug: el device queda PAUSADO esperando comandos de

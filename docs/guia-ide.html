@@ -295,11 +295,20 @@
       resources del proyecto) y lo ejecuta allí; la salida vuelve en
       vivo a la Consola.</li>
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborta el programa en
-      marcha — local o en placa — sin reiniciar nada. En la placa es un
+      marcha — local, en la ventana de <em>Run Window</em> o en placa — sin
+      reiniciar nada. En la placa es un
       KILL cooperativo: la VM muere limpia y el micro sigue
       respondiendo, también si el programa está dentro de una función
-      <code>native</code> larga. El programa termina con código 130.</li>
+      <code>native</code> larga. El programa termina con código 130.
+      El <code>kill</code> (o <code>stop</code>) de la línea de comandos del
+      explorador hace lo mismo.</li>
 </ul>
+<p>
+  <strong>Un programa a la vez.</strong> Mientras hay uno en marcha, <em>Run</em>,
+  <em>Run Window</em>, <em>Debug</em>, <em>Run on Device</em> y el <code>run</code> de la
+  línea de comandos no lanzan otro: lo dicen, y hay que pararlo antes con Stop. Compilar
+  sí se puede. Y al cerrar el IDE, lo que tenga en marcha en el PC se para.
+</p>
 <p>
   <strong>Dónde corre en el PC.</strong> La VM Java tiene su flash, como una
   placa, con sus <code>/sys</code>, <code>/lib</code>, <code>/app</code> y
@@ -671,8 +680,8 @@ hola, Eduardo
   </p>
 </div>
 <p>
-  Dos de ellos merecen subrayado: <code>kill</code> aborta el programa
-  en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
+  Dos de ellos merecen subrayado: <code>kill</code> (o <code>stop</code>) aborta el
+  programa en ejecución, en el PC o en la placa (equivale a Run → Stop), y <code>autorun</code> gestiona
   el arranque autónomo (§12). Con un programa en marcha la placa atiende el
   saludo de conexión, <code>kill</code> y <code>reset</code> y, desde V7, también
   <strong>las lecturas</strong>: el árbol del explorador se refresca, y

@@ -2324,7 +2324,7 @@ el segundo `RUN` contesta `BUSY` y el segundo `KILL`, `NO_SESSION`: en una repet
   a los 3,0 s en la Metro, la Nucleo, la S3 y la P4, y la línea siguiente entra entera. La del log sale en la Nucleo,
   la S3 y la P4, con `log=1`; la Metro no tiene esa clave en su ENV, y tras el arranque no apunta nada.
 
-#### 🔵 `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave · **hecha el 29-oct**, `d5d522e9`; **vista en la placa con Eduardo el 4-nov**; sin confirmar, el `Stop` de la VM local)
+#### ✅ `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave · **hecha el 29-oct**, `d5d522e9`; **vista en la placa con Eduardo el 4-nov**; **y el `Stop` de la VM local, visto el 14-nov: CERRADA**, con `#822`)
 
 El KILL y el RUN van «sin respuesta» (`sendOneShot`), y las respuestas con `id` que no esperaba nadie se descartan («Silencioso
 por diseño»). Así, un KILL perdido decía «KILL enviado», y un RUN con la ruta mal (`NOT_FOUND`) dejaba el `run()` esperando
@@ -2353,6 +2353,9 @@ placa ya manda el `RUN_REPLY` entonces—, sólo cuando algo va mal: *«OK, me p
   en marcha en la placa»; `Stop` con un bucle en marcha, «la placa para el programa» y `exit 130 (terminado por KILL)`; y un RUN
   de un fichero que el árbol enseñaba y ya no estaba, «la placa rechaza el RUN: VM error [NOT_FOUND]: fichero no existe», sin
   quedarse esperando. **Sin confirmar:** el `Stop` de la VM local, probado sólo sin la ventana (3/3).
+- **14-nov, CERRADA** (Eduardo, en la ventana: *«OK, ahora si»*): con el Run de la barra, el botón Stop dice «[ide] Stop: la
+  VM local para el programa» y el programa acaba. Al probarlo salió `#822`: el `stop` de la línea de comandos del
+  explorador no llegaba a la VM local, y dos Run seguidos dejaban una VM perdida.
 
 #### ✅ `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»* · **CERRADA el 4-nov**: lo de «referencia nula», `dffb1c1d`; lo de «sin destruir», `39cda457`, visto en la Metro y la P4)
 
@@ -7386,6 +7389,29 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### ✅ `#822` — el IDE perdía de vista una VM del PC: el `stop` de la línea de comandos no llegaba a la VM local, dos Run seguidos dejaban la primera dando vueltas sin que nada la parara, y ni el Stop llegaba a la VM-C de Run Window ni cerrar el IDE las paraba (abierta y **CERRADA el 14-nov**, el commit de `#822`; salió al cerrar `#694`; Eduardo: *«mientras se ejecuta un programa no debería dejar ejecutar otro»*)
+
+- **Lo que pasaba**, reproducido con la ventana del IDE de verdad (un arnés que «pulsa» Run y Stop por reflexión, como
+  en `#811`):
+  - **el `stop` (o `kill`) de la línea de comandos del explorador iba sólo a la placa**, y antes de mirar el comando se
+    miraba la conexión: con el programa en la VM local, «no conectado — pulsa Connect.», y seguía (Eduardo: *«el stop que
+    no para y saca el mensaje es el de la línea de comandos, el stop del botón funciona»*);
+  - **dos Run seguidos** arrancaban dos VMs locales, y el IDE sólo apuntaba la última: el primer Stop paraba la segunda,
+    la primera seguía, y el Stop siguiente se iba al explorador («no hay placa conectada»);
+  - **el Stop no sabía de la VM-C de Run Window**: con un programa sin pantalla no había ventana que cerrar;
+  - **al cerrar el IDE**, su VM local seguía viva (medido: una huérfana con el IDE de antes; con el nuevo, ninguna).
+- **Hecho** (en el IDE, `FrmMain` y `PicoExplorer`): **un programa a la vez**: con uno en marcha, Run, Run Window, Debug,
+  Run on Device, depurar en la placa y el `run` de la línea de comandos no lanzan otro y lo dicen («Ya hay un programa en
+  marcha. Páralo con Stop antes de ejecutar otro.»); compilar, sí. La marca se pone al pulsar, antes de compilar, y se
+  quita al acabar la ejecución (en la placa, desde que el explorador lleva la subida y el RUN). **El `stop` de la línea de
+  comandos hace lo que el botón**, antes de mirar la conexión. **El Stop para también la VM-C de Run Window.** **Al cerrar
+  el IDE se para lo que tenga en marcha en el PC** (al cerrar la ventana y al salir la JVM). Y el Stop con nada en marcha
+  y sin placa dice «no hay ejecución en curso», no «no hay placa conectada».
+- **Probado** con el arnés, con el IDE de antes y con el nuevo: dos Run (el segundo, el aviso; el Stop para el primero);
+  la secuencia de Eduardo, el micro simulado por el explorador y luego el Run de la barra (bien también antes); Run
+  Window y Stop; Run y cerrar la ventana; y el `stop` del terminal sin placa (antes, «no conectado» y seguía). Y en la
+  ventana, Eduardo: *«OK, ahora si»*. La guía del IDE (§5 y la línea de comandos); la inglesa, en el D1.
 
 #### 🔵 `#821` — la S3: mientras se conectan el teclado y el ratón, la mínima de la RAM interna baja a 7,9 KB (abierta el 14-nov, al cerrar H2; **por analizar**)
 

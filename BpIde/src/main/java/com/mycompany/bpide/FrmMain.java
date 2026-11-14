@@ -141,6 +141,13 @@ public class FrmMain extends javax.swing.JFrame
     public FrmMain() {
         initComponents();
         this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        /* V8 #822 (14-nov) — al cerrar el IDE, lo que tenga en marcha en el PC se para: la VM local (su cliente la mata al
+         * cerrarse) y la VM-C de Run Window. Antes seguían vivas, sin ventana y sin nadie que las parara. Al cerrar la
+         * ventana, y por si la JVM se va sin cerrarla, también al salir. */
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent e) { paraLoQueHayaEnElPc(); }
+        });
+        Runtime.getRuntime().addShutdownHook(new Thread(this::paraLoQueHayaEnElPc, "ide-para-lo-del-pc"));
         FrmMain.form=this;
         /* H10.4 — el compilador corre EN PROCESO dentro del IDE, así que no tiene
          * un BpVM.cfg propio del que sacar la biblioteca de packs: se la pasamos
@@ -787,6 +794,10 @@ public class FrmMain extends javax.swing.JFrame
         // FP4 — explorador del dispositivo Pico en el panel inferior izquierdo.
         // Envía el output del comando RUN remoto a la consola del IDE.
         picoExplorer = new PicoExplorer();
+        /* V8 #822 — el `stop` de la línea de comandos del explorador, como el botón Stop; y su `run`, con un programa en
+         * marcha en el PC, no lanza otro. */
+        picoExplorer.setStopDelIde(this::onStopRun);
+        picoExplorer.setProgramaEnElPc(() -> ejecutando.get() || debug.isAttached());
         picoExplorer.setOutputSink(line -> {
             if (consolaArea != null) {
                 consolaArea.append(line);
@@ -2044,6 +2055,7 @@ public class FrmMain extends javax.swing.JFrame
         if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
+        if (!empiezaUnaEjecucion()) return;   // V8 #822: un programa a la vez
 
         consolaArea.setText("");
         errors.clear();
@@ -2104,6 +2116,7 @@ public class FrmMain extends javax.swing.JFrame
                 debuggingActive = false;
                 onDebugResumed();
                 currentModuleManager = null;
+                acabaLaEjecucion();   // V8 #822
             }
         }.execute();
     }
@@ -2344,6 +2357,7 @@ public class FrmMain extends javax.swing.JFrame
         if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
+        if (!empiezaUnaEjecucion()) return;   // V8 #822: un programa a la vez
 
         consolaArea.setText("");
         errors.clear();
@@ -2460,6 +2474,10 @@ public class FrmMain extends javax.swing.JFrame
             protected void process(List<String> chunks) {
                 for (String s : chunks) { appendConsola(s); parseAndAddError(s); }
             }
+            @Override
+            protected void done() {
+                acabaLaEjecucion();   // V8 #822
+            }
         }.execute();
     }
 
@@ -2483,6 +2501,7 @@ public class FrmMain extends javax.swing.JFrame
         if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
+        if (execute && !empiezaUnaEjecucion()) return;   // V8 #822: un programa a la vez (compilar, sí)
 
         consolaArea.setText("");
         errors.clear();
@@ -2564,6 +2583,10 @@ public class FrmMain extends javax.swing.JFrame
                     parseAndAddError(s);
                 }
             }
+            @Override
+            protected void done() {
+                if (execute) acabaLaEjecucion();   // V8 #822
+            }
         }.execute();
     }
 
@@ -2590,6 +2613,7 @@ public class FrmMain extends javax.swing.JFrame
         }
         onSave();
         if (currentFile == null) return;
+        if (!empiezaUnaEjecucion()) return;   // V8 #822: un programa a la vez
 
         consolaArea.setText("");
         errors.clear();
@@ -2723,6 +2747,8 @@ public class FrmMain extends javax.swing.JFrame
                     }
                 } catch (Exception ex) {
                     appendConsola("[ide] error: " + ex.getMessage() + "\n");
+                } finally {
+                    acabaLaEjecucion();   // V8 #822: desde aquí lo lleva el explorador (hayUnProgramaEnLaPlaca)
                 }
             }
         }.execute();
@@ -2871,6 +2897,7 @@ public class FrmMain extends javax.swing.JFrame
         }
         onSave();
         if (currentFile == null) return;
+        if (!empiezaUnaEjecucion()) return;   // V8 #822: un programa a la vez
 
         consolaArea.setText("");
         errors.clear();
@@ -2955,6 +2982,8 @@ public class FrmMain extends javax.swing.JFrame
                     }, collectProjectResources(), deviceAppPrefix());   // H12 (#260) + F2 (H19)
                 } catch (Exception ex) {
                     appendConsola("[debug] error: " + ex.getMessage() + "\n");
+                } finally {
+                    acabaLaEjecucion();   // V8 #822: desde aquí, la sesión de depuración (debug.isAttached) y el explorador
                 }
             }
         }.execute();
@@ -3217,6 +3246,40 @@ public class FrmMain extends javax.swing.JFrame
      *  PicoExplorer.killRunning() (conexión serie del explorer). */
     private volatile BpvmClient activeRunClient;
 
+    /** V8 #822 (14-nov) — UN PROGRAMA A LA VEZ (Eduardo: «mientras se ejecuta un programa no debería dejar ejecutar
+     *  otro»). La marca se pone al pulsar Run, Run Window, Debug, Run on Device o depurar en la placa —antes de compilar,
+     *  para que tampoco pase un segundo clic durante la compilación— y se quita cuando acaba su ejecución (el done() de
+     *  su SwingWorker; en la placa, cuando el explorador ya lleva la subida y el RUN). Antes, un segundo Run arrancaba
+     *  otra VM local y el IDE perdía la primera: seguía dando vueltas, ni el Stop ni cerrar el IDE la paraban, y el Stop
+     *  siguiente se iba al explorador («no hay placa conectada»). */
+    private final java.util.concurrent.atomic.AtomicBoolean ejecutando = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private boolean hayUnProgramaEnMarcha() {
+        return ejecutando.get() || debug.isAttached()
+                || (picoExplorer != null && picoExplorer.hayUnProgramaEnLaPlaca());
+    }
+
+    /** V8 #822 — true si puede empezar una ejecución, y la marca; si ya hay un programa en marcha, lo dice y false. */
+    private boolean empiezaUnaEjecucion() {
+        if (!hayUnProgramaEnMarcha() && ejecutando.compareAndSet(false, true)) return true;
+        JOptionPane.showMessageDialog(this,
+                "Ya hay un programa en marcha.\nPáralo con Stop antes de ejecutar otro.",
+                "Un programa a la vez", JOptionPane.INFORMATION_MESSAGE);
+        return false;
+    }
+
+    private void acabaLaEjecucion() { ejecutando.set(false); }
+
+    /** V8 #822 — para lo que el IDE tenga en marcha en el PC: la VM local y la VM-C de Run Window. Al cerrar el IDE. */
+    private void paraLoQueHayaEnElPc() {
+        BpvmClient c = activeRunClient;
+        if (c != null) {
+            try { c.close(); } catch (Exception ignored) { }
+        }
+        Process p = vmcProcess;
+        if (p != null && p.isAlive()) p.destroyForcibly();
+    }
+
     /** P-run-stop (#257) — acción del menú Run → Stop. */
     private void onStopRun() {
         BpvmClient c = activeRunClient;
@@ -3238,9 +3301,16 @@ public class FrmMain extends javax.swing.JFrame
                 }, "ide-stop");
                 t.setDaemon(true);
                 t.start();
-            } else if (picoExplorer != null) {
-                picoExplorer.killRunning();
+            } else if (vmcProcess != null && vmcProcess.isAlive()) {
+                /* V8 #822 — el Stop también para la VM-C de Run Window. Con un programa sin pantalla no hay ventana que
+                 * cerrar: antes, sólo cerrando el IDE (y su proceso seguía). */
+                vmcProcess.destroy();
+                appendConsola("[ide] Stop: se para la VM-C de la ventana\n");
+            } else if (picoExplorer != null && picoExplorer.isConnected()) {
+                picoExplorer.killRunning();   // también lo que arrancó la placa sola (un autorun): #256
             } else {
+                /* V8 #822 — sin nada en marcha en el PC y sin placa: antes, «[Explorer] Stop: no hay placa conectada»,
+                 * que confunde después de un Run en el PC. */
                 consolaArea.append("[ide] Stop: no hay ejecución en curso\n");
             }
         } catch (Exception ex) {
