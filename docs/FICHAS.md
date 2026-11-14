@@ -7217,7 +7217,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   PSRAM ( un pequeño bloque de RAM reservado en la PSRAM para que trabaje la VM ). Esto creo ya lo hemos mirado, es una
 >   segunda vuelta a ver que se puede optimizar.»* —empieza por el censo de lo que la VM tiene aún en la RAM interna; la
 >   primera vuelta ya pasó a la PSRAM el heap de la VM, el pool de la GUI, la RAM de los packs y el búfer del refresco de
->   la pantalla (`#818`)—.
+>   la pantalla (`#818`)—; **a V9 el mismo día, tras el censo** (Eduardo: *«a estas alturas de V8 no vamos a cambiar las
+>   VMs, demasiado arriesgado. Pero si lo podemos analizar.»*; *«B, a v9»*; lo visto, en `#710`).
 > - **V8, al documentar:** `#823` (las rutas relativas: recomendar `/data`); y lo que el repaso vio desfasado:
 >   `referencia.html` §14.19 (en las placas, `isAvailable()` false) y `manual.html` (la WiFi en las placas, «lo de V8»);
 >   y, de `#820`, que un ratón Bluetooth dormido del todo se despierta con un clic (moverlo no basta).
@@ -7516,7 +7517,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Window y Stop; Run y cerrar la ventana; y el `stop` del terminal sin placa (antes, «no conectado» y seguía). Y en la
   ventana, Eduardo: *«OK, ahora si»*. La guía del IDE (§5 y la línea de comandos); la inglesa, en el D1.
 
-#### 🔵 `#821` — la S3: mientras se conectan el teclado y el ratón, la mínima de la RAM interna baja a 7,9 KB (abierta el 14-nov, al cerrar H2; **V8, con `#710`**)
+#### 🧬 `#821` — la S3: mientras se conectan el teclado y el ratón, la mínima de la RAM interna baja a 7,9 KB (abierta el 14-nov, al cerrar H2; **V8, con `#710`** · **a V9 el mismo día**, con `#710`)
 
 - **Lo medido** (`MEMORIA`, «La radio del Bluetooth en la S3»): con los recortes de la WiFi, la S3 arranca con 61–62,6 KB
   de mínima, y con los dos aparatos conectados le quedan 35,7 KB libres; pero mientras se conectan, la mínima baja a
@@ -7525,6 +7526,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   un programa que encienda el Bluetooth sin aparatos, y después con ellos. Los candidatos: el controlador al arrancar, o
   los avisos de anuncio que acumula mientras espera a los recordados.
 - **14-nov, V8, con `#710`** (Eduardo, al pasar `#710`: *«OK, V8. Lo miramos»*), y con su idea de la PSRAM.
+- **14-nov, a V9, con `#710`** (Eduardo: *«B, a v9»*): medir quién hace el pico, en V9, con lo de `#710`.
 
 #### ✅ `#820` — el ratón Bluetooth tarda en volver: de 1 s a casi 100, y una vez ni en 150 (abierta el 14-nov, al cerrar H2; **V8: por analizar**; lo primero, el ratón con el PC · **CERRADA el 14-nov: no es un fallo, es el ratón**, que dormido del todo sólo se despierta con un clic)
 
@@ -11411,7 +11413,7 @@ caracteres; `StringBuilder.toString` validará sus piezas (una pasada más con a
 
 Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs). `V8_IDEAS` §E5, «`#711` HECHO».
 
-#### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas · **14-nov: V8, con `#821`**)
+#### 🧬 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas · **14-nov: V8, con `#821`** · **a V9 el mismo día**, tras el censo de lo que la VM tiene fijo en la RAM interna)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los
   informes `compat/informes/f1_v7_*` e `idf61_*`): la S3, −34,0 KB; la C5, −35,1 KB; la P4, de −52,6 a −56,5 KB, igual
@@ -11429,6 +11431,24 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   de la conexión del Bluetooth (quién lo hunde), y después decidir. Lo que cambió desde el 4-nov: con el Bluetooth, la
   RAM interna de la C5 y la S3 va justa; y una reserva de DMA gastada en otra cosa es la memoria que faltó en `#818`. Va
   con la idea de Eduardo de la PSRAM (en «📋 El repaso de los pendientes del 14-nov», bajo la tabla de hitos de V8).
+- **14-nov, el censo, y a V9** (Eduardo: *«A ver, a estas alturas de V8 no vamos a cambiar las VMs, demasiado
+  arriesgado. Pero si lo podemos analizar.»*; *«B, a v9»*). Lo nuestro fijo en la RAM interna, por el `.map` de cada
+  imagen: 82.941 B en la S3, 89.552 en la C5 y 90.381 en la P4 (`MEMORIA`, «Lo que la VM tiene fijo en la RAM interna»).
+  Se queda:
+  la pila de C de la tarea `run`, 16 KB (una pila en la PSRAM no puede escribir la flash), y el log que sobrevive a un
+  reinicio (4–8 KB). Podrían ir a la PSRAM unos 45–50 KB: el búfer del PUT, el espejo del ENV y la zona de rascar (8 KB
+  cada uno), el de ficheros (4), las tres líneas del wire (6) y una parte del resto (27–30 KB, en muchos trozos
+  pequeños), mirando uno a uno que no los toque una interrupción ni el DMA. Las imágenes de la S3 y la C5 arrancan también sin PSRAM (`SPIRAM_IGNORE_NOTFOUND`), así
+  que el enlazador no puede ponerlos allí: se pedirían al arrancar, a la PSRAM si la hay. **Para V9, por orden:** medir
+  quién hunde la mínima (en el arranque y al conectar el Bluetooth, `#821`), mover esos búferes, y recortar la pila de
+  los runs (el peor caso medido, unos 6,5 KB de 16, en la P4 con la GUI). **Y la idea de Eduardo de las pilas** (*«Los
+  threads BP que tienen que estar en SRAM son los que se están ejecutando de verdad, cuando se cambia de hilo, se puede
+  subir a la PSRAM y cuando se reactiva se baja de la PSRAM a SRAM. Con 2 nucleos, necesitamos 2 stacks pero con 1
+  nucleo, solamente 1.»*): las pilas de los hilos BP ya están todas en la PSRAM (desde `#740`, del heap de la VM), y lo
+  que está en la SRAM es la pila de C de cada run, una por núcleo, como él contaba (*«me lie con los threads, son los del
+  SO tal como dices»*). Bajar a la SRAM la pila del hilo activo sería por velocidad, con un techo del 4–7 % (medido el
+  31-ago en la Metro; `fib(28)`, que trabaja casi sólo en la pila, un 4,3 %), y el precio de sacar la pila de la memoria
+  de la VM (las posiciones de los marcos, el GC que recorre las pilas, el depurador que lee `sp` y `bp`): no compensa.
 
 #### ✅ `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente; **CERRADA el 3-nov**, en el lote de placas)
 

@@ -277,6 +277,36 @@ línea `mem:` del log.
 - **Pero mientras se conectan, la mínima vuelve a bajar a 7,9 KB** (`#821`): un pico de unos 28 KB por encima de lo que
   queda después, sin fallos. Sin la consola de la S3 delante (va por su otro USB), no se sabe de quién es.
 
+## Lo que la VM tiene fijo en la RAM interna: la S3, la C5 y la P4 (14-nov)
+
+> Para `#710` y `#821`, que pasan a V9 (Eduardo: *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado
+> arriesgado. Pero si lo podemos analizar.»*). El censo, por el `.map` del enlazador de cada imagen (las del 14-nov por
+> la mañana): lo de `libmain.a` —lo nuestro— en las secciones de la RAM interna (`.dram0.bss`, `.dram1.bss` en la P4,
+> `.noinit` y `.dram0.data`). En KB de 1024 B.
+
+| | S3 | C5 | P4 |
+|---|---|---|---|
+| **lo nuestro fijo en la RAM interna** | **82.941 B** | **89.552 B** | **90.381 B** |
+| la pila de C de la tarea `run` (se queda: una pila en la PSRAM no puede escribir la flash) | 16 | 16 | 16 |
+| el log que sobrevive a un reinicio, en `.noinit` (se queda) | 4 | 8 | 8 |
+| el búfer del PUT, el espejo del ENV y la zona de rascar (`g_scratch`), 8 KB cada uno | 24 | 24 | 24 |
+| el búfer de ficheros (4 KB) y las tres líneas del wire (2 KB cada una) | 10 | 10 | 10 |
+| el resto, en muchos trozos de 1,5 KB para abajo (el wire, el enlace, el IDE, la SD, el Bluetooth…) | 27,0 | 29,5 | 30,3 |
+
+- **Lo que podría ir a la PSRAM:** las dos filas del medio (34 KB) y una parte del resto: unos 45–50 KB por placa,
+  mirando uno a uno que no los toque una interrupción ni el DMA (los de la SD). Y alguno ni hace falta en las ESP: el
+  anillo de recepción de la UART común (`g_rx`, 1 KB) es para las familias que lo llenan desde su interrupción; las ESP
+  usan el búfer de su driver.
+- **Cómo:** las imágenes de la S3 y la C5 arrancan también en placas sin PSRAM (`SPIRAM_IGNORE_NOTFOUND`), así que el
+  enlazador no puede ponerlos allí (`EXT_RAM_BSS_ATTR` no vale con esa opción): se pedirían al arrancar, a la PSRAM si la
+  hay, y si no, a la RAM interna, como hoy. La P4 siempre tiene PSRAM; el mismo código le vale.
+- **Y la pila de los runs:** una por núcleo —la del run 0, estática; la del run 1, con `vm.runs=2`, del montón interno—,
+  16 KB cada una; el peor caso medido, unos 6,5 KB (la P4, con la GUI). Las pilas de los hilos BP ya están en la PSRAM
+  (`#740`: del heap de la VM).
+- **Lo que pide el sistema por su cuenta**, aparte: los `malloc` de hasta 2 KB van a la RAM interna
+  (`SPIRAM_MALLOC_ALWAYSINTERNAL=2048`), y el IDF guarda 32 KB internos para el DMA (`SPIRAM_MALLOC_RESERVE_INTERNAL`,
+  el candidato de `#710`).
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las
