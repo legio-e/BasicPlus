@@ -1474,7 +1474,7 @@ aviso «[bpvm] pila: …» se colaba en mitad de la línea «marcas a/b/c = …�
 con los valores bien—; arreglada (la salida, sola; los avisos, a un fichero que se enseña si falla) y pasada 20 de 20.
 **En la Pico 2, con el próximo lote** (esperado: `fib(26)` con dos runs, los 3 178 ms de uno).
 
-#### 🧊 `#663` — `Gui.__guiInvokeByName` no encuentra nada desde el enlace tardío: el handler se ignora en silencio (abierta el 6-oct, al probar LVGL con dos runs; SUELTA · **CANDIDATA A ELIMINAR, aparcada**: Eduardo, 7-oct, *«Déjalo de momento. Si quieres la puedes marcar como candidata para eliminar, pero esperamos un poco a ver cómo evolucionan las cosas (1 o 2 versiones como mucho para decidir)»*: se decide en V8 o V9)
+#### 🧬 `#663` — `Gui.__guiInvokeByName` no encuentra nada desde el enlace tardío: el handler se ignora en silencio (abierta el 6-oct, al probar LVGL con dos runs; SUELTA · **CANDIDATA A ELIMINAR, aparcada**: Eduardo, 7-oct, *«Déjalo de momento. Si quieres la puedes marcar como candidata para eliminar, pero esperamos un poco a ver cómo evolucionan las cosas (1 o 2 versiones como mucho para decidir)»*: se decide en V8 o V9 · **a V9 el 14-nov, como obsoleta**)
 
 **Visto el 6-oct** (al escribir `test-cola` 19): `bpvm_resolve_handler` (`src/builtins.c`) busca el módulo del anfitrión
 por la dirección de su clase DENTRO de los datos de cada módulo, y desde el enlace tardío (`#523`) las clases las
@@ -1483,6 +1483,11 @@ construye el cargador en su arena: no casa ninguna, devuelve 0 y el builtin IGNO
 declara; los formularios van por ranura, `#607`). Decidir: arreglarlo (buscar por el módulo del descriptor de la
 clase) o quitarlo de `Gui.bp`. (7-oct, con `#664`: si se arregla, en la VM-Java la llamada ya corre ENTERA —el bucle
 de las anidadas, `correAnidado`, es uno para las tres—.)
+
+- **14-nov, a V9, como obsoleta** (Eduardo: *«Vamos a darle un poco mas de tiempo ( parecido al Java 'Deprecated' ) . De
+  momento a V9»*): se queda como está, con la marca de candidata a eliminar, y se decide en V9. Nadie la llama (`Gui.bp`
+  y `Core.bp` sólo la declaran); el comentario de `Gui.bp` que dice que la usa el dispatch de `Gui.Window` ya no es
+  verdad.
 
 #### ✅ `#664` — en la VM-Java, `Gui.__guiInvokeBySlot` no invoca el método (la VM-C sí): paridad (abierta el 6-oct, al probar LVGL con dos runs; SUELTA · **CERRADA el 7-oct**, `95390da5`)
 
@@ -1517,7 +1522,7 @@ hija no pública, las dos VMs daban `suma = 0` en MOD8 —en MOD8 `__guiSlotOf` 
 y en las dos VMs igual: la hija del sample, `public` (como toda ventana de Forms), y la diferencia, anotada en
 `PUBLICAR.md` para la decisión de `--formato=8`.
 
-#### 🧊 `#665` — la imagen de DOS núcleos de la RP2350, más lenta de lo que debería: PrintBench +19 % en la Pico 2 desde el 5-oct, y en la Metro `fib(26)` +35 % (abierta el 6-oct, en las medidas finales de H12; **a V8**, Eduardo, al cerrar H12: *«Todo esto son cosas que hay que investigar pero ya en V8»*)
+#### 🔵 `#665` — la imagen de DOS núcleos de la RP2350, más lenta de lo que debería: PrintBench +19 % en la Pico 2 desde el 5-oct, y en la Metro `fib(26)` +35 % (abierta el 6-oct, en las medidas finales de H12; **a V8**, Eduardo, al cerrar H12: *«Todo esto son cosas que hay que investigar pero ya en V8»* · **14-nov: se mide en las pruebas finales de V8**: parecida, se cierra; más lenta, a V9)
 
 **La Metro** (6-oct, tarde; Eduardo: repetir las medidas en ella): con la imagen de dos núcleos, `fib(26)` 3 908 ms con
 un run y 4 095 con dos, frente a **2 892 con la de uno: +35 %** (en la Pico 2, +1,8 %). Con `vm.cores=1` —todo en el
@@ -1593,6 +1598,13 @@ cambia (462 frente a 456–461 ms). Así que lo del bytecode solo no son fallos 
 también en la SRAM, todo lo que mueve memoria de la PSRAM gana bastante más que sólo con la VM (crear 16 KB, −24 %
 frente a −8 %). La explicación probable, sin comprobar: el otro núcleo ejecuta FreeRTOS desde la flash y compite por la
 caché del XIP.
+
+- **14-nov, a las pruebas finales de V8** (Eduardo, al saber que no se había vuelto a medir desde lo de la SRAM: *«OK,
+  me parece bien. En las pruebas finales lo volvemos a medir. Si da tiempos parecidos la cerramos y si va mas lento la
+  pasaremos a V9.»*): la imagen de un núcleo y la de dos, con el código de hoy, en la Pico 2 y la Metro (`fib(26)`,
+  `PrintBench` y el programa de dos hilos de `#743`). Lo que cambió desde el 12-oct: en la Metro, el firmware M desde el
+  22-oct (el intérprete, los builtins, la reserva y el cerrojo de FreeRTOS en la SRAM, y los `mem*`); en la Pico 2, todo
+  en la flash (`#720`). Una pista: con el intérprete en la SRAM, `fib(22)` no cambió (22-oct).
 
 #### ✅ `#666` — lo que un programa enciende —PWM, contador de pulsos, NeoPixel— sigue encendido y OCUPADO después de su RUN: el PWM sigue sacando la señal, y en las ESP los canales no se sueltan (abierta el 7-oct, al pasar la ronda de V7 en la C6; SUELTA · **CERRADA el 9-oct**, con `#667` y `#668`: la C3, la última)
 
@@ -3184,7 +3196,7 @@ run y que miVM; con dos y cuatro workers, en las dos VMs, los tres hilos empieza
 Saboteada (elegir otra vez desde el primero): `--smp=1` y `--smp=2`, en rojo. En las placas ese planificador está
 compilado pero apagado —todas corren un run—: no cambia nada hasta H12.
 
-#### 🧊 `#615` — la Pico sobre el backend común de FreeRTOS (`src/platform_freertos.c`): con él, `PrintBench` va un 10,8 % más lento y no se sabe por qué; aparcada sin fecha (abierta 1-oct, al vaciar H7; SUELTA · **a V8**, Eduardo, 9-oct: *«615 a v8»*)
+#### 🧬 `#615` — la Pico sobre el backend común de FreeRTOS (`src/platform_freertos.c`): con él, `PrintBench` va un 10,8 % más lento y no se sabe por qué; aparcada sin fecha (abierta 1-oct, al vaciar H7; SUELTA · **a V8**, Eduardo, 9-oct: *«615 a v8»* · **a V9 el 14-nov**, aparcada)
 
 Era la fila «la Pico a `platform_freertos.c`» de H7 (el paso 0 de fundir los tres backends de FreeRTOS, `#473` R1+R16;
 `docs/FUSION_BACKENDS_FREERTOS.md`). **Medido el 30-sep** (`d8db24b7`, la Pico 2 grabada por turnos con el OK de
@@ -3198,6 +3210,8 @@ son la herramienta para seguir.
 no, en la otra. Y así acaba apareciendo»*. **Aparcada** (Eduardo, 1-oct): *«aparcado indefinidamente (sin ninguna fecha
 ni previsión), lo que quiere decir que algún día se retomará pero no ahora. Lo mejor es sacarlo de H7 y dejar la entrada
 suelta. Ya veremos si lo resolvemos en V7 o la pasamos a V8»*.
+
+- **14-nov, a V9** (Eduardo: *«a V9»*), aparcada como está.
 
 #### ✅ `#614` — `GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —en la C5, de 1 a 5,8 ms; en la DK2, de 1,0 a 1,8—, con la pantalla entera igual (abierta 30-sep, al grabar la C5 tras medir los márgenes; SUELTA · **CERRADA el 9-oct**: no era una regresión)
 
@@ -4082,7 +4096,7 @@ por operación de `double`). El número, en el manual (§8.3, «Velocidad y `dou
 `float`) y en `AOT_LIMITES` §1; y `DblNat`, en la ronda de V7: las placas con FPU simple (la Metro, la Pico, la
 Discovery, la Nucleo, el P4) darán su número con su próxima ronda.
 
-#### 🧊 `#584` — la cola de la fusión `.mod`/`.mdn`: el `.mod` MULTIFAMILIA, la poda como UNA función y `putIfChanged` con lo podado (abierta 27-sep, al cerrar H5; SUELTA · **a V8**, Eduardo, 9-oct: con la WiFi, desplegar un mismo programa a varias placas)
+#### 🧬 `#584` — la cola de la fusión `.mod`/`.mdn`: el `.mod` MULTIFAMILIA, la poda como UNA función y `putIfChanged` con lo podado (abierta 27-sep, al cerrar H5; SUELTA · **a V8**, Eduardo, 9-oct: con la WiFi, desplegar un mismo programa a varias placas · **a V9 el 14-nov**: sólo dentro de un proyecto, que dice qué familias lleva)
 
 La fusión está hecha —el formato v7, con un bloque nativo por familia; hoy N=1: el IDE sólo funde el de la placa
 conectada— y su aviso era *«lo caro no es la fusión, es su cola»*. Lo que falta, según el diseño (`V6_IDEAS` §«El
@@ -4101,6 +4115,10 @@ podado al decidir si subir.
 ya llevan varias familias (SQLite: ARM y RISC-V). El `.mod` multifamilia sirve para llevar el mismo programa a varias
 placas sin el IDE delante —una SD, o la WiFi de V8—: va con ella. Coste estimado, un día largo (el IDE, la poda común,
 la comparación de lo podado, las pruebas y la placa: el bloque del P4 en la C6, «rechazado (rc=-7)»).
+
+- **14-nov, a V9** (Eduardo: *«a V9. Pero lo haremos solamente dentro de un proyecto con las opciones de las natives que
+  queremos soportar. a V9»*): el `.mod` multifamilia, sólo en un proyecto, que dice qué familias de natives lleva.
+  `PENDIENTES.md`, corregido (decía «de V8, con la WiFi»).
 
 #### ✅ `#583` — el DEBUGGER y las natives (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **CERRADA el 9-oct**, el commit de `#583`: no se depuran —Eduardo—, y el IDE lo dice)
 
@@ -4131,7 +4149,7 @@ quítale `native`». El manual (§8.3, «Depurar», en las dos lenguas) y `AOT_L
 manual ya no da las tuplas por no soportadas dentro de una native (lo están desde `#577`, salvo con campos `float`,
 `long` o `double`). El frontend, 281 de 281. **Por probar a mano en el IDE** (Eduardo): F9 dentro de una native.
 
-#### 🧊 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio · **la etapa 1, el bytecode, hecha el 4-nov**, `8c72bb95`, y vista en la Metro y la P4 · **la etapa 2, las natives, congelada el 4-nov**: Eduardo, *«congelalo»*)
+#### ✅ `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio · **la etapa 1, el bytecode, hecha el 4-nov**, `8c72bb95`, y vista en la Metro y la P4 · **la etapa 2, las natives, congelada el 4-nov**: Eduardo, *«congelalo»* · **CERRADA el 14-nov**: no se hace; una limitación conocida, documentada)
 
 *«…cómo se puede localizar en qué línea ocurrió»* (Eduardo, 21-ago; `V7_IDEAS` §«Los cabos sueltos del AOT»). Un
 `RuntimeError` desde una native dice QUÉ pasó —con el texto del intérprete— pero no DÓNDE: la estructura del fallo
@@ -4175,6 +4193,11 @@ Python), el AOT y las pruebas—: en la recta final, con `#578` y `#592` dentro,
   (`IdeFallaStd.bp:8`). Dentro de la stdlib y con la VM local sale la posición, no la línea: `#788`, pendiente.
 - **La etapa 2, congelada** (Eduardo: *«congelalo»*): dentro de una native, la línea es la de quien la llamó, y la misma
   función se puede depurar interpretada en el PC. Si se retoma: lo decidido el 9-oct, arriba.
+- **14-nov, CERRADA en el repaso** (Eduardo: *«En realidad la solución es comentar el native y ejecutar interpretada y
+  ver que ocurre. De momento yo no haría nada, se puede poner como observación, una limitación conocida.»*): la etapa 2
+  no se hace. Dentro de una native, la línea de un error es la de quien la llamó; para ver la exacta, se le quita
+  `native` y se ejecuta interpretada. Dicho como limitación conocida en `PENDIENTES.md` y en `AOT_LIMITES.md` §8, que
+  decían que la placa no da la línea de ningún error (desde la etapa 1, sí la da).
 
 #### ✅ `#581` — P2b.3.d en las ESP: la S3, la C3, la C5 y la C6 siguen con la ABI 8 —rechazan todo `.mdn` nuevo y corren interpretado— (abierta 27-sep, al cerrar H5; SUELTA: el resto de la sesión de placas de P2b.3 · **CERRADA el 7-oct**, el commit de `#581`)
 
@@ -7036,16 +7059,16 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > el IDE lo mismo»*. Lo de abajo que toque el SO, el lenguaje o el IDE se dice al proponerlo, y decide Eduardo.
 >
 > Lo que ya es de V8:
-> - **la red en placa**: el backend WiFi de `Net`, que hoy sólo tiene el del PC. Ya era de V8 desde el rumbo
+> - ✅ **la red en placa** (H3, la WiFi, cerrado): el backend WiFi de `Net`, que hoy sólo tiene el del PC. Ya era de V8 desde el rumbo
 >   del 10-ago, que entonces decía WiFi y una web pequeña servida por el dispositivo para configurarlo y
 >   diagnosticarlo;
-> - **el Bluetooth**, nuevo en el plan;
+> - ✅ **el Bluetooth**, nuevo en el plan (H2, cerrado el 14-nov);
 > - **el bajo consumo**: `#490`, el estudio, movido aquí entero desde V7 (era de H10), con su texto intacto. **A V9 desde el 6-nov** (abajo, «El rumbo hasta el final de V8»).
-> - **la C3, optimizada** (Eduardo, 30-sep: *«la C3 se optimizará más adelante (V8). De momento, aunque con límites
+> - **la C3, optimizada** **→ A V9 el 14-nov** (Eduardo: *«a V9. Hay que investigar si se puede controlar la reserva de memoria de idf para ver si podemos evitar ese hueco.»*). Antes (Eduardo, 30-sep: *«la C3 se optimizará más adelante (V8). De momento, aunque con límites
 >   más bajos, que funcione lo mínimo»*): coser sus dos regiones (136 → ~250 KB, `V6_IDEAS`) y devolverle su objetivo
 >   —la VM bajó de 128 a 120 KB porque el asignador ya no da 128 seguidos—. El +10 % de su `AllocBench` se cierra: la
 >   premisa no se sostenía y el camino que medía ya no existe (`#554`).
-> - **la prueba de resistencia de días** (Eduardo, 2-oct: *«la prueba de resistencia de días lo dejamos para V8, cuando
+> - **la prueba de resistencia de días** **→ a las pruebas finales de V8, en varios micros a la vez** (Eduardo, 14-nov: *«OK, podemos hacer una prueba final de resistencia. Y ya puestos, la podemos hacer en diferentes micros a la vez a ver como sale.»*). Antes (Eduardo, 2-oct: *«la prueba de resistencia de días lo dejamos para V8, cuando
 >   lo trabajemos un poco más»*): días de carga variada con una marca periódica en el log-anillo (un RUN largo Y muchos
 >   RUN); venía de H9. (La batería de rendimiento, en cambio, se queda en V7: se mide en H12, con dos núcleos.)
 > - **la PIO del RP2350, programable desde BP** **→ A V9 el 7-nov, con los streams (`#723`)**: Eduardo, *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»*. Antes (Eduardo, 2-oct: *«Más adelante, si tenemos tiempo de V7, si no en
@@ -7059,7 +7082,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   RP2350» («¿Y las ESP32?»).
 > - **el DMA de `Uart`** donde la familia lo tenga **→ A V9 el 7-nov, con los streams (`#723`)**. Antes (Eduardo, 2-oct, al vaciar H10: *«A V8»*): V6 dejó el anillo por
 >   interrupción en todas, y basta para las velocidades de hoy; con el DMA, la CPU no atiende cada byte.
-> - **el simulador con disfraces** y **la inyección de eventos en la placa** (Eduardo, 2-oct, al vaciar H9: *«A V8»*):
+> - **el simulador con disfraces** y **la inyección de eventos en la placa** **→ A V9 el 14-nov**, con el disfraz de los tiempos (Eduardo: *«a V9»*). Antes (Eduardo, 2-oct, al vaciar H9: *«A V8»*):
 >   un `bpvm-sim --familia=pico|s3|p4|stm32` que imite lo que distingue a cada familia (el bloque de borrado, la GUI,
 >   el AOT) —parte del motivo cayó con la unificación—; y un verbo del cable que pulse en la GUI de la placa, para que
 >   la tanda conduzca allí las pruebas gráficas como en el PC (hoy, en placa, sólo la pantalla inicial).
@@ -7071,30 +7094,30 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   proporción. La prueba de que sirve: que reproduzca lo que el PC no vio el 5-oct —un hilo que concatena con dos runs,
 >   igual en el PC y un 73 % más lento en la Pico 2 (`V7_IDEAS` §H12, «La 3.2»)—.
 > - **el micro simulado con periféricos, y su ventana de configuración** **→ su `Uart` a un puerto del PC, a V9 el
->   7-nov, con la UART de los streams (`#723`)**; la ventana, por decidir. Antes (Eduardo, 9-oct, al decidir `#647`: *«Estoy
+>   7-nov, con la UART de los streams (`#723`)**; **la ventana, a V9 el 14-nov** (Eduardo: *«a V9 si»*), con su `Uart` y los disfraces. Antes (Eduardo, 9-oct, al decidir `#647`: *«Estoy
 >   pensando en añadir algunos periféricos también al emulador empezando por la UART que nosotros mapearíamos a un
 >   puerto serie. Vamos a necesitar una ventana de configuración del emulador para poder decir la resolución de la
 >   pantalla, los puertos, etc. Esto último iría en V8»*): la `Uart` de un programa, en el simulado, a un puerto serie
 >   del PC; y una ventana en el IDE para configurarlo —la resolución de la pantalla, qué puerto del PC hace de cada
 >   UART…—, que hoy se configura con opciones de la línea de comandos (`--mem`, `--flash`, `--sd`, `--board`…). Va
 >   con «el simulador con disfraces», arriba.
-> - **`#663`, `Gui.__guiInvokeByName`: CANDIDATA A ELIMINAR** (Eduardo, 7-oct: *«esperamos un poco a ver cómo
+> - **`#663`, `Gui.__guiInvokeByName`: CANDIDATA A ELIMINAR** **→ A V9 el 14-nov, como obsoleta** (Eduardo: *«parecido al Java 'Deprecated'»*). Antes (Eduardo, 7-oct: *«esperamos un poco a ver cómo
 >   evolucionan las cosas (1 o 2 versiones como mucho para decidir)»*): desde el enlace tardío no encuentra nada y el
 >   handler se ignora en silencio; no lo usa nadie (los formularios van por ranura, `#607`). Se decide en V8 o V9:
 >   arreglarlo (buscar por el módulo del descriptor de la clase) o quitarlo de `Gui.bp` y `Core.bp`, con el builtin 206
 >   reservado. Si se arregla, en la VM-Java la llamada ya corre entera (`#664`).
-> - **`#665`, la imagen de dos núcleos de la RP2350, más lenta de lo que debería** (Eduardo, 6-oct, al cerrar H12:
+> - **`#665`, la imagen de dos núcleos de la RP2350, más lenta de lo que debería** **→ a las pruebas finales de V8 (14-nov)**: parecida, se cierra; más lenta, a V9. Antes (Eduardo, 6-oct, al cerrar H12:
 >   *«Todo esto son cosas que hay que investigar pero ya en V8»*): en la Metro, con los datos de la VM en la PSRAM, un
 >   35 % en un programa de un hilo (también con `vm.cores=1`: es la imagen, no el otro núcleo); PrintBench +19 % en la
 >   Pico 2 desde el 5-oct; y las cadenas, que con dos núcleos no escalan en la RP2350 (×0,83 en la Pico 2, ×0,75 en la
 >   Metro, con un heap 26 veces mayor; la P4, ×1,33). Los primeros pasos, en la ficha (`V7_IDEAS` §H12 «Las medidas
 >   finales»).
-> - **`M5`, el depurador que despliega objetos** (Eduardo, 1-oct: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*): hoy el
+> - **`M5`, el depurador que despliega objetos** **→ A V9 el 14-nov** (Eduardo: *«En realidad toda la información está grabada en el módulo, en la interfaz de la clase, es cuestión de utilizarla. Y aunque no tuviésemos el código fuente funcionaría. Es como una especie de reflexión.»*). Antes (Eduardo, 1-oct: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*): hoy el
 >   depurador no despliega NINGÚN objeto —un local objeto sale como `@<valor>`—, y por eso tampoco las properties
 >   heredadas (de H1, 21-sep, y de ahí a H8). Hacerlo es una función nueva: el layout de cada clase en el `.dbg`
 >   (padre, campos, properties y offsets, recalculados por el enlace tardío al cargar), leer la memoria desde el IDE
 >   (`READ_INT`, que la VM-C ya tiene) y la vista en árbol (`V7_IDEAS` §H8, el mapa del 28-sep).
-> - **la robustez en campo: que un fallo de un run no tumbe la placa** (Eduardo, 5-oct, al decidir los caminos fatales
+> - **la robustez en campo: que un fallo de un run no tumbe la placa** **→ se decide con la prueba de resistencia de las pruebas finales (14-nov)**: antes, qué situaciones se pueden dar y cómo quedan registradas (en «🏁», bajo la tabla de hitos). Antes (Eduardo, 5-oct, al decidir los caminos fatales
 >   de la etapa 3.1 de H12: *«Lo importante es que IO sea sólido como una roca, todo lo demás tiene solución»*; y *«es
 >   un tema complejo. Lo podemos dejar para más adelante (V8). De momento hacemos lo que podemos, sabiendo que nos
 >   puede quedar algún caso suelto. Para eso fatal error, el log y reset»*): (1) CONTENER el fallo en el run —el
@@ -7106,7 +7129,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   sin autorun hasta que llegue el IDE—, que a un equipo autónomo le relanza la app tras un fallo suelto. En V7, lo
 >   que hay: con dos núcleos, el informe al log y reiniciar, y el arranque siguiente sin autorun (`V7_IDEAS` §H12 «La
 >   etapa 3.1, el diseño», el paso 4).
-> - **reservar sin el cerrojo de la VM: un trozo del almacén por run** (Eduardo, 5-oct, viendo que con dos núcleos dos
+> - **reservar sin el cerrojo de la VM: un trozo del almacén por run** **→ A V9 el 14-nov** (Eduardo: *«a V9. Es un tema interesante, sería darle una especie de cache de trabajo. Lo único que me preocupa es que cada vez estamos complicando mas la gestión de la memoria pero bueno.»*). Antes (Eduardo, 5-oct, viendo que con dos núcleos dos
 >   hilos que concatenan cadenas no escalan —×0,65—: *«Y si el bloqueo entre hilos para evitar corrupción de objetos en
 >   el heap no hiciese falta. Solamente pasar una lista de referencias que el otro hilo no puede tocar?»*; y *«de momento
 >   con que no se corrompa la memoria me vale. Esto sería una optimización posterior… lo podemos dejar para más tarde
@@ -7152,13 +7175,13 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >
 > 📌 **El rumbo de los próximos días** (Eduardo, 22-oct): *«De momento estos dias podemos ir solucionando temas pendientes. Mas adelante podemos retomar el Bluetooth y la Wifi.»*
 >
-> 🧭 **El rumbo hasta el final de V8, y V9** (Eduardo, 6-nov, al cerrar el día de la WiFi): *«La wifi y el Bluetooth van muy bien encaminados, faltan cosillas pero una vez terminadas daremos los hitos por terminados. La verficación de la compatibilidad ente C# y JC también va muy bien. Cuando lleguemos a los grupos 10 u 11 lo daremos por terminado, con la pruebas que pasen como buenas. […] Después de la versión 8 vendrá una versión 9 y ahí complementaremos algunas de las cosas de la versión 8, entre ellas las pruebas de compatilidad. Lo del ahorro de energía lo pasaremos a la V9. Es demasiado complejo y depende mucho del hardware así que hay que analizarlo con detalle, ya lo haremos. Con todo esto a la V8 ya le queda poco relativamente.»* O sea: H2 y H3 se cierran al terminar lo que les falta; H8, al llegar a los temas 10 u 11 («métodos de extensión» y «arrays»), con las que pasen como buenas; y lo demás de C# y el bajo consumo (`#490`) pasan a V9. **Por decidir (Eduardo):** lo que sigue en la lista «Lo que ya es de V8», que viene de V7 y sigue sin tocar (la PIO, las UART, el DMA, el simulador, `M5`, la robustez en campo…): si se hace en V8 o pasa a V9. **Y el 7-nov, la fase final** (Eduardo): *«No hay muchos pendientes gracias a que hemos ido cerrando muchos. Cuando acabemos los pendientes y el bluetooth la v8 entra en fase final.»* Los pendientes y H2, y después documentar, las pruebas finales y publicar; H4, la C5, al final o a V9. **Y los streams y los dispositivos, a V9** (Eduardo, ese día): *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»* De la lista, los de dispositivos —la PIO, las UART de las ESP32 y el DMA de `Uart`— van con `#723`; lo demás sigue por decidir.
+> 🧭 **El rumbo hasta el final de V8, y V9** (Eduardo, 6-nov, al cerrar el día de la WiFi): *«La wifi y el Bluetooth van muy bien encaminados, faltan cosillas pero una vez terminadas daremos los hitos por terminados. La verficación de la compatibilidad ente C# y JC también va muy bien. Cuando lleguemos a los grupos 10 u 11 lo daremos por terminado, con la pruebas que pasen como buenas. […] Después de la versión 8 vendrá una versión 9 y ahí complementaremos algunas de las cosas de la versión 8, entre ellas las pruebas de compatilidad. Lo del ahorro de energía lo pasaremos a la V9. Es demasiado complejo y depende mucho del hardware así que hay que analizarlo con detalle, ya lo haremos. Con todo esto a la V8 ya le queda poco relativamente.»* O sea: H2 y H3 se cierran al terminar lo que les falta; H8, al llegar a los temas 10 u 11 («métodos de extensión» y «arrays»), con las que pasen como buenas; y lo demás de C# y el bajo consumo (`#490`) pasan a V9. **Por decidir (Eduardo):** lo que sigue en la lista «Lo que ya es de V8», que viene de V7 y sigue sin tocar (la PIO, las UART, el DMA, el simulador, `M5`, la robustez en campo…): si se hace en V8 o pasa a V9. **Decidido el 14-nov**, en el repaso (en la lista, arriba, y en «📋», abajo). **Y el 7-nov, la fase final** (Eduardo): *«No hay muchos pendientes gracias a que hemos ido cerrando muchos. Cuando acabemos los pendientes y el bluetooth la v8 entra en fase final.»* Los pendientes y H2, y después documentar, las pruebas finales y publicar; H4, la C5, al final o a V9. **Y los streams y los dispositivos, a V9** (Eduardo, ese día): *«Hay un tema importante que al final no hicimos que son los streams y los Readers y Writers. Bien lo pasaremos a V9 y será un tema importante. Una vez que lo hagamos habrá que cambiar algunas clases de dispositivos. Y eso enlace con los que tenemos que decidir de dispositivos, los pasaremos a V9 y alli los haremos todos juntos, poniendo un poco de orden.»* De la lista, los de dispositivos —la PIO, las UART de las ESP32 y el DMA de `Uart`— van con `#723`; lo demás, decidido el 14-nov (abajo, «📋»).
 >
 > 🔒 **El alcance de V8, cerrado** (Eduardo, 6-nov, tras hablar de Micro32 Suite, `#802`): *«Y con eso cerraremos V8, no añadiremos mas temas, cerramos lo que ya tenemos y cuando esté hacemos lo de siempre: terminar los pendientes, documentar, pruebas finales y publicar.»* Lo que venga nuevo, a V9.
 >
 > 📡 **Las radios que no entran en V8** (Eduardo, 7-nov): *«La radio de la Pico 2W si mantiene las mismas condiciones para el Bluetooth de momento lo ignoramos. Buscaré un módulo de radio externo que se pueda conectar a las placas y con el ampliaremos el tema de Bluetooth y wifi. También hay un micro STM32 con wifi, ya buscaré u kit. Pero todo eso será para V9 o mas adelante, de momento nos quedamos con lo que tenemos.»*
 >
-> 💡 **Una idea de Eduardo, para después de los pendientes** (23-oct): *«añadir sets? De momento limitado a 31 elementos y representados por un uint32. Los sets son similares a los de Pascal»*; y *«OK, terminamos el #714 primero»*. Lo visto ese día (casi todo en el compilador; la VM ya tiene las operaciones de bits; las palabras `in` y `set` ya están reservadas), en `V8_IDEAS` §E6. Decidido ese día con Eduardo: un elemento es su máscara (una potencia de 2) y `+`/`-` se hacen con `|`/`& ~`; se declaran con `set`, como el `enum`; fuera de las llaves, `ControlBits.bitOn`; un conjunto tiene el tamaño de sus elementos, y un bit de fuera, al convertir un entero, es una excepción; se imprime el número. Sin empezar: falta el análisis completo, con la sintaxis de BP y la de JC.
+> 💡 **Una idea de Eduardo, para después de los pendientes** (23-oct) **→ A V9 el 14-nov** (Eduardo, tras preguntar por los de C# —el `[Flags] enum`— y los de Java —`EnumSet`, un vector de bits sin límite—: *«a V9 . Haremos nuestro propio conjunto, de 32 y/o de 64 bits.»*): *«añadir sets? De momento limitado a 31 elementos y representados por un uint32. Los sets son similares a los de Pascal»*; y *«OK, terminamos el #714 primero»*. Lo visto ese día (casi todo en el compilador; la VM ya tiene las operaciones de bits; las palabras `in` y `set` ya están reservadas), en `V8_IDEAS` §E6. Decidido ese día con Eduardo: un elemento es su máscara (una potencia de 2) y `+`/`-` se hacen con `|`/`& ~`; se declaran con `set`, como el `enum`; fuera de las llaves, `ControlBits.bitOn`; un conjunto tiene el tamaño de sus elementos, y un bit de fuera, al convertir un entero, es una excepción; se imprime el número. Sin empezar: falta el análisis completo, con la sintaxis de BP y la de JC.
 >
 > 🏁 **Para las pruebas finales de V8** (Eduardo, 31-oct): *«Al final de la versión V8, durante las pruebas finales
 > podemos aprovechar y hacer alguna prueba de rendimiento adicional.»* Lo que hay: `#743` (la herramienta,
@@ -7166,6 +7189,40 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > (un programa de dos hilos con un núcleo y con dos, Eduardo: *«que también mejoraríamos»*), y de paso `#665` (la
 > imagen de dos núcleos de la RP2350, más lenta que la de uno: en la Metro, `fib(26)` +35 %); y si sirve, V6 y V5 en la
 > Metro y la serie de la P4 en una sola placa.
+>
+> 🏁 **Y del repaso del 14-nov, también para las pruebas finales:** `#665` (medir la imagen de un núcleo y la de dos:
+> parecidas, se cierra; más lenta, a V9); `#708` (el sonido de la C5, si Eduardo encuentra el conector; si no, a V9);
+> `#769` y `#779` (las dos pruebas de la red que salieron rojas una vez: si vuelven a salir, hay un cabo suelto); `#815`
+> (el pánico de la P4 buscando aparatos, provocado a propósito); **la prueba de resistencia de días, en varios micros a la
+> vez**; y con ella, **la robustez en campo** (Eduardo: *«No lo se. Cuando hagamos las pruebas de resistencia pensamos que
+> situaciones se pueden dar y como hacer que queden registradas. Por ejemplo, un programa que corre durante 2 dias
+> seguidos, ¿ que situaciones nos podemos encontrar ? . Que todo vaya bien, OK, nada que hacer. Que se quede sin memoria.
+> Que se fragmente la memoria. Que se produzca un error imprevisto pero que esté controlado. Que se produzca un error no
+> controlado o un pánico. Un error aleatorio, etc.»*): una tabla con cada situación, qué hace hoy la placa, cómo queda
+> registrada (el log, el `INFO`, el `EXITED`, el motivo del reinicio, `bootCount`) y qué querríamos; algunas, provocadas a
+> propósito en la prueba de días. Con eso se decide qué se hace de las tres piezas (contener el fallo en el run, el MPU y
+> el contador de reinicios).
+>
+> 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
+> moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
+> número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
+> aquí, el reparto:
+>
+> - **V8, por hacer:** `#824` (la VM-Java: `rmdir` y `removeFile`); `#820` (el ratón que tarda en volver; lo primero,
+>   probarlo con el PC); y `#710` con `#821` (la RAM interna de las ESP con PSRAM), con la idea de Eduardo: *«ver si
+>   podemos reducir la RAM que necesita las VMs al mínimo sin perjudicar el rendimiento y el resto ver si se puede mover a
+>   PSRAM ( un pequeño bloque de RAM reservado en la PSRAM para que trabaje la VM ). Esto creo ya lo hemos mirado, es una
+>   segunda vuelta a ver que se puede optimizar.»* —empieza por el censo de lo que la VM tiene aún en la RAM interna; la
+>   primera vuelta ya pasó a la PSRAM el heap de la VM, el pool de la GUI, la RAM de los packs y el búfer del refresco de
+>   la pantalla (`#818`)—.
+> - **V8, al documentar:** `#823` (las rutas relativas: recomendar `/data`); y lo que el repaso vio desfasado:
+>   `referencia.html` §14.19 (en las placas, `isAvailable()` false) y `manual.html` (la WiFi en las placas, «lo de V8»).
+> - **V8, en las pruebas finales:** arriba, 🏁.
+> - **A V9:** `#490`, `#584` (sólo en un proyecto), `#615`, `#663` (como obsoleta), `#719`, `#723` (con el censo de las
+>   clases de dispositivos), `#728`, `#738`, `#745` (una segunda fase), `#781`, `#782`, `#809` y `#819`; y sin número, la
+>   C3 optimizada, `M5`, el simulador con disfraces, la ventana del micro simulado, reservar sin el cerrojo y los sets.
+> - **Cerradas:** `#582` (una limitación conocida, documentada) y `#735` (no se hace).
+> - **`#802`, el orden:** V8 se publica como siempre; después, antes de V9, una versión que sólo reorganiza en la suite.
 >
 > 🧪 **JC frente a las pruebas de C#** (Eduardo, 31-oct): *«lo que le falta a JC para que soporte mas pruebas de C#.
 > Empezar por añadir lo mas sencillo y ver cuantas mejoras pasarían»*. El análisis, con las pruebas de Mono: `#745`;
@@ -7390,7 +7447,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810`)
+#### 🔵 `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente**)
 
 - **Lo medido** (14-nov, dentro de la flash: `/data/f824`, un fichero, y `/data/d824`, una carpeta vacía): la VM-Java,
   `rmdir` del fichero, bien, y el fichero ya no está; `removeFile` de la carpeta, bien, y la carpeta tampoco. La VM-C,
@@ -7402,8 +7459,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **El arreglo** (pequeño): en la VM-Java, `rmdir` falla si no es una carpeta, y `removeFile` si lo es, con sus textos de
   ahora; y una prueba en el corpus. Salió al repasar lo medido en `#810` (con `../x810`, `rmdir` iba en la VM-Java y
   fallaba en la VM-C, y `removeFile` al revés).
+- **14-nov, V8, pendiente** (Eduardo: *«OK, pendiente de V8»*).
 
-#### 🔵 `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **por decidir**: qué significa una ruta relativa)
+#### 🔵 `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **decidido el 14-nov**: se queda como está; documentarlo y recomendar `/data`)
 
 - **Lo medido** (14-nov, el programa de `#810` con `../x810`, corrido desde una carpeta del scratchpad): las dos VMs del PC
   escribieron, leyeron y borraron `x810` en la carpeta de encima de la del proceso, fuera de la flash (que `rmdir` y
@@ -7413,6 +7471,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que hay que decidir** (Eduardo): relativa a qué es una ruta relativa —la raíz de la flash, como littlefs; la
   carpeta del programa, como el IDE; o un error—, y que lo hagan igual la placa, las dos VMs del PC y el IDE. El corpus
   usa rutas absolutas (lo que escriben las pruebas va a su flash, `#808`): habría que mirar si alguna usa relativas.
+- **14-nov, decidido** (Eduardo: *«En un PC ya ocurre ese, los ficheros se crean según desde donde se llama el programa.
+  Para evitar ese tenemos /data . Yo lo daría por bueno, es el programador el que tiene que decidir donde quiere crear
+  los ficheros. Lo que podemos hacer es documentarlo y recomendar que utilicen /data .»*): no se cambia. Queda
+  documentarlo, en el repaso de la documentación de V8: en la placa, una relativa se escribe en la raíz y se lee
+  buscando primero en la carpeta del programa; en el IDE, la carpeta del programa; en las VMs de consola, la carpeta
+  desde donde se lanzan; y la recomendación, `/data`. Se cierra al documentarlo.
 
 #### ✅ `#822` — el IDE perdía de vista una VM del PC: el `stop` de la línea de comandos no llegaba a la VM local, dos Run seguidos dejaban la primera dando vueltas sin que nada la parara, y ni el Stop llegaba a la VM-C de Run Window ni cerrar el IDE las paraba (abierta y **CERRADA el 14-nov**, el commit de `#822`; salió al cerrar `#694`; Eduardo: *«mientras se ejecuta un programa no debería dejar ejecutar otro»*)
 
@@ -7437,7 +7501,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Window y Stop; Run y cerrar la ventana; y el `stop` del terminal sin placa (antes, «no conectado» y seguía). Y en la
   ventana, Eduardo: *«OK, ahora si»*. La guía del IDE (§5 y la línea de comandos); la inglesa, en el D1.
 
-#### 🔵 `#821` — la S3: mientras se conectan el teclado y el ratón, la mínima de la RAM interna baja a 7,9 KB (abierta el 14-nov, al cerrar H2; **por analizar**)
+#### 🔵 `#821` — la S3: mientras se conectan el teclado y el ratón, la mínima de la RAM interna baja a 7,9 KB (abierta el 14-nov, al cerrar H2; **V8, con `#710`**)
 
 - **Lo medido** (`MEMORIA`, «La radio del Bluetooth en la S3»): con los recortes de la WiFi, la S3 arranca con 61–62,6 KB
   de mínima, y con los dos aparatos conectados le quedan 35,7 KB libres; pero mientras se conectan, la mínima baja a
@@ -7445,8 +7509,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que se miraría:** de quién es el pico, con la consola de la S3 (va por su otro USB) o con la mínima en cada paso:
   un programa que encienda el Bluetooth sin aparatos, y después con ellos. Los candidatos: el controlador al arrancar, o
   los avisos de anuncio que acumula mientras espera a los recordados.
+- **14-nov, V8, con `#710`** (Eduardo, al pasar `#710`: *«OK, V8. Lo miramos»*), y con su idea de la PSRAM.
 
-#### 🔵 `#820` — el ratón Bluetooth tarda en volver: de 1 s a casi 100, y una vez ni en 150 (abierta el 14-nov, al cerrar H2; **por analizar**)
+#### 🔵 `#820` — el ratón Bluetooth tarda en volver: de 1 s a casi 100, y una vez ni en 150 (abierta el 14-nov, al cerrar H2; **V8: por analizar**; lo primero, el ratón con el PC)
 
 - **Lo medido:** el 14-oct, en la P4 sin WiFi, 13 y 44 s; el 11-nov, en la P4 con WiFi, 97 y 35 s; el 13-nov, en la C5,
   de 1,3 a 49 s, y una vez ni en 150; el 14-nov, en la S3, 27 s. El teclado vuelve casi siempre en el acto (una vez, 21 s).
@@ -7455,14 +7520,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   con el diagnóstico del 11-nov no se vio ni un anuncio suyo mientras no volvía.
 - **Lo que se miraría:** cómo se anuncia el ratón al despertar (con un escáner en el PC o en el móvil), y los parámetros
   del connect de la lista blanca (la ventana y el intervalo de escaneo), frente a un PC con el mismo ratón.
+- **14-nov, V8, analizando primero** (Eduardo: *«Podemos probar el ratón Bluetooth con el PC y ver si le pasa lo
+  mismo?»*; *«Apuntala para hacer, terminamos el repaso primero.»*): lo primero, el ratón emparejado con Windows (el PC
+  tiene Bluetooth LE; con la P4 apagada), dormido y despertado, y con el Bluetooth de Windows apagado y encendido. Si en
+  Windows vuelve en 1–2 s siempre, es nuestro lado (la lista blanca, los parámetros de la espera, una dirección
+  privada); si también tarda, es el ratón. Después, emparejarlo otra vez con la P4.
 
-#### 🔵 `#819` — el paso 6 de H2: el programa de configuración del Bluetooth, en BasicPlus (abierta el 14-nov, al cerrar H2; **V8 o V9, por decidir**)
+#### 🧬 `#819` — el paso 6 de H2: el programa de configuración del Bluetooth, en BasicPlus (abierta el 14-nov, al cerrar H2; **a V9 el 14-nov**)
 
 - **Lo que es** (`V8_IDEAS` §E1, el diseño del 14-oct y el orden del 8-nov): un programa BP, dado en un pack y lanzado
   desde el IDE, con dos pantallas: la lista de los aparatos recordados (activar, desactivar, olvidar) y la búsqueda, para
   añadir uno. Lo que necesita ya está: `Air.Bluetooth` (`turnOn`, `scan`, `connect`, `forget`, `listDevices`) y
   `/sys/bluetooth.json`.
 - **Por decidir** (Eduardo, 14-nov: *«El paso 6 apuntalo como pendiente y ya decidiremos si lo hacemos en V8 o en V9»*).
+- **14-nov, a V9** (Eduardo: *«a V9»*). Mientras, emparejar se hace con unas líneas de BP (`referencia.html` §14.19, con
+  su ejemplo); esa sección dice aún que en las placas `isAvailable()` es false: a corregir al documentar V8.
 
 #### ✅ `#818` — en las ESP con PSRAM, cada refresco de una pantalla SPI pedía a la RAM interna un búfer de rebote del tamaño de la franja de LVGL (11,5 KB en la C5), y con el Bluetooth y la WiFi encendidos no lo había: la pantalla dejaba de refrescarse (abierta y **CERRADA el 13-nov**, el commit de `#818`; salió en H2, en la C5; Eduardo: *«OK»*)
 
@@ -7532,7 +7604,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (`REPL_LIST_MAX_DIRS`). `/data` es una más, y cada `/data/<proyecto>`, otra. Pasado el tope, el listado lo dice
   (`#425`), no lo calla.
 
-#### 🔵 `#815` — la P4 se reinició con un pánico buscando aparatos Bluetooth, la segunda vez que se encendía la radio en el mismo arranque (abierta el 11-nov, en el paso 5 de H2; una vez, sin repetirse)
+#### 🔵 `#815` — la P4 se reinició con un pánico buscando aparatos Bluetooth, la segunda vez que se encendía la radio en el mismo arranque (abierta el 11-nov, en el paso 5 de H2; una vez, sin repetirse · **14-nov: se prueba a propósito en las pruebas finales**)
 
 - **Lo visto** (11-nov): `BtBusca` encendió el Bluetooth, buscó 10 s y lo apagó; 40 s después, `BtConecta` lo volvió a
   encender y, buscando 15 s con el teclado y el ratón en modo de emparejar, la placa se reinició. El `INFO` de después:
@@ -7544,6 +7616,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que se haría**: si se repite, hacer que deje rastro (la consola por un rato, o el volcado del IDF en la flash) y
   leerlo con `addr2line` sobre el `.elf` de esa imagen; y probar a propósito lo que lo distinguía: encender, apagar y
   volver a encender, y buscar con aparatos en modo de emparejar.
+- **14-nov, a las pruebas finales** (Eduardo: *«OK»*): en la P4, encender, apagar y volver a encender el Bluetooth y
+  buscar con los aparatos en modo de emparejar, unas cuantas veces; si sale, una imagen de prueba con la consola
+  encendida para tener la traza.
 
 #### ✅ `#814` — en el PC, el fin de RUN avisa de una FUGA del programa que no es suya: lo que la GUI del PC pide para sí, el búfer de dibujo sin ventana (`--no-screen`) y el guion de la ventana (abierta el 11-nov, en las pruebas de `#813` · **CERRADA el 13-nov**, el commit de `#814`; Eduardo: *«si»*)
 
@@ -7677,12 +7752,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (39 líneas), y si una operación no falla o `fileExists` dice que sí, una línea FALLO; con `sandboxPath` como antes, la
   VM-Java muere en el primer `fileExists` (exit 1). Lo de `--workdir` (las rutas relativas) queda en `#823`.
 
-#### 🔵 `#809` — la zona de packs de la VM del PC, en un fichero binario permanente que se cargue al arrancar (abierta el 8-nov, en H2; **para más adelante**)
+#### 🧬 `#809` — la zona de packs de la VM del PC, en un fichero binario permanente que se cargue al arrancar (abierta el 8-nov, en H2; **para más adelante** · **a V9 el 14-nov**)
 
 - **La idea, de Eduardo (8-nov):** *«Y para la zona de Pack un fichero binario permanente que se cargue al arrancar la
   VM»*. Hoy la VM-C de consola y el micro simulado la tienen en la RAM: se rellena al arrancar con los `--pack=`, y lo
   que se instale en ella se pierde al cerrar. La VM-Java, por mirar cómo lleva los packs.
 - **Cuándo** (*«la 2) lo puedes hacer mas adelante»*): no hace falta para H2.
+- **14-nov, a V9** (Eduardo: *«a V9»*).
 
 #### ✅ `#808` — la VM del PC, con su flash: una carpeta que no se borra (abierta el 8-nov, en H2 · **CERRADA el 13-nov**, el commit de `#808`; Eduardo: *«La b»*)
 
@@ -7841,11 +7917,16 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Comprobado en la P4**, con los plazos de verdad: quieta 25 s y un programa callado 30 s, sin falsa alarma; parado en el depurador, contesta; y cuando la radio desaparece, el IDE lo dice a los 11 s y se vuelve a conectar. En la ventana, Eduardo: *«OK, todo funciona»*.
 - **Las placas:** la P4, la S3 y la C5, con la imagen nueva el 7-nov. Una placa con WiFi y una imagen anterior daría, con este IDE, «conexión perdida» con un programa callado más de 15 s.
 
-#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir)
+#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir · **14-nov: decidido el orden** —la suite, entre V8 y V9—)
 
 - **La idea:** *«con JC llamar al proyecto BasicPlus se queda un poco corto»*: el nombre de un grupo de proyectos, y dos: el IDE, el compilador y la VM-Java, y la VM-C con las de los micros.
 - **Medido** (`V8_IDEAS` §E14): el código se separa limpio, por contratos; en medio quedan la stdlib, la red, el AOT, lo que usa el IDE y los documentos; y en V8, uno de cada tres commits de código toca Java y C a la vez.
 - **Sin hacer: por decidir (Eduardo)**, y nada en GitHub sin su palabra. La recomendación, en §E14: la organización al publicar V8, y la división no antes de empezar V9.
+- **14-nov, decidido el orden** (Eduardo: *«Mira, haremos lo siguiente. Publicamos V8 normal. Entonces con V8 publicada
+  y antes de empezar V9, preparamos la versión para la suite y la publicamos. Sin hacer ningún cambio mas ni mejora,
+  solamente la suite. Lo que si haremos antes de publicar es verificar que todo funciona antes de publicar.»*): V8 se
+  publica como siempre; después, entre V8 y V9, una versión que sólo reorganiza en la suite, sin cambios ni mejoras,
+  verificada entera antes de publicarla. Nada en GitHub sin su palabra.
 
 #### ✅ `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi · **CERRADA el 13-nov** sin cambiar el código, el commit de `#801`; Eduardo: *«Yo haría a)»*, documentarlo)
 
@@ -8322,14 +8403,15 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
 - **Probado:** `test-named-06` se traduce como `d.Foo((long) 2, 1)` y funciona; el lote de Mono, 443 que funcionan
   (frente al de `#772`, vuelve `test-named-06`; frente al del 2-nov, `test-163` de más y ninguna de menos).
 
-#### 🔵 `#782` — los recursos: lo grande (un texto, una tabla) fuera del bloque de datos del módulo, cargado al heap cuando se usa (abierta el 3-nov, tras `#768`; **decidido, sin fecha**)
+#### 🧬 `#782` — los recursos: lo grande (un texto, una tabla) fuera del bloque de datos del módulo, cargado al heap cuando se usa (abierta el 3-nov, tras `#768`; **decidido, sin fecha** · **a V9 el 14-nov**)
 
 - **La idea** (Eduardo, 3-nov, en `#768`): *«Los literales grandes deberian ser resources, que se cargan al heap.»*
   Está en `V8_IDEAS` §E12. En una placa, un módulo se carga en la memoria de la VM, delante del heap: lo grande que
   vive en su bloque de datos ocupa RAM aunque no se use.
 - **Decidido** (Eduardo, 3-nov: *«b) también pero sin fecha para hacerlo»*). Sin diseñar.
+- **14-nov, a V9, sin fecha** (Eduardo: *«a V9»*).
 
-#### 🔵 `#781` — quitar el tope de los datos de un módulo: un prefijo `WIDE`, como el de la JVM, para los datos que no llegan con el operando de 16 bits (abierta el 3-nov, tras `#768`; **decidido, para más adelante**)
+#### 🧬 `#781` — quitar el tope de los datos de un módulo: un prefijo `WIDE`, como el de la JVM, para los datos que no llegan con el operando de 16 bits (abierta el 3-nov, tras `#768`; **decidido, para más adelante** · **a V9 el 14-nov**)
 
 - **Por qué** (Eduardo, 3-nov: *«A mi me da la impresión que la restricción de 64K es una limitación del compilador,
   probablemente del generador de código»*): lo es. Las instrucciones que tocan un dato del módulo llevan su posición
@@ -8340,6 +8422,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   dato no llega: lo de hoy, igual byte a byte; sólo un módulo con más de 64 KB de datos pediría una VM que la conozca.
   El opcode, en las dos VMs, el desensamblador y el compilador (el `ModWriter` ya sabe la posición al emitir).
 - **Decidido** (Eduardo, 3-nov: *«a) si pero se puede hacer mas adelante»*).
+- **14-nov, a V9** (Eduardo: *«a V9»*).
 
 #### ✅ `#780` — `samples/errores`: tres ejemplos sin caso en `h13-errores.sh` (nadie vigila su mensaje), y `AnnMal` falla por algo que no es lo suyo (abierta el 3-nov, al añadir el de `#768`; **CERRADA el mismo día**, el commit de `#780`)
 
@@ -8360,7 +8443,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   (El de `#768` no entró: un ejemplo de más de 64 KB de datos pide más de 64 KB de fuente; lo prueba
   `ModuloNoCabeTest`.)
 
-#### 🔵 `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis**)
+#### 🔵 `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis** · **14-nov: se mira en las pruebas finales**)
 
 - **Cómo salió:** la red de las 23:16 (2-nov), en ROJO sólo por esto, en el grupo de las pruebas de C; lo demás, verde.
   Lo que guardó el log: lo suyo, todo PASS, la línea «OK: la cola…» y el principio de los sabotajes; no cuál falló (la
@@ -8375,6 +8458,8 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   como deben, llevan «FAIL» en su línea: llenaban las 8 y la del veredicto, al final, quedaba cortada. **Hecho**
   (Eduardo: *«OK»*): `check-testc` enseña primero las líneas de veredicto de la prueba (las que empiezan por `FAIL `) y
   después, hasta 8, lo demás. Abierta hasta que se repita: entonces se verá qué sabotaje fue.
+- **14-nov, a las pruebas finales** (Eduardo: *«OK, lo miramos en las pruebas finales que para eso estan.»*), con la
+  pista del sabotaje 13 (se caza en 2 de cada 20 vueltas).
 
 #### ✅ `#778` — el traductor de C#: dos huecos que tapaba el rechazo del `null` de las cadenas —un enum en una cadena (C#, su nombre; JC, su número) se traduce sin decirlo, y una variable que C# ve con valor tras un `switch` sobre una constante y JC, como Java, no— (abierta el 2-nov, en el lote de `#774`; **CERRADA el 3-nov**, el commit de `#778`: `Enum.getName`, y la local sin valor con el de su tipo)
 
@@ -8652,7 +8737,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   próximo lote (`builtins.c` es de todas). **En placa, el 3-nov (el lote):** `SleepCede` y `CedeCero`, IDÉNTICOS al PC
   en las nueve.
 
-#### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis**)
+#### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis** · **14-nov: se vuelve a probar en las pruebas finales**)
 
 - **Cómo salió:** la red del 2-nov a las 12:51, en ROJO sólo por esto (lo demás, verde); el cambio de esa red sólo
   tocaba un sample BP que la prueba no usa. La red de las 12:12, con la misma VM-C, la pasó.
@@ -8666,6 +8751,10 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   `build/trazasbus.diff` y enseña sus 12 primeras líneas en el FAIL. Probado con un sabotaje (un envoltorio de la VM-C
   que con dos runs se come una traza): «FAIL … la primera, en build/trazasbus.diff» y la traza que faltaba. Abierta
   hasta que se repita.
+- **14-nov, abierta hasta las pruebas finales** (propuse cerrarla como «no se reproduce»; Eduardo: *«La dejamos abierta.
+  En las pruebas finales lo volvemos a probar a ver si vuelve a aparecer. Los problemas de memoria y de Threads son así,
+  aparecen alguna vez. Si no vuelve a aparecer es una falsa alarma pero si aparece otra vez es que tenemos un cabo
+  suelto por algún siti0.»*). Desde el 3-nov no ha vuelto a salir (no hay `build/trazasbus.diff`).
 
 #### ✅ `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **CERRADA el 3-nov**, el commit de `#768`: el bloque de datos, hasta 64 KB, y un error claro si no cabe)
 
@@ -9408,7 +9497,7 @@ Lo dice el propio emisor (`MivmEmitter`, el `+=` de un elemento y el de un miemb
 side-effects (lo habitual)»*. Emite dos veces `ix.target` y `ix.index`, o `ma.target`: igual con `obj().n += 1` y con
 una propiedad. El AOT, por mirar. Va con `#747`: los compuestos nuevos comparten ese código.
 
-#### 🔵 `#745` — JC frente a las pruebas de C# de Mono: qué le falta a JC y cuántas pruebas desbloquea cada cosa (abierta el 31-oct; **sólo análisis**)
+#### 🧬 `#745` — JC frente a las pruebas de C# de Mono: qué le falta a JC y cuántas pruebas desbloquea cada cosa (abierta el 31-oct; **sólo análisis** · **a V9 el 14-nov**: una segunda fase)
 
 Eduardo (31-oct): *«Hay un standard para C#. Hay algun paquete para verificar el compilador ( y el intérprete ) ? […]
 igual lo podíamos aprovechar para verificar el compilador JC»*; y después: *«Mira de momento lo que podemos mirar es lo
@@ -9475,6 +9564,11 @@ expresiones landa no entrarían, expresiones como *= y genéricos se podrian añ
   producto); (2) lo S en JC y en BP a la vez, empezando por los compuestos, que ya dijo que sí; (3) lo M, por lo que
   rinde, cada cosa con su OK; (4) los genéricos, como hito propio; y lo de las interfaces simples.
 - **Sigue abierta** (Eduardo, 4-nov, al preguntarle si se cerraba: *«La 3 no»*).
+- **14-nov, a V9, una segunda fase** (Eduardo, a la propuesta de cerrarla: *«No, va a V9. En V9 haremos una segunda
+  fase. Nos quedaron por ver el resto de temas ( revisamos la mitad ). Y todavia se nos puede ocurrir algo mas.
+  Personalmente creo que el lenguaje ya está bastante completo teniendo en cuanta que se ejecuta en microcontroladore
+  con poca RAM. Meter toda la complejidad de Java y C# no le veo mucho sentido. Pero si hay algun ajuste pequeño que no
+  represente demasiado problema lo podemos hacer.»*).
 
 #### ✅ `#744` — BP: leer o escribir una propiedad por `super` (`super.prop`) va a la de la hija, no a la del padre; `super.m()` sí va al padre (abierta el 31-oct, con `#745`; preexistente; **CERRADA el 1-nov**, el commit de `#744`)
 
@@ -9722,7 +9816,7 @@ con su test— y quitar el caso, o dejarlo como una comprobación que avise si a
 - La red, VERDE (14:31); `check-jc`, VERDE (8:24); las pruebas de la VM-Java, 62 (una nueva). A las placas, con el próximo
   lote (llegó el 3-nov, a las nueve).
 
-#### 🧊 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5 · **medida y congelada el 4-nov**, Eduardo: *«No corre prisa y de momento no corremos riesgos que ya estamos haciendo muchos cambios en los strings. Prefiero ver como van una temporada y si hace falta lo volvemos a mejorar»*)
+#### 🧬 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5 · **medida y congelada el 4-nov**, Eduardo: *«No corre prisa y de momento no corremos riesgos que ya estamos haciendo muchos cambios en los strings. Prefiero ver como van una temporada y si hace falta lo volvemos a mejorar»* · **a V9 el 14-nov**, aparcada)
 
 La RP2350 tiene un alias de la memoria externa sin caché (`XIP_NOCACHE_NOALLOC`) y un DMA que llega a la PSRAM
 (`V8_IDEAS` §E5, «¿Y DMA entre la PSRAM y la RAM?»). Daría, en las operaciones de bloque: copiar y poner a cero sin
@@ -9784,6 +9878,9 @@ bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la 
   - **Congelada, y los strings, terminados por ahora** (Eduardo, 4-nov): *«¿Por que miramos los strings en V8? Porque en
     V7 vimos que eran lentos. Yo creo que todos los cambios hemos mejorado bastante. De momento los strings lo daría por
     terminado.»*
+- **14-nov, a V9, aparcada** (Eduardo: *«a V9. Ya la miraremos mas adelante.»*). Va encima de `#736` (la reserva sin
+  ceros de los builtins, hecha el 29-oct): aun sin poner a cero, la primera escritura en la PSRAM recién reservada pasa
+  por la caché del XIP.
 
 #### ✅ `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y las de la S3 (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**: la P4, con la L2 de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la S3, con las dos al máximo —instrucciones 32 KB, datos 64 KB con líneas de 64 B—, medida y en la placa el 3-nov)
 
@@ -9892,7 +9989,7 @@ longitud—; y *«OK»*):
 - **Decidido** (Eduardo, 3-nov: *«OK 736»*, a «dejarla así»): la concatenación, como está. Lo grande está en la
   memoria recién estrenada de la PSRAM, `#738`.
 
-#### 🧊 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **aparcada el 3-nov**: de momento no)
+#### ✅ `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **aparcada el 3-nov**: de momento no · **CERRADA el 14-nov**: no se hace)
 
 Se guarda la longitud en bytes. Con el bit «todo ASCII», en una cadena ASCII los caracteres son los bytes y `strlen`
 es O(1); con acentos, se cuenta (lineal; el cursor la recuerda mientras no cambie de cadena). La opción (`V8_IDEAS`
@@ -9904,6 +10001,8 @@ que ningún camino reescriba la etiqueta entera y la borre.
 - **Decidido** (Eduardo, 3-nov: *«735 de momento no la hacemos. No es un bug, es una optimación y por lo que dices no se
   gana mucho así que de momento no.»*): con el cursor, los patrones medidos ya son lineales (`StrCursorBench` en la
   Pico 2, el lote del 3-nov); sólo ganaría con muchas cadenas con acentos medidas una vez cada una. Aparcada.
+- **14-nov, CERRADA: no se hace** (Eduardo: *«La cerramos. No es nada crítico y la parte de strings ya está bastante
+  optimizada. Si mas adelante hace falta siempre podemos retomar la idea.»*). La idea queda escrita arriba.
 
 #### ✅ `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; explicada el 29-oct —la caché del XIP— e `intToString`, hecha; **CERRADA el 2-nov**: lo demás se queda como está)
 
@@ -10173,7 +10272,7 @@ Metro diga «ancla: en 0x1016…, y es LA misma», y la Pico 2, la suya.
 - **Visto en el lote del 3-nov:** con la imagen de hoy, el arranque de la Metro dice «ancla: en 0x10167F3C (la
   busqueda la encuentra, y es LA misma)», sin la falsa alarma.
 
-#### 🔵 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar**)
+#### 🧬 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar** · **a V9 el 14-nov**)
 
 Eduardo, 24-oct: *«Como idea. Estoy pensando si te sería útil a Claude y a otras IAs dotarle al IDE de una interfaz
 accesible desde la IA. Que pueda efectuar operaciones como cerrar el IDE, cargar un source, compilar, conectar a un
@@ -10196,6 +10295,8 @@ dispositivo, ejecutar, etc.»* Lo visto ese día:
   depurador.
 
 Eduardo: *«OK»*. Apuntada; se retoma cuando él diga.
+
+- **14-nov, a V9** (Eduardo: *«a V9»*).
 
 #### ✅ `#727` — `test-tablasim` (`#639`), caso 4: con un byte menos que la línea base espera que algo no entre; pero si lo último que pide la carga es el array de registros, crece menos y cabe todo (abierta el 23-oct, al pasar la red de `#725`; **CERRADA el mismo día**: el caso busca el presupuesto con el que algo no entra, `8f1ca68b`)
 
@@ -10353,7 +10454,7 @@ blob. Lo hecho, con la regla de `#711` —los bytes por un lado y el descodifica
   (las mismas entradas). **En placa, en el próximo lote**: el `SQLite.pack` nuevo en la Metro y en la P4 (con
   `SqlTexto` y `SqlDemo`) y el texto del motivo 3 en las imágenes. Hasta entonces, las placas siguen como hoy.
 
-#### 🔵 `#723` — los streams: las fuentes de bytes, y un `Reader` encima que espera el resto de un carácter (la idea de Eduardo del 22-oct), por diseñar (abierta el 23-oct, al cerrar `#711` · **a V9 el 7-nov, como tema importante, con los dispositivos**)
+#### 🧬 `#723` — los streams: las fuentes de bytes, y un `Reader` encima que espera el resto de un carácter (la idea de Eduardo del 22-oct), por diseñar (abierta el 23-oct, al cerrar `#711` · **a V9 el 7-nov, como tema importante, con los dispositivos**)
 
 Eduardo: *«Los streams los podemos hacer siempre de bytes (creo que en Java son así). Pero luego se encapsulan en un
 Reader. […] el problema no es la lectura de los bytes, el problema es de codificación y ahí si le faltan bytes lo que
@@ -10377,6 +10478,12 @@ RP2350, las UART de las ESP32 y el DMA de `Uart`; y lo que cambie en las clases 
 constructor) y la del PC (el nombre del puerto, `COM3` o `/dev/ttyUSB0`), casi iguales; quizá una tercera para los puertos
 serie sobre USB o Bluetooth. Con ella, la `Uart` del micro simulado a un puerto del PC, y los builtins que esperan
 (`Uart.read`) cediendo el hilo BP.
+
+- **14-nov, sigue en V9, con el censo de las clases de dispositivos** (Eduardo: *«si en V9. En V9 haremos un censo de
+  clases que gestionan dispositivos. Por ejemplo, la UART. Tenemos una UART sobre un canal fisico del microcontrolador,
+  sobre USB, sobre Bluetooth, sobre un puerto Windows/Linux, SoftUART, PIOUART, etc . Bien, lo que hay que hacer es
+  definir una interfaz UART común, y luego las diferentes implementaciones. Y dentro un InputStream y un OutputStream .
+  Para SPI también algo similar.»*).
 
 #### ✅ `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
 
@@ -10455,7 +10562,7 @@ más que lo que se gana dentro. En la Pico 2 además la SRAM sirve a la vez el c
 (`pico/CMakeLists.txt`). Comprobado: en P, `mem*` en la flash y `.data` 920 B menor; en M, en la RAM, como antes. En la
 Pico 2, «buscar y cortar» de `StrAcentos` vuelve a 76 ms (85 con `mem*` en la RAM), y el heap de la VM, a 219 016 B.
 
-#### 🧊 `#719` — la división quirúrgica en la RP2350: lo más usado y crítico de la VM y de FreeRTOS, a la SRAM interna, y el resto en la flash (abierta el 22-oct, al medir el código caliente en la SRAM en el H5; **para más adelante**, Eduardo: *«Lo que necesitamos es una división quirurgica, lo mas utilizado y crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy complicado. Lo dejamos para mas adelante.»*)
+#### 🧬 `#719` — la división quirúrgica en la RP2350: lo más usado y crítico de la VM y de FreeRTOS, a la SRAM interna, y el resto en la flash (abierta el 22-oct, al medir el código caliente en la SRAM en el H5; **para más adelante**, Eduardo: *«Lo que necesitamos es una división quirurgica, lo mas utilizado y crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy complicado. Lo dejamos para mas adelante.»* · **a V9 el 14-nov**)
 
 **Por qué.** En la RP2350 la flash es externa y va por QSPI, más lenta que la SRAM interna (Eduardo). El código se
 ejecuta por una caché de 16 KB que en la Metro es también la de la PSRAM. Lo medido el 22-oct (`V8_IDEAS` §E5, «El
@@ -10484,6 +10591,9 @@ código caliente en la SRAM»), con ficheros ENTEROS en la SRAM y en la Metro co
 
 Relacionada con `#665`: con FreeRTOS en la SRAM, lo que mueve memoria de la PSRAM ganaba bastante más. Probablemente es
 el otro núcleo, que ejecuta FreeRTOS desde la flash y compite por la caché.
+
+- **14-nov, a V9** (Eduardo: *«a V9 si»*). Lo grueso ya está en la Metro (el firmware M); lo de esta ficha es afinarlo y
+  la Pico 2. Lo que salga de medir `#665` en las pruebas finales dirá cómo retomarla.
 
 #### ✅ `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **CERRADA el 30-oct**: los huecos, en 48 listas por tamaño que eligen el hueco más bajo —el mismo que la lista única, sin recorrerla—, con el camino de la reserva en la SRAM de la RP2350; el commit de `#718`)
 
@@ -11272,7 +11382,7 @@ caracteres; `StringBuilder.toString` validará sus piezas (una pasada más con a
 
 Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs). `V8_IDEAS` §E5, «`#711` HECHO».
 
-#### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
+#### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas · **14-nov: V8, con `#821`**)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los
   informes `compat/informes/f1_v7_*` e `idf61_*`): la S3, −34,0 KB; la C5, −35,1 KB; la P4, de −52,6 a −56,5 KB, igual
@@ -11286,6 +11396,10 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
 - **Lo que haría falta, si Eduardo quiere:** medir el mínimo en puntos del arranque, para saber quién lo hunde y si es
   pasajero de verdad. Las pruebas dan lo mismo, y el peor margen es la C5, con 153 KB libres.
 - **Sigue abierta** (Eduardo, 4-nov, al preguntarle si se cerraba: *«La 3 no»*).
+- **14-nov, V8, con `#821`** (Eduardo: *«OK, V8. Lo miramos»*): primero medir el mínimo en varios puntos del arranque y
+  de la conexión del Bluetooth (quién lo hunde), y después decidir. Lo que cambió desde el 4-nov: con el Bluetooth, la
+  RAM interna de la C5 y la S3 va justa; y una reserva de DMA gastada en otra cosa es la memoria que faltó en `#818`. Va
+  con la idea de Eduardo de la PSRAM (en «📋 El repaso de los pendientes del 14-nov», bajo la tabla de hitos de V8).
 
 #### ✅ `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente; **CERRADA el 3-nov**, en el lote de placas)
 
@@ -11301,7 +11415,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   **Por ver en el lote:** tras `idf flash`, el `INFO` de la C3 o la C5 dice «USB».
 - **Visto en el lote del 3-nov:** tras `idf flash`, el `INFO` de la C3, la C5 y la C6 dice `"resetReason": "USB"`.
 
-#### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»*)
+#### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»* · **14-nov: la C5, en las pruebas finales**)
 
 - **Lo que dijo Eduardo**, tras el análisis: *«La placa tiene una salida speaker y la placa venía con unos pequeños
   altavoces. Y sí, podemos empezar con .wav.»*
@@ -11342,6 +11456,8 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   en el bit 3 del expansor CH32V003, que la pantalla escribe entero y no se puede leer. Lo propuesto: el expansor con
   un solo dueño, la HAL BP, y una entrada nueva en la BIOS para el pack de la pantalla. El análisis, en §E4
   («27-oct, la C5»). La ficha sigue abierta con ella.
+- **14-nov, sigue igual** (Eduardo: *«Sigue igual. Tengo que buscar un conector que entre y probar. Lo decidimos en las
+  pruebas finales.»*): la C5, en las pruebas finales; si no se puede, a V9, y H4 se cierra con el PC y la P4.
 
 #### ✅ `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3 · **CERRADA el 19-oct**, `fdc212cf`, `b3015a2b` y el commit del perro: las cinco placas, 0 de 250 pruebas cambian)
 
@@ -12157,6 +12273,8 @@ decir qué hace el código es gratis, decir cuántos mA necesita instrumento. Y 
 número que había (0,4 ms/vuelta) es del P4, de antes de `#462`, medía sólo `lv_timer_handler`, y su
 propia revisión dice que no se puede extender a otra placa. Sin línea base, la escalera no tiene
 contra qué compararse.
+
+- **14-nov, el repaso de los pendientes** (Eduardo: *«a V9»*): se queda en V9.
 
 ## 📦 CERRADAS EN V6 (con su commit, para no volver a darlas por abiertas) — V6 publicada el 12-sep-2026
 

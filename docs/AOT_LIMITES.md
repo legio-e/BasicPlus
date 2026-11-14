@@ -263,8 +263,11 @@ asegurarnos que el compilador funciona correctamente. Se puede detectar con test
 cada native contra su interpretada, y la tanda, cada placa contra el PC—. El IDE lo dice al poner el breakpoint
 (`NativaEnLinea`, en el compilador: por el texto, la `function` más cercana por encima y su `end`).
 
-El cabo del AOT que queda, en su ficha: la línea de un error dentro de una native (`#582`, en V8: la placa dirá
-dónde y el PC lo traducirá). El `try`/`catch` dentro, hecho (`#578`, 9-oct; §2).
+Y lo mismo con la línea de un error dentro de una native (`#582`): desde V8 la placa da la cadena de llamadas de un
+error y el IDE la traduce a su línea, pero dentro de una native la línea es la de quien la llamó. Para ver la exacta,
+se le quita `native` y se ejecuta interpretada. Es una limitación conocida (Eduardo, 14-nov: *«De momento yo no haría
+nada, se puede poner como observación, una limitación conocida.»*). El `try`/`catch` dentro, hecho (`#578`, 9-oct;
+§2).
 
 ## Dónde se hace cumplir
 

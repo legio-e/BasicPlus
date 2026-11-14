@@ -407,19 +407,19 @@ cambia al escribir un programa.
   fatal: tras él, el autorun sí se lanza (y si el programa vuelve a caer, la salida es la
   ventana del autorun: con el IDE conectado, al arrancar da unos segundos para pararlo con
   *Stop*). **En las STM32** (la Nucleo y la DK2), un HardFault deja su informe en el log y la
-  placa **parada**: no se reinicia sola. Para V8: terminar sólo el run que falla y que `io`
-  siga, el MPU protegiendo la memoria del sistema y un contador de reinicios contra el bucle
-  del autorun.
-- **En la placa, un error no dice en qué línea pasó** (`#582`). Al acabar, la placa da el
-  mensaje —`excepcion no atrapada: Core.RuntimeError: División por cero`— y nada más, en
-  código interpretado y en una `native`; la traza con la línea sólo la da la VM Java del
-  PC. La placa no tiene el `.dbg` (da direcciones, y el PC pone los nombres): en V8, la
-  placa dirá dónde y el IDE lo traducirá a su línea.
+  placa **parada**: no se reinicia sola. Terminar sólo el run que falla y que `io` siga, el
+  MPU protegiendo la memoria del sistema y un contador de reinicios contra el bucle del
+  autorun se deciden con la prueba de resistencia de las pruebas finales de V8 (14-nov).
+- **Dentro de una `native`, un error no dice su línea** (`#582`; una limitación conocida,
+  Eduardo, 14-nov). Desde V8, un error sin atrapar en la placa trae su cadena de llamadas y
+  el IDE la traduce a fichero y línea (la placa da direcciones y el PC pone los nombres,
+  con el `.dbg`). Pero dentro de una `native` la línea es la de quien la llamó. Para ver la
+  exacta, quítale `native` y ejecútala interpretada: lo mismo que para depurarla.
 - **Un `.mod` lleva el código nativo de UNA familia** (`#584`). El IDE compila en cada Run
   para la placa que tiene delante y funde en el `.mod` el bloque nativo de su familia;
   llevado a mano a una placa de otra familia, el programa corre igual, pero sus `native` van
   interpretadas (la placa tolera el bloque ajeno). El `.mod` multifamilia —el mismo fichero
-  para cualquier placa— es de V8, con la WiFi.
+  para varias familias— es de V9, y sólo dentro de un proyecto que diga qué familias lleva.
 - **El depurador no despliega los objetos** (`M5`). Un local que es un objeto sale como
   `@<valor>`, sin sus campos ni sus properties (heredadas o no). Pide el layout de cada clase
   en el `.dbg` y una vista en árbol en el IDE: V8.
