@@ -1063,6 +1063,11 @@ o en V9»*): el teclado y el ratón Bluetooth funcionan en la P4, la C5 y la S3.
 programa de configuración (`#819`); el ratón que tarda en volver (`#820`); el pico de la S3 (`#821`); el pánico de la P4
 de una vez (`#815`); y el solape de `#817` en la C6, en el lote final.
 
+**El ratón que tardaba en volver era el ratón** (`#820`, cerrada el 14-nov; Eduardo: *«si»*): dormido del todo, moverlo
+no lo despierta, sólo un clic (*«Cuando el ratón se duerme profundo hay que despertarlo con un clic. Cuando el raton se
+duerme normal (si no se mueve) se depierta con moverlo o con clic. En teclado se despierta siempre con una tecla.»*).
+Despertado con un clic, vuelve a la P4 en 3,3–5,1 s, contando lo que tarda el clic, como a Windows (4,9 s), y sin cortes.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
