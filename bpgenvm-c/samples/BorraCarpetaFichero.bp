@@ -1,0 +1,122 @@
+// BorraCarpetaFichero.bp — #824 (14-nov): `IO.rmdir` sólo borra carpetas (vacías) e `IO.removeFile` sólo ficheros,
+// como dice la referencia y como hace la flash de las placas (littlefs). Antes, en la VM-Java cualquiera de las dos
+// borraba un fichero o una carpeta vacía (`Files.delete`), y en la VM-C dependía de lo de debajo: en la SD de las placas
+// (FAT) y en un PC con Linux, también. Si una operación que debe fallar no falla, o una que debe ir no va, una línea
+// FALLO pone la red en rojo aunque las dos VMs digan lo mismo. La clase del error, con un `catch` por tipo y no con
+// `instanceof`: en MOD8, `instanceof` no nombra una clase de Core (como en ErroresConTipo).
+module BorraCarpetaFichero
+  import IO
+
+  function dice(que: string, clase: string, msg: string)
+    print que + " -> " + clase + ": " + msg
+  end dice
+
+  function Main()
+    var f: string := "/data/f824"
+    var d: string := "/data/d824"
+    var lleno: string := "/data/l824"
+    var dentro: string := "/data/l824/dentro"
+    // Lo que quedara de una pasada anterior, cada cosa con lo suyo.
+    if fileExists(dentro) then
+      IO.removeFile(dentro)
+    endif
+    if IO.isDirectory(lleno) then
+      IO.rmdir(lleno)
+    endif
+    if fileExists(f) then
+      IO.removeFile(f)
+    endif
+    if IO.isDirectory(d) then
+      IO.rmdir(d)
+    endif
+    writeFile(f, "x")
+    IO.mkdir(d)
+    IO.mkdir(lleno)
+    writeFile(dentro, "y")
+
+    // rmdir de un fichero: falla, y el fichero sigue.
+    try
+      IO.rmdir(f)
+      print "FALLO: rmdir borra un fichero"
+    catch e: IOError
+      dice("rmdir(fichero)", "IOError", e.msg)
+    catch e2: RuntimeError
+      dice("rmdir(fichero)", "RuntimeError", e2.msg)
+    endtry
+    if not fileExists(f) then
+      print "FALLO: el fichero ya no está"
+    endif
+
+    // removeFile de una carpeta vacía: falla, y la carpeta sigue.
+    try
+      IO.removeFile(d)
+      print "FALLO: removeFile borra una carpeta"
+    catch e: IOError
+      dice("removeFile(carpeta)", "IOError", e.msg)
+    catch e2: RuntimeError
+      dice("removeFile(carpeta)", "RuntimeError", e2.msg)
+    endtry
+    if not IO.isDirectory(d) then
+      print "FALLO: la carpeta ya no está"
+    endif
+
+    // rmdir de una carpeta con algo dentro: falla, y sigue (ya era así).
+    try
+      IO.rmdir(lleno)
+      print "FALLO: rmdir borra una carpeta llena"
+    catch e: IOError
+      dice("rmdir(carpeta llena)", "IOError", e.msg)
+    catch e2: RuntimeError
+      dice("rmdir(carpeta llena)", "RuntimeError", e2.msg)
+    endtry
+    if not fileExists(dentro) then
+      print "FALLO: lo de dentro ya no está"
+    endif
+
+    // Lo de siempre: cada cosa con lo suyo, bien.
+    try
+      IO.removeFile(f)
+      print "removeFile(fichero): bien"
+    catch e: IOError
+      print "FALLO: removeFile(fichero) -> " + e.msg
+    endtry
+    if fileExists(f) then
+      print "FALLO: el fichero sigue"
+    endif
+    try
+      IO.rmdir(d)
+      print "rmdir(carpeta vacía): bien"
+    catch e: IOError
+      print "FALLO: rmdir(carpeta vacía) -> " + e.msg
+    endtry
+    if IO.isDirectory(d) then
+      print "FALLO: la carpeta sigue"
+    endif
+    try
+      IO.removeFile(dentro)
+      IO.rmdir(lleno)
+      print "rmdir(la llena, ya vacía): bien"
+    catch e: IOError
+      print "FALLO: vaciar y borrar la llena -> " + e.msg
+    endtry
+
+    // Lo que no existe: las dos fallan (ya era así).
+    try
+      IO.rmdir("/data/no824")
+      print "FALLO: rmdir de lo que no existe no falla"
+    catch e: IOError
+      dice("rmdir(no existe)", "IOError", e.msg)
+    catch e2: RuntimeError
+      dice("rmdir(no existe)", "RuntimeError", e2.msg)
+    endtry
+    try
+      IO.removeFile("/data/no824")
+      print "FALLO: removeFile de lo que no existe no falla"
+    catch e: IOError
+      dice("removeFile(no existe)", "IOError", e.msg)
+    catch e2: RuntimeError
+      dice("removeFile(no existe)", "RuntimeError", e2.msg)
+    endtry
+    print "fin"
+  end Main
+end BorraCarpetaFichero

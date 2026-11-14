@@ -768,9 +768,12 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <tr><td><code>mkdir(p)</code></td>
       <td>Crea el directorio (y los intermedios que falten). No falla si ya existe.</td></tr>
   <tr><td><code>rmdir(p)</code></td>
-      <td>Borra un directorio. Sólo si está vacío.</td></tr>
+      <td>Borra un directorio. Sólo si está vacío; con un fichero, falla (para eso, <code>removeFile</code>).
+          <em>Cambió en V8</em> (antes, en la VM Java y en la SD de las placas, borraba también un fichero).</td></tr>
   <tr><td><code>removeFile(p)</code></td>
-      <td>Borra un fichero.</td></tr>
+      <td>Borra un fichero; con un directorio, falla (para eso, <code>rmdir</code>). <em>Cambió en V8</em>
+          (antes, en la VM Java, en la SD de las placas y en un PC con Linux, borraba también un directorio
+          vacío).</td></tr>
   <tr><td><code>rename(src, dst)</code></td>
       <td>Renombra/mueve. Sobreescribe destino si existe.</td></tr>
   <tr><td><code>copyFile(src, dst)</code></td>

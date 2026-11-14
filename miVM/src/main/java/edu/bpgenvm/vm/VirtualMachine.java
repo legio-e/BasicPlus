@@ -7422,7 +7422,13 @@ public class VirtualMachine {
             }
             case RMDIR: {
                 String p = readVmString(popTcRef(tc));
-                try { java.nio.file.Files.delete(enLaFlash(tc, p)); }
+                try {
+                    java.nio.file.Path q = enLaFlash(tc, p);
+                    // V8 #824: sólo una carpeta, como la flash de las placas y la referencia; con un fichero, falla
+                    // (Files.delete borraba los dos, y la VM-C no).
+                    if (!java.nio.file.Files.isDirectory(q)) throw new java.io.IOException("no es una carpeta: " + p);
+                    java.nio.file.Files.delete(q);
+                }
                 catch (java.io.IOException e) {   // la VM-C no distingue «no vacío» de los demás fallos: el mismo texto
                     throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): no se pudo borrar (¿no vacío?)");
                 }
@@ -7433,7 +7439,12 @@ public class VirtualMachine {
                 String p = readVmString(popTcRef(tc));
                 Breve ab = abreBreve(tc, "removeFile", p, claveFichero(tc, p, null), 1);   // V7 #657: borrar es escribir, mientras dura
                 boolean fallo = false;
-                try { java.nio.file.Files.delete(enLaFlash(tc, p)); }
+                try {
+                    java.nio.file.Path q = enLaFlash(tc, p);
+                    // V8 #824: sólo un fichero, como la flash de las placas y la referencia; con una carpeta, falla.
+                    if (java.nio.file.Files.isDirectory(q)) fallo = true;
+                    else java.nio.file.Files.delete(q);
+                }
                 catch (java.io.IOException e) { fallo = true; }
                 finally { cierraBreve(ab); }
                 if (fallo) throwBpError(tc, CLASE_ES, "removeFile('" + p + "'): error al borrar");   // V7 #657: el texto de la VM-C

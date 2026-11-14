@@ -7193,7 +7193,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > 🏁 **Y del repaso del 14-nov, también para las pruebas finales:** `#665` (medir la imagen de un núcleo y la de dos:
 > parecidas, se cierra; más lenta, a V9); `#708` (el sonido de la C5, si Eduardo encuentra el conector; si no, a V9);
 > `#769` y `#779` (las dos pruebas de la red que salieron rojas una vez: si vuelven a salir, hay un cabo suelto); `#815`
-> (el pánico de la P4 buscando aparatos, provocado a propósito); **la prueba de resistencia de días, en varios micros a la
+> (el pánico de la P4 buscando aparatos, provocado a propósito); `#824` (en la SD de una placa con la imagen nueva,
+> `rmdir` de un fichero y `removeFile` de una carpeta fallan, como en la flash); **la prueba de resistencia de días, en varios micros a la
 > vez**; y con ella, **la robustez en campo** (Eduardo: *«No lo se. Cuando hagamos las pruebas de resistencia pensamos que
 > situaciones se pueden dar y como hacer que queden registradas. Por ejemplo, un programa que corre durante 2 dias
 > seguidos, ¿ que situaciones nos podemos encontrar ? . Que todo vaya bien, OK, nada que hacer. Que se quede sin memoria.
@@ -7208,7 +7209,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
 > aquí, el reparto:
 >
-> - **V8, por hacer:** `#824` (la VM-Java: `rmdir` y `removeFile`); `#820` (el ratón que tarda en volver; lo primero,
+> - **V8, por hacer:** `#824` (la VM-Java: `rmdir` y `removeFile`; **hecha el mismo día**, también en la VM-C, por la SD);
+>   `#820` (el ratón que tarda en volver; lo primero,
 >   probarlo con el PC; **cerrada el mismo día**: era el ratón, que dormido del todo sólo se despierta con un clic); y
 >   `#710` con `#821` (la RAM interna de las ESP con PSRAM), con la idea de Eduardo: *«ver si
 >   podemos reducir la RAM que necesita las VMs al mínimo sin perjudicar el rendimiento y el resto ver si se puede mover a
@@ -7449,7 +7451,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente**)
+#### ✅ `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente** · **CERRADA el 14-nov**, el commit de `#824`; la SD de una placa, en las pruebas finales)
 
 - **Lo medido** (14-nov, dentro de la flash: `/data/f824`, un fichero, y `/data/d824`, una carpeta vacía): la VM-Java,
   `rmdir` del fichero, bien, y el fichero ya no está; `removeFile` de la carpeta, bien, y la carpeta tampoco. La VM-C,
@@ -7462,6 +7464,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   ahora; y una prueba en el corpus. Salió al repasar lo medido en `#810` (con `../x810`, `rmdir` iba en la VM-Java y
   fallaba en la VM-C, y `removeFile` al revés).
 - **14-nov, V8, pendiente** (Eduardo: *«OK, pendiente de V8»*).
+- **14-nov, hecho** (Eduardo: *«OK»*; *«ok, sigue»*): la regla de la referencia —`rmdir` sólo una carpeta, y vacía;
+  `removeFile` sólo un fichero—, mirada antes de borrar, con los textos de antes: en la VM-Java, `Files.isDirectory`; en
+  la VM-C, `bpvm_fs_isdir` en los dos builtins, para que no dependa de lo de debajo. Al analizarlo salió que la VM-C
+  tampoco lo cumplía en todas partes: en la SD de las placas (FAT), `f_unlink` borra un fichero o una carpeta vacía, así
+  que en `/sd` las dos iban, como en la VM-Java; y en un PC con Linux, `remove()` borra una carpeta vacía. Lo demás que
+  borra (la subida del IDE, el log, la captura de la GUI) no cambia. Lo prueba `BorraCarpetaFichero`, nuevo en el corpus
+  (y en su lista de `compat.sh`): `rmdir` de un fichero y `removeFile` de una carpeta fallan y no tocan nada, una carpeta
+  llena no se borra, lo de siempre va y lo que no existe falla; con la VM-Java de antes, 6 líneas FALLO; ahora, las dos
+  VMs, la misma salida (9 líneas), en MOD9 y en MOD8. La red, VERDE (la paridad, 215; MOD8, 207 y los 8 SKIP de siempre);
+  check-jc, 213 PASS y los 2 SKIP; BpIde, rehecho (lleva la VM-Java). La referencia, al día (la tabla de IO, «Cambió en
+  V8»). **En las pruebas finales:** en la SD de una placa con la imagen nueva, que las dos fallen como en la flash.
 
 #### 🔵 `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **decidido el 14-nov**: se queda como está; documentarlo y recomendar `/data`)
 

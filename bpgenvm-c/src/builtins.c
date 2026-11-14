@@ -2989,7 +2989,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             snprintf(em, sizeof(em), "removeFile('%s'): ya está abierto", path);
             return builtin_throw_es(vm, tc, em);
         }
-        int fallo = (bpvm_fs_remove(path) != 0);
+        /* V8 #824: sólo un fichero, como la flash de las placas y la referencia; con una carpeta, falla. Sin mirarlo,
+         * dependía de lo de debajo: en la SD (FAT) f_unlink borra también una carpeta vacía, y en un PC con Linux,
+         * remove(). */
+        int fallo = bpvm_fs_isdir(path) || (bpvm_fs_remove(path) != 0);
         cerrar_breves(vm, &ab, NULL);
         if (fallo) {
             char em[576];
@@ -3064,7 +3067,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
             return builtin_throw_es(vm, tc, "path demasiado largo");
-        if (bpvm_fs_rmdir(path) != 0) {
+        /* V8 #824: sólo una carpeta, como la flash de las placas y la referencia; con un fichero, falla (en la SD,
+         * FAT, f_unlink lo borraría). */
+        if (!bpvm_fs_isdir(path) || bpvm_fs_rmdir(path) != 0) {
             char em[576];
             snprintf(em, sizeof(em), "rmdir('%s'): no se pudo borrar (¿no vacío?)", path);
             return builtin_throw_es(vm, tc, em);
