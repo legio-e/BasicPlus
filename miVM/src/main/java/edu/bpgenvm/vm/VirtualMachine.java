@@ -1260,7 +1260,9 @@ public class VirtualMachine {
     }
     /** La ruta con la que se compara, la de FOPEN: un recurso de pack, tal cual; un fichero, la del sandbox. */
     private String claveFichero(ThreadContext tc, String path, byte[] dePack) {
-        return (dePack != null || esPackAjeno(path)) ? path : sandboxPath(tc, path).toString();
+        if (dePack != null || esPackAjeno(path)) return path;
+        java.nio.file.Path enPc = sandboxPath(tc, path);   // #810: fuera de la flash, la ruta tal cual (no se abrirá)
+        return (enPc != null) ? enPc.toString() : path;
     }
     private Breve abreBreve(ThreadContext tc, String que, String path, String clave, int mode) {
         Breve b = new Breve(clave, mode);
@@ -1600,13 +1602,16 @@ public class VirtualMachine {
         return r.startsWith(flashDir) ? r : null;
     }
 
+    /** Dónde está en el PC la ruta de un programa. #810 (14-nov): con una ruta absoluta que se sale de la flash
+     *  (`/../x`), null, y cada operación falla como en la placa, donde littlefs no deja subir de la raíz
+     *  (LFS_ERR_INVAL): con el texto de la operación («readFile('/../x'): no se pudo abrir»…), y fileExists e
+     *  isDirectory, false. Lo mismo que la VM-C. Antes, «sandbox: path escapa de la flash» en todas, también en
+     *  fileExists. Las operaciones con su catch de IOException van por {@link #enLaFlash}. */
     private java.nio.file.Path sandboxPath(ThreadContext tc, String userPath) {
         if (userPath != null && userPath.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1 > PATH_MAX_BYTES)
             throwBpError(tc, CLASE_ES, "path demasiado largo");
         if (flashDir != null && userPath != null && userPath.startsWith("/")) {   // #808: la placa, en su flash
-            java.nio.file.Path r = enFlash(userPath);
-            if (r == null) throwBpError(tc, CLASE_ES, "sandbox: path escapa de la flash: " + userPath);
-            return r;
+            return enFlash(userPath);   // #810: null si se sale
         }
         ModuleManager mm = getModuleManager();
         if (mm != null && mm.getWorkdir() != null) {
@@ -1621,6 +1626,14 @@ public class VirtualMachine {
             }
         }
         return java.nio.file.Paths.get(userPath);
+    }
+
+    /** #810 — {@link #sandboxPath} para las operaciones que fallan con su IOException: una ruta que se sale de la flash
+     *  falla así, y el catch de la operación pone su texto, el de la placa y la VM-C. */
+    private java.nio.file.Path enLaFlash(ThreadContext tc, String userPath) throws java.io.IOException {
+        java.nio.file.Path r = sandboxPath(tc, userPath);
+        if (r == null) throw new java.io.IOException("se sale de la flash: " + userPath);
+        return r;
     }
 
     /**
@@ -6036,7 +6049,8 @@ public class VirtualMachine {
                 // ventana aun no ha nacido (el hilo del GUI no ha dado su primera vuelta)
                 // se crea aqui; sin ventana posible (headless), shot() dira -1.
                 if (!guiStarted && !java.awt.GraphicsEnvironment.isHeadless()) { gui.start(); guiStarted = true; }
-                pushTc(tc, gui.shot(sandboxPath(tc, path).toString()));
+                java.nio.file.Path enPc = sandboxPath(tc, path);   // #810: fuera de la flash, null: -2 al escribir
+                pushTc(tc, gui.shot(enPc != null ? enPc.toString() : null));
                 break;
             }
             case GUI_REFRESH: { int hnd = popTc(tc); gui.refresh(hnd); pushTc(tc, 0); break; }
@@ -6378,7 +6392,7 @@ public class VirtualMachine {
                 Breve ab = abreBreve(tc, "readFile", path, claveFichero(tc, path, data), 0);   // V7 #657: un open para leer, mientras dura
                 try {
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
-                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    if (data == null) data = java.nio.file.Files.readAllBytes(enLaFlash(tc, path));
                 } catch (java.io.IOException e) {
                     data = null;
                 } finally {
@@ -6406,7 +6420,7 @@ public class VirtualMachine {
                 Breve ab = abreBreve(tc, "writeFile", path, claveFichero(tc, path, null), 1);   // V7 #657: un open para escribir, mientras dura
                 boolean fallo = false;
                 try {
-                    java.nio.file.Files.write(sandboxPath(tc, path),
+                    java.nio.file.Files.write(enLaFlash(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 } catch (java.io.IOException e) {
                     fallo = true;
@@ -6424,7 +6438,7 @@ public class VirtualMachine {
                 Breve ab = abreBreve(tc, "appendFile", path, claveFichero(tc, path, null), 2);   // V7 #657: un open para añadir, mientras dura
                 boolean fallo = false;
                 try {
-                    java.nio.file.Files.write(sandboxPath(tc, path),
+                    java.nio.file.Files.write(enLaFlash(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                             java.nio.file.StandardOpenOption.CREATE,
                             java.nio.file.StandardOpenOption.APPEND);
@@ -6453,7 +6467,9 @@ public class VirtualMachine {
                 CursorBP c = new CursorBP();
                 c.mode = mode;
                 byte[] pk = (mode == 0) ? packResource(path) : null;   // #310 — el pack en ejecución va primero (sólo lectura)
-                c.path = (pk != null || esPackAjeno(path)) ? path : sandboxPath(tc, path).toString();
+                java.nio.file.Path enPc = (pk != null || esPackAjeno(path)) ? null : sandboxPath(tc, path);
+                final boolean fuera = (pk == null && !esPackAjeno(path) && enPc == null);   // #810: fuera de la flash
+                c.path = (enPc != null) ? enPc.toString() : path;
                 // V7 #657 — mirar si ya está abierto, abrirlo y apuntarlo, JUNTOS, bajo el cerrojo de la lista (como la
                 // VM-C desde H12 2b: con dos workers, dos hilos podían verlo libre y abrirlo los dos para escribir); y la
                 // lista mira también los builtins de fichero entero. Las excepciones, ya fuera.
@@ -6463,7 +6479,7 @@ public class VirtualMachine {
                     if (!ya) {
                         try {
                             if (pk != null) { c.mem = pk; c.size = pk.length; }
-                            else if (esPackAjeno(path)) throw new java.io.IOException(path);
+                            else if (esPackAjeno(path) || fuera) throw new java.io.IOException(path);   // #810: «no se pudo abrir»
                             else {
                                 java.io.File f = new java.io.File(c.path);
                                 if ((mode == 0 || mode == 3) && !f.isFile()) throw new java.io.IOException(path);
@@ -6593,7 +6609,7 @@ public class VirtualMachine {
                 byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
                 try {
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
-                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    if (data == null) data = java.nio.file.Files.readAllBytes(enLaFlash(tc, path));
                 } catch (java.io.IOException e) {
                     data = null;
                 }
@@ -6730,8 +6746,11 @@ public class VirtualMachine {
                 // IO.dirExists). Era Files.exists, que dice que sí a una carpeta, y la VM-C —littlefs y el PC— decía que
                 // no: el invariante, roto. Y es la regla de #493: «if fileExists(x) then readFile(x)» ve lo que readFile.
                 String path = readVmString(popTcRef(tc));
-                boolean hay = (packResource(path) != null)   // #310 — el pack en ejecución va primero
-                        || (!esPackAjeno(path) && java.nio.file.Files.isRegularFile(sandboxPath(tc, path)));   // #520 (a)
+                boolean hay = (packResource(path) != null);   // #310 — el pack en ejecución va primero
+                if (!hay && !esPackAjeno(path)) {   // #520 (a)
+                    java.nio.file.Path enPc = sandboxPath(tc, path);   // #810: fuera de la flash, null: no está
+                    hay = enPc != null && java.nio.file.Files.isRegularFile(enPc);
+                }
                 pushTc(tc, hay ? 1 : 0);
                 break;
             }
@@ -6744,7 +6763,7 @@ public class VirtualMachine {
                 Breve ab = abreBreve(tc, "readFileBytes", path, claveFichero(tc, path, data), 0);   // V7 #657: un open para leer, mientras dura
                 try {
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
-                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                    if (data == null) data = java.nio.file.Files.readAllBytes(enLaFlash(tc, path));
                 } catch (java.io.IOException e) {
                     data = null;
                 } finally {
@@ -6770,7 +6789,7 @@ public class VirtualMachine {
                 Breve ab = abreBreve(tc, "writeFileBytes", path, claveFichero(tc, path, null), 1);   // V7 #657: un open para escribir, mientras dura
                 boolean fallo = false;
                 try {
-                    java.nio.file.Files.write(sandboxPath(tc, path), out);
+                    java.nio.file.Files.write(enLaFlash(tc, path), out);
                 } catch (java.io.IOException e) {
                     fallo = true;
                 } finally {
@@ -6803,8 +6822,8 @@ public class VirtualMachine {
             }
             case LIST_DIR: {
                 String path = readVmString(popTcRef(tc));
-                java.io.File dir = sandboxPath(tc, path).toFile();
-                String[] names = dir.list();
+                java.nio.file.Path enPc = sandboxPath(tc, path);   // #810: fuera de la flash, null: no se puede abrir
+                String[] names = (enPc == null) ? null : enPc.toFile().list();
                 // V7/H3 — como la VM-C (que ya lo tiene): un directorio que no se puede abrir es
                 // ERROR, no una lista vacía; y ORDENADO por bytes UTF-8, que el orden de un
                 // listado es del FS y el mismo programa tiene que imprimir lo mismo en la placa.
@@ -7394,7 +7413,7 @@ public class VirtualMachine {
             // rename y copyFile): antes, el del sistema (e.getMessage()), que cambia de un SO a otro y no sale en la placa.
             case MKDIR: {
                 String p = readVmString(popTcRef(tc));
-                try { java.nio.file.Files.createDirectories(sandboxPath(tc, p)); }
+                try { java.nio.file.Files.createDirectories(enLaFlash(tc, p)); }
                 catch (java.io.IOException e) {
                     throwBpError(tc, CLASE_ES, "mkdir('" + p + "'): no se pudo crear");
                 }
@@ -7403,7 +7422,7 @@ public class VirtualMachine {
             }
             case RMDIR: {
                 String p = readVmString(popTcRef(tc));
-                try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
+                try { java.nio.file.Files.delete(enLaFlash(tc, p)); }
                 catch (java.io.IOException e) {   // la VM-C no distingue «no vacío» de los demás fallos: el mismo texto
                     throwBpError(tc, CLASE_ES, "rmdir('" + p + "'): no se pudo borrar (¿no vacío?)");
                 }
@@ -7414,7 +7433,7 @@ public class VirtualMachine {
                 String p = readVmString(popTcRef(tc));
                 Breve ab = abreBreve(tc, "removeFile", p, claveFichero(tc, p, null), 1);   // V7 #657: borrar es escribir, mientras dura
                 boolean fallo = false;
-                try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
+                try { java.nio.file.Files.delete(enLaFlash(tc, p)); }
                 catch (java.io.IOException e) { fallo = true; }
                 finally { cierraBreve(ab); }
                 if (fallo) throwBpError(tc, CLASE_ES, "removeFile('" + p + "'): error al borrar");   // V7 #657: el texto de la VM-C
@@ -7427,8 +7446,8 @@ public class VirtualMachine {
                 Breve[] bs = abreBreves2(tc, "rename", from, 1, to, 1);   // V7 #657: los dos se escriben, mientras dura
                 boolean fallo = false;
                 try {
-                    java.nio.file.Files.move(sandboxPath(tc, from),
-                            sandboxPath(tc, to),
+                    java.nio.file.Files.move(enLaFlash(tc, from),
+                            enLaFlash(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
                     fallo = true;
@@ -7445,8 +7464,8 @@ public class VirtualMachine {
                 Breve[] bs = abreBreves2(tc, "copyFile", from, 0, to, 1);   // V7 #657: el origen se lee y el destino se escribe, mientras dura
                 boolean fallo = false;
                 try {
-                    java.nio.file.Files.copy(sandboxPath(tc, from),
-                            sandboxPath(tc, to),
+                    java.nio.file.Files.copy(enLaFlash(tc, from),
+                            enLaFlash(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
                     fallo = true;
@@ -7463,7 +7482,7 @@ public class VirtualMachine {
                 if (enPack != null) { pushTc(tc, enPack.length); break; }
                 try {
                     if (esPackAjeno(p)) throw new java.io.IOException("no se pudo abrir");   // #520 (a)
-                    long sz = java.nio.file.Files.size(sandboxPath(tc, p));
+                    long sz = java.nio.file.Files.size(enLaFlash(tc, p));
                     // i32: si sobrepasa Integer.MAX_VALUE, error claro.
                     if (sz > Integer.MAX_VALUE)
                         throwBpError(tc, CLASE_ES, "fileSize('" + p + "'): tamaño > 2GB no representable en integer");
@@ -7475,13 +7494,14 @@ public class VirtualMachine {
             }
             case IS_DIRECTORY: {
                 String p = readVmString(popTcRef(tc));
-                pushTc(tc, java.nio.file.Files.isDirectory(sandboxPath(tc, p)) ? 1 : 0);
+                java.nio.file.Path enPc = sandboxPath(tc, p);   // #810: fuera de la flash, null: no es una carpeta
+                pushTc(tc, (enPc != null && java.nio.file.Files.isDirectory(enPc)) ? 1 : 0);
                 break;
             }
             case LAST_MODIFIED: {
                 String p = readVmString(popTcRef(tc));
                 try {
-                    long ms = java.nio.file.Files.getLastModifiedTime(sandboxPath(tc, p)).toMillis();
+                    long ms = java.nio.file.Files.getLastModifiedTime(enLaFlash(tc, p)).toMillis();
                     pushTc(tc, (int) (ms & 0x7FFFFFFFL));
                 } catch (java.io.IOException e) {
                     throwBpError(tc, CLASE_ES, "lastModified('" + p + "'): no se pudo leer");   // #805

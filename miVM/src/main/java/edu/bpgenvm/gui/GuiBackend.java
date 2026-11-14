@@ -996,6 +996,7 @@ public final class GuiBackend {
         }
 
         // 3) Al disco: crea o TRUNCA el fichero; no crea directorios (como writeFile).
+        if (rutaResuelta == null) return -2;   // #810: la ruta se sale de la flash: no se puede escribir, como en la VM-C
         try {
             java.nio.file.Files.write(java.nio.file.Paths.get(rutaResuelta), bb.array());
         } catch (java.io.IOException | RuntimeException e) {

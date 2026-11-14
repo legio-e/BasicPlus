@@ -7390,6 +7390,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810`)
+
+- **Lo medido** (14-nov, dentro de la flash: `/data/f824`, un fichero, y `/data/d824`, una carpeta vacía): la VM-Java,
+  `rmdir` del fichero, bien, y el fichero ya no está; `removeFile` de la carpeta, bien, y la carpeta tampoco. La VM-C,
+  «rmdir('/data/f824'): no se pudo borrar (¿no vacío?)» y «removeFile('/data/d824'): error al borrar», y los dos siguen.
+  La salida de las dos VMs no es la misma: rompe el invariante, con una ruta normal.
+- **Por qué:** la VM-Java borra con `Files.delete`, que borra un fichero o una carpeta vacía; la VM-C, `rmdir` sólo
+  carpetas y `remove` sólo ficheros, y en la placa lo mismo (`fs_lfs.c`: `be_remove_impl` falla con una carpeta,
+  `LFS_ERR_ISDIR`, y `be_rmdir_impl` con un fichero, `LFS_ERR_NOTDIR`; `test_fs_lfs` prueba el segundo).
+- **El arreglo** (pequeño): en la VM-Java, `rmdir` falla si no es una carpeta, y `removeFile` si lo es, con sus textos de
+  ahora; y una prueba en el corpus. Salió al repasar lo medido en `#810` (con `../x810`, `rmdir` iba en la VM-Java y
+  fallaba en la VM-C, y `removeFile` al revés).
+
+#### 🔵 `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **por decidir**: qué significa una ruta relativa)
+
+- **Lo medido** (14-nov, el programa de `#810` con `../x810`, corrido desde una carpeta del scratchpad): las dos VMs del PC
+  escribieron, leyeron y borraron `x810` en la carpeta de encima de la del proceso, fuera de la flash (que `rmdir` y
+  `removeFile` fueran distintos en cada VM es otra cosa, `#824`). Con el IDE no pasa: su VM local corre con `--workdir` (`<flash>/app/<proyecto>`, `#808`), una relativa va
+  ahí y una que se sale da «sandbox: path escapa del workdir» (`ModuleManager`). En la placa, littlefs no tiene carpeta
+  actual: por medir qué hace con `x` y con `../x`.
+- **Lo que hay que decidir** (Eduardo): relativa a qué es una ruta relativa —la raíz de la flash, como littlefs; la
+  carpeta del programa, como el IDE; o un error—, y que lo hagan igual la placa, las dos VMs del PC y el IDE. El corpus
+  usa rutas absolutas (lo que escriben las pruebas va a su flash, `#808`): habría que mirar si alguna usa relativas.
+
 #### ✅ `#822` — el IDE perdía de vista una VM del PC: el `stop` de la línea de comandos no llegaba a la VM local, dos Run seguidos dejaban la primera dando vueltas sin que nada la parara, y ni el Stop llegaba a la VM-C de Run Window ni cerrar el IDE las paraba (abierta y **CERRADA el 14-nov**, el commit de `#822`; salió al cerrar `#694`; Eduardo: *«mientras se ejecuta un programa no debería dejar ejecutar otro»*)
 
 - **Lo que pasaba**, reproducido con la ventana del IDE de verdad (un arnés que «pulsa» Run y Stop por reflexión, como
@@ -7634,7 +7658,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   compilador). Lo que la red ve: `MutexBucle`, en el corpus. El clic de verdad no lo ve (la red no abre ventanas): se
   comprobó con el arnés, a mano.
 
-#### 🔵 `#810` — una ruta que se sale de la flash del PC (`/../x`): la VM-Java lanza «sandbox: path escapa de la flash», también en `fileExists`; la VM-C, como la placa, falla con el texto de cada operación, y `fileExists` da false (abierta el 8-nov, en `#808`)
+#### ✅ `#810` — una ruta que se sale de la flash del PC (`/../x`): la VM-Java lanza «sandbox: path escapa de la flash», también en `fileExists`; la VM-C, como la placa, falla con el texto de cada operación, y `fileExists` da false (abierta el 8-nov, en `#808` · **CERRADA el 14-nov**, el commit de `#810`)
 
 - **Lo medido** (8-nov, a mano, `writeFile`, `readFile`, `IO.mkdir` y `fileExists` con `/../x` y `/a/../../x`): la
   VM-Java, «sandbox: path escapa de la flash: /../x», y `fileExists` lanza lo mismo; la VM-C, «writeFile('/../x'): error
@@ -7643,6 +7667,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que falta:** que la VM-Java dé lo de la placa: son 22 llamadas a `sandboxPath`, cada una con su texto. Y lo mismo
   con `--workdir`, que la VM-C no tiene.
 - **Cuándo** (Eduardo, 8-nov): *«cuando sea ahora no es importante»*.
+- **14-nov, CERRADA** (Eduardo: *«si»*): medido antes con todas las operaciones de ficheros (un programa que las prueba
+  con `/../x810` y `/a/../../x810`): la VM-C, cada una con su texto, como la placa, y `fileExists` e `isDirectory`, false;
+  la VM-Java, «sandbox: path escapa de la flash» en todas. Ahora `sandboxPath` da null con una ruta absoluta que se sale
+  de la flash, y cada operación falla por su camino: las que tienen su `catch` de `IOException` (leer, escribir, añadir,
+  los bytes, `mkdir`, `rmdir`, `removeFile`, `rename`, `copyFile`, `fileSize`, `lastModified`) por `enLaFlash`, con su
+  texto; `fileExists` e `isDirectory`, false; `listDir`, «no se pudo abrir»; `File`, «no se pudo abrir»; y `Gui.shot`,
+  -2, como la VM-C al no poder escribir. Lo prueba `RutaFueraFlash`, nuevo en el corpus: las dos VMs, la misma salida
+  (39 líneas), y si una operación no falla o `fileExists` dice que sí, una línea FALLO; con `sandboxPath` como antes, la
+  VM-Java muere en el primer `fileExists` (exit 1). Lo de `--workdir` (las rutas relativas) queda en `#823`.
 
 #### 🔵 `#809` — la zona de packs de la VM del PC, en un fichero binario permanente que se cargue al arrancar (abierta el 8-nov, en H2; **para más adelante**)
 
