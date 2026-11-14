@@ -7228,6 +7228,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   C3 optimizada, `M5`, el simulador con disfraces, la ventana del micro simulado, reservar sin el cerrojo y los sets.
 > - **Cerradas:** `#582` (una limitación conocida, documentada) y `#735` (no se hace).
 > - **`#802`, el orden:** V8 se publica como siempre; después, antes de V9, una versión que sólo reorganiza en la suite.
+> - **V8, hasta publicar** (Eduardo, 14-nov, al acabar el día): *«En esta V8 todavía no congelamos código de forma
+>   oficial porque igual durante las pruebas finales necesitamos hacer algún cambio. Pero ya no hay temas nuevos,
+>   terminamos los pendientes que tenemos de las pruebas finales y nada mas.»* Y antes, ese día: *«a estas alturas de V8
+>   no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo podemos analizar.»*
 > - **Y V9** (Eduardo, 14-nov, al acabar el día): *«El plan principal, tal como dijimos, terminar V8 y publicar, despues
 >   la suite y despues v9. En v9 no tenemos un tema principal, iremos terminando lo que tenemos pendiente. Continuaremos
 >   las pruebas de compatibilidad con C#. Donde avanzaremos, con las librerías de dispositivos, mejorando y ampliando lo

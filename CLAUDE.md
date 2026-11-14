@@ -159,6 +159,10 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
   pendientes, la documentación, las pruebas finales y publicar. Lo nuevo, a V9. Matiz del 13-nov:
   los cambios pequeños que resuelven un problema sí entran, aunque sean algo nuevo (*«no abrir temas
   completamente nuevos, pero si podemos hacer pequeños cambios»*); el código aún no está congelado.
+  **Y desde el 14-nov, repasados los pendientes, sólo lo que queda:** *«ya no hay temas nuevos, terminamos los
+  pendientes que tenemos de las pruebas finales y nada mas»*; el código sigue sin congelar de forma oficial, por si las
+  pruebas finales piden algún cambio, pero las VMs no se reorganizan (*«a estas alturas de V8 no vamos a cambiar las
+  VMs, demasiado arriesgado. Pero si lo podemos analizar»*): lo que salga, se analiza y va a V9.
   Su tema: la red y el Bluetooth (el bajo consumo pasó a V9 el 6-nov). Su cuaderno, `docs/V8_IDEAS.md`. V7 se
   publicó el 13-oct (tag `v7.0`; su ZIP en `dist/` es el oráculo de «¿lo he roto yo hoy?»).
   Qué hay abierto, en `docs/FICHAS.md` §ABIERTAS, bloque V8.
