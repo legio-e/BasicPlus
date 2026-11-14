@@ -7228,6 +7228,24 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   C3 optimizada, `M5`, el simulador con disfraces, la ventana del micro simulado, reservar sin el cerrojo y los sets.
 > - **Cerradas:** `#582` (una limitación conocida, documentada) y `#735` (no se hace).
 > - **`#802`, el orden:** V8 se publica como siempre; después, antes de V9, una versión que sólo reorganiza en la suite.
+> - **Y V9** (Eduardo, 14-nov, al acabar el día): *«El plan principal, tal como dijimos, terminar V8 y publicar, despues
+>   la suite y despues v9. En v9 no tenemos un tema principal, iremos terminando lo que tenemos pendiente. Continuaremos
+>   las pruebas de compatibilidad con C#. Donde avanzaremos, con las librerías de dispositivos, mejorando y ampliando lo
+>   que hay, incorporamos streams e interfaces. Añadiremos I2C, SPI y UART por software. En la Pico2, el driver PIO, y las
+>   versiones PIO de la UART y SPI . De la wifi y Bluetooth es principio nada nuevo pero ya veremos.»* Lo que vaya en C,
+>   mirando antes si puede ir en natives (o en un motor de un pack) y no en la imagen: *«Si lo hacemos en C, tendríamos
+>   que analizar si lo podemos hacer con funciones nativas, para no engordar la bios de las placas. Tenemos que intentar
+>   contener tanto el consumo de SRAM pero también de flash. Hay que pensar en los micros mas pequeños.»* Lo que ya hay
+>   para eso: `#723` (los streams, el modelo del 24-oct, `V8_IDEAS` §E8), su diseño de la UART del 7-nov (una interfaz y
+>   una clase por número en el micro y otra por nombre en el PC) y el censo de las clases de dispositivos del repaso. Y
+>   una placa más: *«He encargado una ESP32-S31 con pantalla muy parecida a la P4 que tenemos actualmente. Así que
+>   tendríamos 3 placas, de menor a mayor: La C5, la S31 y la P4.»* Es la Waveshare ESP32-S31-Touch-LCD-4.3C
+>   (`https://docs.waveshare.com/ESP32-S31-Touch-LCD-4.3C`): dos núcleos RISC-V a 320 MHz, 512 KB de SRAM, 16 MB de flash
+>   y 16 de PSRAM; WiFi 6, Bluetooth 5.4 (LE y clásico) y 802.15.4, en el chip; la pantalla, de 4,3" y 800×480, por RGB
+>   paralelo de 16 bits —no MIPI-DSI como la P4: otro driver, y con la imagen en la PSRAM el IDF suele pedir búferes de
+>   rebote en la RAM interna—, con la táctil GT911 de la P4; el wire, por un CH343P a la UART0, como la P4; el sonido, un
+>   ES8389 (la P4 lleva un ES8311); y SD, RTC con pila, batería con medidor, IMU, RS485 y CAN-FD. El RS485 comparte su pin
+>   de dirección con BOOT (GPIO61). Al llegar, mirar si el IDF 6.1 ya la soporta.
 >
 > 🧪 **JC frente a las pruebas de C#** (Eduardo, 31-oct): *«lo que le falta a JC para que soporte mas pruebas de C#.
 > Empezar por añadir lo mas sencillo y ver cuantas mejoras pasarían»*. El análisis, con las pruebas de Mono: `#745`;
