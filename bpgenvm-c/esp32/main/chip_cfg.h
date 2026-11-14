@@ -88,4 +88,8 @@
  * son unos 60 KB de RAM fijos aunque no se use. */
 #define CHIP_TIENE_WIFI 1
 
+/* V8/H2, paso 5 (14-nov): y el Bluetooth (NimBLE, bt_esp32.c), con la radio del chip, como la C5. Va en el gancho `red`,
+ * con la WiFi: necesita CHIP_TIENE_WIFI. Sin pantalla: el teclado y el ratón llegan al SO y a los programas, sin GUI. */
+#define CHIP_TIENE_BT 1
+
 #endif /* BPVM_CHIP_CFG_H */

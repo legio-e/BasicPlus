@@ -12,6 +12,7 @@ idf_component_register(
         "../common/wire_v1.c"
         "../common/wire_red.c"               # V8/H3: el cable de la red
         "../common/wifi_esp32.c"             # V8/H3: la radio de la familia, publicada como 'WIFI'
+        "../common/bt_esp32.c"               # V8/H2, paso 5: el Bluetooth de la familia (NimBLE), publicado como 'BT  '
         "../common/net_esp32.c"              # V8/H3: la IP de la familia (esp_netif)
         "../../src/wire_cables.c"            # V8/H3: encima de la UART, y del cable de la red cuando lo tenga
         "../common/fs_lfs_esp32.c"              # H2-B3: littlefs (cintura esp_partition + shim fs.h) — reemplaza fs_ram.c
@@ -108,6 +109,7 @@ idf_component_register(
         "../../third_party/littlefs"   # H2-B3: lfs.h
     REQUIRES
         esp_wifi         # V8/H3: la WiFi
+        bt               # V8/H2, paso 5: el Bluetooth (NimBLE)
         esp_netif
         esp_event
         lwip

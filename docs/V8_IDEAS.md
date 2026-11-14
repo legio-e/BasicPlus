@@ -1034,6 +1034,35 @@ que cuesta: subir y bajar 1 MB por la WiFi.
 Lo siguiente (Eduardo: *«La S3 mañana»*): la S3; y volver a emparejar el teclado y el ratón con la P4, porque al
 emparejarlos con la C5 cambiaron de dirección (*«Mañana»*).
 
+### El paso 5 en la S3 (14-nov), y H2 cerrado
+
+Eduardo: *«OK, adelante»* (grabar la S3), y *«OK»* a los recortes.
+
+- **La imagen:** NimBLE como en la C5 (`esp32/sdkconfig.defaults`; `CHIP_TIENE_BT` en su `chip_cfg.h`; `bt_esp32.c` en su
+  lista), con los búferes de NimBLE de serie, como en la P4. Enlazarlo cuesta 24,8 KB de RAM interna fijos (el código del
+  controlador en la IRAM, +21,6 KB) y 206 KB de flash (la imagen, 1,47 MB de una partición de 2): la mínima tras arrancar,
+  de 63,7 a 37,4 KB. La S3 no lleva packs con código nativo; su `Stdlib.pack` era del 6-nov (34 ficheros, sin `Keyboards`
+  ni `Mice`) y se cambió por el actual.
+- **Sin recortar, los dos emparejaban con la WiFi conectada, pero la mínima bajó a 7,8 KB** (menos de lo que en la C5 ya
+  tiraba las balizas), y a la pila de la tarea de NimBLE le quedaban 1,4 KB de 4: la S3 es Xtensa y gasta más pila (en la
+  C5 y la P4, 2,6).
+- **Lo mismo que en la C5** (*«OK»*): 6 búferes de recepción y 16 de envío, y el código de la WiFi fuera de la IRAM (aquí,
+  dos opciones: la EXTRA y la del sueño ya iban apagadas), 18 KB fijos; y la pila de NimBLE, a 6 KB (le quedan 3,5). La
+  mínima tras arrancar, 61–62,6 KB: casi lo de antes del Bluetooth.
+- **La pieza 2, sin pantalla:** el teclado vuelve solo y `hola123` llega entero; el ratón volvió a los 27 s. La pieza 5
+  no se probó en la S3: es el mismo código que en la P4 y la C5, y la P4 es la que manda.
+- **Lo que queda a la vista:** mientras se conectan los aparatos, la mínima de la RAM interna baja a 7,9 KB y después
+  vuelve (al acabar, 35,7 KB libres con los dos conectados): un pico de unos 28 KB, sin fallos, pero con poco margen
+  (`#821`). La WiFi: subir 1 MB, 11,2–14,6 s, y bajarlo, 2,8–2,9 s, sin comparar con la imagen sin recortes el mismo rato
+  (Eduardo: *«No te preocupes por la velocidad, no es nada crítico»*).
+- **En la P4, emparejados otra vez** (con la C5 y la S3 cambiaron de dirección): olvidados los viejos, emparejados los dos
+  (0,85 y 1,27 s), y en la GUI, los clics en A y en B, `hola` en el campo y Fin (Eduardo: *«ya está, todo OK»*).
+
+**H2, cerrado el 14-nov** (Eduardo: *«Cierra H2. El paso 6 apuntalo como pendiente y ya decidiremos si lo hacemos en V8
+o en V9»*): el teclado y el ratón Bluetooth funcionan en la P4, la C5 y la S3. Lo que queda, en fichas: el paso 6, el
+programa de configuración (`#819`); el ratón que tarda en volver (`#820`); el pico de la S3 (`#821`); el pánico de la P4
+de una vez (`#815`); y el solape de `#817` en la C6, en el lote final.
+
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)

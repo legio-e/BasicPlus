@@ -267,6 +267,16 @@ línea `mem:` del log.
 - **Y el arranque y el apagado por falta de uso** (la pieza 5, 12-nov): 16 B más de RAM fija en lo común del Bluetooth,
   en todas las imágenes (medido en la P4, `_heap_start`).
 
+**La radio del Bluetooth en la S3** (el mismo `bt_esp32.c`, con el controlador del chip, como la C5; 14-nov), medida con el
+`INFO` y la línea `mem:` del log, con la WiFi conectada:
+- **Enlazarlo cuesta 24,8 KB de RAM interna fija** (`_heap_start`, de `0x3fcbe790` a `0x3fcc4a90`; el código del
+  controlador en la IRAM, +21,6 KB): la mínima tras arrancar, de 63,7 a 37,4 KB. Y 206 KB de flash.
+- **Emparejados el teclado y el ratón, la mínima bajó a 7,8 KB**, y a la pila de NimBLE le quedaban 1,4 KB de 4. Con los
+  recortes de la C5 (6 búferes de recepción y 16 de envío, el código de la WiFi fuera de la IRAM: 18 KB fijos) y la pila
+  de NimBLE a 6 KB: la mínima tras arrancar, 61–62,6 KB; y con los dos conectados, 35,7 KB libres al acabar.
+- **Pero mientras se conectan, la mínima vuelve a bajar a 7,9 KB** (`#821`): un pico de unos 28 KB por encima de lo que
+  queda después, sin fallos. Sin la consola de la S3 delante (va por su otro USB), no se sabe de quién es.
+
 ## La WiFi en la C3 y la C6 (6-nov)
 
 Sus imágenes no la llevan, y no la llevarán (Eduardo: *«C3 y C6 sin wifi»*). Enlazarla costaría, aunque no se encendiera nunca, +54 KB de RAM fija en la C3 y +88 KB en la C6; con todas las opciones de ahorro, +33 y +60 KB. La S3 pone sus búferes en la PSRAM, y estas dos no tienen. Las

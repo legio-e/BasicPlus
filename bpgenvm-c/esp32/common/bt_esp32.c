@@ -521,7 +521,8 @@ static void listo(aparato_t* a) {
     busca_luces(a);
     snprintf(a->clase, sizeof a->clase, "%s", bpvm_hid_clase(&a->hid));
     bpvm_hid_describe(&a->hid, que, sizeof que);
-    /* La marca de la pila de NimBLE, que se queda en sus 4 KB (el fichero de las claves se escribe fuera de ella). */
+    /* La marca de la pila de NimBLE, que se queda en sus 4 KB (6 en la S3, que es Xtensa: CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE;
+     * el fichero de las claves se escribe fuera de ella). */
     log_printf("bt: %s listo (%s: %s; de la pila de NimBLE quedan %u B)", a->dir, a->clase, que,
                (unsigned) uxTaskGetStackHighWaterMark(NULL));
     escribe_luces(a);   /* un teclado: las luces de los bloqueos de ahora (al arrancar, la de Bloq Num) */
