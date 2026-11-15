@@ -56,6 +56,8 @@
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
 #include "freertos/FreeRTOS.h"   /* pdMS_TO_TICKS, portMAX_DELAY */
+#include "freertos/semphr.h"     /* V8 #826: el cerrojo del sensor de temperatura */
+#include "driver/temperature_sensor.h"   /* V8 #826: el sensor de temperatura del chip (Machine.tempC, el INFO) */
 #include "esp_mac.h"      /* uniqueId desde la MAC de efuse */
 #include "esp_timer.h"    /* uptime */
 
@@ -143,8 +145,37 @@ static void esp32_board_name_impl(char* buf, size_t len) {
     }
 }
 
+/* V8 #826 (15-nov) — LA TEMPERATURA DEL CHIP, con el sensor que traen los cinco (SOC_TEMP_SENSOR_SUPPORTED): hasta hoy
+ * era un 0 escrito a mano en la S3, la C3, la C5 y la C6 («no cableado en el MVP»), y un 0 pasa por una temperatura. La
+ * P4 tenía la suya en p4_board_id.c; ahora es ésta, la de las cinco. Se enciende la primera vez que se pide, una sola
+ * vez aunque la pidan dos hilos a la vez (con dos runs, la S3 y la P4), y se lee bajo un cerrojo. El rango, de 20 a
+ * 100 °C (el IDF da un error de menos de 2 °C): un chip trabajando no baja de 20, y en una prueba de días puede pasar de
+ * 80. Si el sensor no arranca, 0 como antes, y el log lo dice una vez. */
+static temperature_sensor_handle_t s_tsens = NULL;
+static SemaphoreHandle_t s_tsens_m = NULL;
+static int s_tsens_estado = 0;   /* 0, sin encender; 1, encendiéndose; 2, listo; 3, no arranca */
+
+float esp32_temp_c(void) {
+    int sin_encender = 0;
+    if (__atomic_compare_exchange_n(&s_tsens_estado, &sin_encender, 1, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
+        esp_err_t e = temperature_sensor_install(&cfg, &s_tsens);
+        if (e == ESP_OK) e = temperature_sensor_enable(s_tsens);
+        if (e == ESP_OK && (s_tsens_m = xSemaphoreCreateMutex()) == NULL) e = ESP_ERR_NO_MEM;
+        if (e != ESP_OK) log_printf("temperatura: el sensor del chip no arranca (%s): tempC dice 0", esp_err_to_name(e));
+        __atomic_store_n(&s_tsens_estado, e == ESP_OK ? 2 : 3, __ATOMIC_RELEASE);
+    }
+    while (__atomic_load_n(&s_tsens_estado, __ATOMIC_ACQUIRE) == 1) vTaskDelay(1);   /* lo enciende otro hilo */
+    if (__atomic_load_n(&s_tsens_estado, __ATOMIC_ACQUIRE) != 2) return 0.0f;
+    float c = 0.0f;
+    xSemaphoreTake(s_tsens_m, portMAX_DELAY);
+    esp_err_t e = temperature_sensor_get_celsius(s_tsens, &c);
+    xSemaphoreGive(s_tsens_m);
+    return e == ESP_OK ? c : 0.0f;
+}
+
 static float esp32_temp_c_impl(void) {
-    return 0.0f;   /* sensor interno no cableado en el MVP (igual que STM32) */
+    return esp32_temp_c();
 }
 
 /* V8 #784 (3-nov) — LA FRECUENCIA, LA DE VERDAD, Y CAMBIARLA. Hasta hoy, un 240 escrito a mano para las cuatro de este

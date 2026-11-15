@@ -1946,8 +1946,10 @@ port.write(tx, <span class="num">4</span>)
           reboots y reflasheos.</td></tr>
   <tr><td><code>tempC(): float</code></td>
       <td>Temperatura del die en °C (RP2350: sensor ADC4, precisión ±2 °C sin
-          calibración; STM32: sensor interno por ADC1, calibrado de fábrica; en ESP32
-          devuelve 0.0 — sensor no cableado).</td></tr>
+          calibración; STM32: sensor interno por ADC1, calibrado de fábrica; ESP32: el sensor del
+          chip, con un error de menos de 2 °C entre 20 y 100 °C). Es la misma que da el <code>INFO</code>
+          (<code>tempMilliC</code>). <em>Cambió en V8</em> (antes, en las ESP32 devolvía 0.0, y el
+          <code>INFO</code> de las ESP32 y las STM32 decía 0).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Frecuencia actual de la CPU en Hz: la que lleva de verdad (en las ESP32, desde V8; antes decía
           una nominal, y en la S3, la C3 y la C6 decía 240 yendo a 160).</td></tr>

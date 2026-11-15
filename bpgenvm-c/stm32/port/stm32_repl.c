@@ -193,7 +193,8 @@ static void stm32_repl_info(bpvm_repl_info_t* o) {
     o->arch          = (unsigned) bpvm_mdn_host_arch();
     o->cpu_hz        = (unsigned long) SystemCoreClock;
     o->uptime_ms     = (unsigned long) HAL_GetTick();
-    o->temp_milli_c  = 0;            /* sensor interno, para más adelante */
+    /* V8 #826 (15-nov): la del sensor del ADC, por la fachada (Machine.tempC), como la Pico; antes, un 0 escrito a mano. */
+    o->temp_milli_c  = (long) (bpvm_machine_temp_c() * 1000.0f);
     o->gpio_count    = 114;          /* I/Os del LQFP144 */
     o->pio_count     = 0;            /* PIO es del RP2350 */
     o->pwm_slices    = 28;           /* salidas PWM, como cuentan los otros ports */

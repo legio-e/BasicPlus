@@ -26,6 +26,10 @@ const char* esp32_reset_cause(void);
 int esp32_cpu_freq_hz(void);
 int esp32_set_cpu_freq_mhz(int mhz);
 
+/* V8 #826 — la temperatura del chip, en °C, con su sensor (0 si no arranca). La comparten el backend de la familia
+ * (gpio_esp32.c) y el del P4 (p4_board_id.c); el INFO la lee por la fachada (Machine.tempC). */
+float esp32_temp_c(void);
+
 /* V7 #669 — el bus del IDF de un I2C ABIERTO por la cintura (o NULL): para quien lo comparte por el árbitro de G4 —el
  * táctil de la P4 se engancha como el firmware (bpvm_i2c_abrir) y pone en él su dispositivo; el IDF reparte las
  * transacciones de todos—. Es un i2c_master_bus_handle_t (declarado así para no arrastrar driver/i2c_master.h). */

@@ -612,7 +612,8 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
     o->arch          = (unsigned) bpvm_mdn_host_arch();
     o->cpu_hz        = (unsigned long) bpvm_machine_cpu_freq_hz();   /* V8 #784: la de verdad, la de Machine.cpuFreqHz() */
     o->uptime_ms     = (unsigned long) (esp_timer_get_time() / 1000LL);
-    o->temp_milli_c  = 0;            /* sensor interno, para mas adelante */
+    /* V8 #826 (15-nov): la del chip, por la fachada (Machine.tempC), como la Pico; antes, un 0 escrito a mano. */
+    o->temp_milli_c  = (long) (bpvm_machine_temp_c() * 1000.0f);
     o->gpio_count    = bid->gpio_count;
     o->pio_count     = bid->pio_count;
     o->pwm_slices    = bid->pwm_slices;

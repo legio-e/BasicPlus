@@ -1945,8 +1945,10 @@ port.write(tx, <span class="num">4</span>)
           reboots and reflashes.</td></tr>
   <tr><td><code>tempC(): float</code></td>
       <td>Die temperature in °C (RP2350: ADC4 sensor, ±2 °C without calibration;
-          STM32: internal sensor via ADC1, factory-calibrated; on ESP32 it returns 0.0
-          — sensor not wired).</td></tr>
+          STM32: internal sensor via ADC1, factory-calibrated; ESP32: the chip's own sensor, with an
+          error under 2 °C between 20 and 100 °C). It is the same one the <code>INFO</code> gives
+          (<code>tempMilliC</code>). <em>Changed in V8</em> (before, on the ESP32 it returned 0.0, and
+          the <code>INFO</code> of the ESP32 and STM32 said 0).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Current clk_sys frequency in Hz.</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>

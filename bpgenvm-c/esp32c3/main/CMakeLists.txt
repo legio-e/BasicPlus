@@ -127,6 +127,7 @@ idf_component_register(
         esp_adc          # H14: backend ADC (esp_adc oneshot)
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
+        esp_driver_tsens # V8 #826: el sensor de temperatura del chip (Machine.tempC y el INFO), en gpio_esp32.c
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support
         efuse            # #581: el eFuse VDD_SPI_AS_GPIO, en gpio_esp32.c (CHIP_GPIO_VDD_SPI)
