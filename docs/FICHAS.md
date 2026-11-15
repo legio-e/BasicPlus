@@ -7243,7 +7243,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > entre fases, la temperatura y lo que tarda cada fase), en `/data/resistencia/log.txt` (y `log.1`). Antes de dejarla, el
 > modo `fallos` (un error de cada clase, que se atrapa y se apunta) en las dos VMs del PC, en el micro simulado (también
 > el paso a `log.1`) y en siete placas: la S3, la C5, la C3, la Pico 2, la Metro, la P4 y la C6. Salieron `#827` (la
-> VM-Java) y `#828` (la Pico 2 con `Gui`).
+> VM-Java) y `#828` (la Pico 2 con `Gui`). Las cuatro, en un hub USB con su propia alimentación (Eduardo): aunque se
+> apague el PC, siguen. A los 20 minutos, sin un error en ninguna, lo vivo tras el GC quieto y la temperatura estable
+> (Eduardo, en la pantalla de la P4: *«No parece que vaya a haber problemas, al menos de momento.»*). Se recoge con
+> `resistencia.py COMx acabar <carpeta>`; lo que se bajó al empezar, en `C:\tmp\resistencia_v8\`.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7519,6 +7522,31 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#829` — la red: `HeapEstres` en la VM-C con dos workers, otra vez «No space in heap» en un hilo después del arreglo de `#762`; esta vez, la tabla de handles se rinde sin una colecta propia (abierta el 15-nov, en la red de `#827`; preexistente; **para decidir**)
+
+- **Cómo salió:** la red de `#827` (15-nov, 12:56), en ROJO sólo por esto: `HeapEstres VM-C --smp=2`, «excepcion no
+  atrapada en un hilo (el hilo termina): No space in heap», con 1479 creados. Lo demás, verde, y `check-estres` suelto,
+  tres veces, verde. `#827` sólo toca la VM-Java.
+- **Medido** (`HeapEstres` como lo corre la red, `--mem=81920`, 40 pasadas por configuración): sin carga, 0 de 40 con
+  `--smp=2` y con `--smp=4`; con seis procesos gastando CPU a la vez, 0 de 40 con `--smp=2` y **1 de 40** con
+  `--smp=4`. Eduardo (15-nov): *«Eso hace sospechar que el problema es real. Hay algun caso donde los 2 hilos coinciden
+  y salta el problema ( es una teoría, no una certeza ).»*
+- **Lo que dice el log de la que falló:** cada colecta suelta ~6,7 KB en ~60 huecos, y lo vivo (38 KB) no crece. Dos
+  workers cruzan a la vez la marca de la tabla («GC por TABLA de handles: 482/512 slots»); uno quiere crecerla de 512 a
+  1024 slots, no cabe («el heap vivo llega a 59328 y la tabla querria bajar a 57344») y lanza el OOM; justo después,
+  otro igual. El programa sigue, y las colectas de después sueltan lo mismo.
+- **La causa, en el código (`heap.c`):** la ventana de `#762`, en la tabla. `heap_reservar` repite la colecta hasta
+  tener una propia cuando no cabe el bloque, pero la tabla la mira antes y después de colectar (`tabla_con_sitio`): si
+  tras la colecta de otro está llena —mientras esperaba soltó el cerrojo, y los demás workers se gastaron los slots que
+  dejó—, intenta crecerla y, si no cabe, se rinde sin colectar él. La colecta de la entrada (la de la marca de la tabla)
+  tampoco mira si fue suya. Lo más probable, un «No space in heap» falso, como el de `#762`: una colecta propia habría
+  reciclado slots.
+- **Dónde podría salir:** con dos runs (la Pico 2, la Metro, la S3 y la P4), con el heap casi lleno y la tabla llena.
+  La VM-Java no: su `heapAlloc` colecta siempre ella.
+- **El arreglo, sin hacer** (Eduardo, 14-nov: *«a estas alturas de V8 no vamos a cambiar las VMs […] Pero si lo podemos
+  analizar»*): como el de `#762` —si la tabla no tiene sitio y la colecta no fue propia, colectar él y volver a
+  mirar—, con su prueba (como la parte 21 de `test_cola`: una ventana de ensayo, para que no dependa de la suerte).
+
 #### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; **para decidir**)
 
 - **Lo que pasó:** la primera versión de `Resistencia` importaba `Gui` (probaba la pantalla y, si no había, seguía sin
@@ -7532,7 +7560,14 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   cargador y del enlazador: de 3 a 6 KB por módulo aunque corra desde el pack (`#651`), y `Gui`, más. En la Metro la VM
   va a la PSRAM y la SRAM entera es de `malloc`.
 - **Lo que hay:** la clave `vmheap` del ENV achica el bloque de la VM, y lo que suelta queda para `malloc` (no probado
-  con este programa). El mensaje no dice qué hacer.
+  con este programa). El mensaje no dice qué hacer. La clave `stack` no sirve: mueve memoria entre el heap y la pila
+  del `Main`, las dos dentro del bloque de la VM.
+- **Y la Pico 2 lleva `stack=90` en el ENV** desde septiembre, cuando la regla daba unos 89 KB a las pilas de los
+  hilos. Desde `#740` (29-oct) los hilos sacan su pila del heap y el `Main` se queda con 16 KB, así que esos 90 KB le
+  quitan 74 al heap (214 KB en vez de unos 288). La Metro va con los 16 de siempre (en su `INFO`, `vmStackBytes`, 16384
+  frente a 92160).
+- **15-nov, decidido** (Eduardo: *«Esperamos a terminar las pruebas.»*): al acabar la prueba de resistencia, en la Pico 2,
+  comprobar que `vmheap` lo resuelve y quitar el `stack=90`. Lo de V8 o V9, entonces.
 
 #### ✅ `#827` — en la VM-Java, `Machine.uptimeMs()` era la hora del reloj del PC cortada a 32 bits: salía negativa y no contaba desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta y **CERRADA el 15-nov**, el commit de `#827`; al probar en el PC la prueba de resistencia; preexistente; Eduardo: *«Si se arregla, parece poco.»*)
 
