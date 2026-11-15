@@ -7247,6 +7247,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > apague el PC, siguen. A los 20 minutos, sin un error en ninguna, lo vivo tras el GC quieto y la temperatura estable
 > (Eduardo, en la pantalla de la P4: *«No parece que vaya a haber problemas, al menos de momento.»*). Se recoge con
 > `resistencia.py COMx acabar <carpeta>`; lo que se bajó al empezar, en `C:\tmp\resistencia_v8\`.
+> **Parada a las 13:32** (Eduardo: *«OK. podemos parar la prueba de resistencia e intentar arreglarlo.»*): en la Pico 2,
+> la fase de memoria fallaba en cada vuelta desde la ~257 (`#831`: los `Mutex` no se sueltan); las otras tres, sin un
+> error tras ~300 vueltas, con lo vivo tras el GC quieto y la temperatura estable (la Pico 2, 17 °C; la Metro, 24; la
+> C6, 33; la P4, 32–33). Lo bajado —los logs, el de la placa y el `INFO`—, en `C:\tmp\resistencia_v8\`. Se repite con el
+> arreglo.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7522,6 +7527,31 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#831` — un `Mutex` no se suelta nunca: su entrada en la tabla de la VM se queda hasta el final del RUN, y un programa que crea mapas en un bucle se queda sin mutex (en la Pico 2, a las ~257 vueltas de la prueba de resistencia: «mutex.lock: id inválido -1») (abierta el 15-nov, en la prueba de resistencia; preexistente; **V8: el arreglo, por decidir cómo**)
+
+- **Lo que pasó** (15-nov, la prueba de resistencia, `compat/resistencia/`): en la Pico 2, desde la vuelta ~257 (a los 47
+  minutos), la fase de memoria falla en cada vuelta con `RuntimeError: mutex.lock: id inválido -1`; las otras cuatro
+  fases, bien. Al pararla (13:32), 329 vueltas y 73 errores, y su log: `mem: malloc en uso 45108 B | MAXIMO 53652 B de
+  65540`. La Metro (331 vueltas), la P4 (337) y la C6 (296), sin un error.
+- **La causa:** `Core.Mutex` pide su id con `__mutexCreate()` y no lo suelta nunca. `bpvm_mutex_alloc` (`threading.c`)
+  reparte con un contador que sólo sube (`mutex_count++`) y amplía la tabla al doble con `realloc`, en el `malloc` del
+  sistema; se suelta entera al acabar el RUN. Cada `Collections.Map` (y cada `SyncList`) lleva su `Mutex`, y la fase de
+  memoria crea un mapa por vuelta. Hacia la vuelta 257 la tabla tenía que pasar de 256 entradas a 512 (8 KB seguidos)
+  y no cupo en los 64 KB de la Pico 2: `__mutexCreate` dio -1, y el `lock()` de cada mapa nuevo, el error. La VM-Java
+  hace lo mismo con un `ArrayList` (`mutexes.add`), que no se acaba: las dos VMs dejan de dar lo mismo en un programa
+  largo.
+- **Dónde sale:** en cualquier programa que cree mapas o mutex en un bucle y corra mucho. En la Pico 2, hacia los 256; en
+  la C6, la Metro y la P4, más tarde (tienen más RAM para `malloc`).
+- **Los dos caminos** (Eduardo: *«OK. podemos parar la prueba de resistencia e intentar arreglarlo.»*):
+  - **el destructor** (un `~Mutex()` que suelta el id, la regla de `#667`): cambia la interfaz de `Core`. Medido con la
+    stdlib compilada como proyecto: un destructor en `Mutex`, aun sin función nueva, cambia los 35 módulos (el control,
+    la stdlib sin tocar compilada en otra carpeta, sale idéntica byte a byte); y un método no puede ser intrínseca ni
+    llamar a una función no pública de su módulo. Con él cambian la stdlib entera, el `Stdlib.pack` y los packs con
+    módulos, y los programas ya compilados dejan de cargar si no se sube la generación (de 7 a 8).
+  - **el GC**, sólo en las dos VMs: al barrer un `Mutex` muerto, su id vuelve a una lista de libres, y `__mutexCreate`
+    reutiliza primero; como la tabla de handles, que ya limpia el GC al barrer. Ni la stdlib, ni los packs, ni los
+    programas; en las placas, la imagen (que se regraba igual por `#829`).
+
 #### 🧬 `#830` — la marca de la tabla de handles, un porcentaje y no 64 slots fijos: más margen con tablas grandes y varios hilos (abierta el 15-nov, de `#829`; idea de Eduardo; **a V9**)
 
 - Eduardo (15-nov): *«Lo de el número de handlers se podría hacer que tenga que crecer cuando llegué al 90% y no esperar
@@ -7592,6 +7622,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   frente a 92160).
 - **15-nov, decidido** (Eduardo: *«Esperamos a terminar las pruebas.»*): al acabar la prueba de resistencia, en la Pico 2,
   comprobar que `vmheap` lo resuelve y quitar el `stack=90`. Lo de V8 o V9, entonces.
+- **15-nov, el `stack=90`, quitado** (con la prueba de resistencia parada; Eduardo: *«Puedes aprovechar y cambiar el stack
+  del Env»*): `ENV_DEL stack` y un reinicio; el `INFO`, `vmStackBytes` 16384 y `vmHeapBytes` 295312 (eran 92160 y
+  219536). Queda lo de `vmheap`.
 
 #### ✅ `#827` — en la VM-Java, `Machine.uptimeMs()` era la hora del reloj del PC cortada a 32 bits: salía negativa y no contaba desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta y **CERRADA el 15-nov**, el commit de `#827`; al probar en el PC la prueba de resistencia; preexistente; Eduardo: *«Si se arregla, parece poco.»*)
 
