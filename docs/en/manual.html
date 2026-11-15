@@ -2480,10 +2480,12 @@ with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
       directly, without re-entering the interpreter — has a closed design in
       <code>docs/AOT_CROSS_MODULE.md</code> (v4). Within the same module it is
       already a direct C call.</li>
-  <li>Networking on the micros: the TCP client (the <code>Net</code> module,
-      <a href="referencia.html#stdlib-net">§14.15</a>) works on PC; on the boards the WiFi+lwIP
-      backend is missing — for now it throws a catchable RuntimeError there. It is V8's job,
-      along with Bluetooth.</li>
+  <li>Networking and Bluetooth on the micros: since V8, WiFi (<code>Air.Wifi</code> and
+      <code>Net</code>, <a href="referencia.html#stdlib-net">§14.15</a> and
+      <a href="referencia.html#stdlib-air">§14.19</a>) and Bluetooth, with keyboards and mice,
+      work on the P4, the S3 and the C5. The C3 and the C6 do not carry them (with no PSRAM,
+      they would take the RAM programs need), and on the Pico&nbsp;2&nbsp;W, later on; there
+      they throw a catchable RuntimeError.</li>
   <li><code>owner</code> / <code>final</code> do not apply to module properties.</li>
   <li><code>Mutex</code> is non-reentrant; no <code>Semaphore</code> /
       <code>Channel</code> in the stdlib.</li>

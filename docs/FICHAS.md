@@ -7221,7 +7221,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   VMs, demasiado arriesgado. Pero si lo podemos analizar.»*; *«B, a v9»*; lo visto, en `#710`).
 > - **V8, al documentar:** `#823` (las rutas relativas: recomendar `/data`); y lo que el repaso vio desfasado:
 >   `referencia.html` §14.19 (en las placas, `isAvailable()` false) y `manual.html` (la WiFi en las placas, «lo de V8»);
->   y, de `#820`, que un ratón Bluetooth dormido del todo se despierta con un clic (moverlo no basta).
+>   y, de `#820`, que un ratón Bluetooth dormido del todo se despierta con un clic (moverlo no basta). **Hecho el
+>   15-nov**, en español y en inglés: la referencia (§13.11, las rutas relativas y `/data`; §14.19, el Bluetooth en la
+>   P4, la S3 y la C5, `autoOff`, `/sys/bluetooth.keys` y las dos cosas de los aparatos —el clic y la dirección que
+>   cambia—; §14.20 y §14.21, el teclado y el ratón en las placas; el apéndice A, la clave `bt`), `gui.html` §22.6 y el
+>   manual §17; y la guía del IDE §5, en español (la inglesa, con la documentación de V8 al publicar).
 > - **V8, en las pruebas finales:** arriba, 🏁.
 > - **A V9:** `#490`, `#584` (sólo en un proyecto), `#615`, `#663` (como obsoleta), `#719`, `#723` (con el censo de las
 >   clases de dispositivos), `#728`, `#738`, `#745` (una segunda fase), `#781`, `#782`, `#809` y `#819`; y sin número, la
@@ -7499,7 +7503,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   check-jc, 213 PASS y los 2 SKIP; BpIde, rehecho (lleva la VM-Java). La referencia, al día (la tabla de IO, «Cambió en
   V8»). **En las pruebas finales:** en la SD de una placa con la imagen nueva, que las dos fallen como en la flash.
 
-#### 🔵 `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **decidido el 14-nov**: se queda como está; documentarlo y recomendar `/data`)
+#### ✅ `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **decidido el 14-nov**: se queda como está; documentarlo y recomendar `/data` · **CERRADA el 15-nov**, documentada, el commit de la documentación)
 
 - **Lo medido** (14-nov, el programa de `#810` con `../x810`, corrido desde una carpeta del scratchpad): las dos VMs del PC
   escribieron, leyeron y borraron `x810` en la carpeta de encima de la del proceso, fuera de la flash (que `rmdir` y
@@ -7515,6 +7519,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   documentarlo, en el repaso de la documentación de V8: en la placa, una relativa se escribe en la raíz y se lee
   buscando primero en la carpeta del programa; en el IDE, la carpeta del programa; en las VMs de consola, la carpeta
   desde donde se lanzan; y la recomendación, `/data`. Se cierra al documentarlo.
+- **15-nov, medido en el micro simulado y documentado** (Eduardo: *«Continuamos con la documentación.»*). Sin placa
+  conectada, lo de la placa con el micro simulado del IDE, que lleva el mismo littlefs y la misma fachada de ficheros:
+  un programa de un proyecto (`/app/Rel823/Rel823.mod`) que escribe `"x823.txt"` lo deja en la raíz, `/x823.txt`, y no
+  en su carpeta; `readFile("x823.txt")` lee el de su carpeta si hay uno con ese nombre (no el que acaba de escribir: la
+  búsqueda de `bpvm_fs_resolve`, que sólo usan las lecturas); sin otro igual, lo encuentra en la raíz; `"../y823.txt"`
+  falla al escribir («error de escritura»); y `/data/z823.txt`, bien. Documentado: la referencia §13.11 (las rutas
+  relativas, al leer y al escribir, en la placa, en el IDE y en una VM del PC, y `/data/<programa>` para los datos), en
+  español y en inglés; y la guía del IDE §5 (en la placa, una relativa va a la raíz), en español (la inglesa no tiene
+  aún ese párrafo: con la documentación de V8 al publicar).
 
 #### ✅ `#822` — el IDE perdía de vista una VM del PC: el `stop` de la línea de comandos no llegaba a la VM local, dos Run seguidos dejaban la primera dando vueltas sin que nada la parara, y ni el Stop llegaba a la VM-C de Run Window ni cerrar el IDE las paraba (abierta y **CERRADA el 14-nov**, el commit de `#822`; salió al cerrar `#694`; Eduardo: *«mientras se ejecuta un programa no debería dejar ejecutar otro»*)
 
@@ -7578,6 +7591,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   moverlo no lo despierta. Casa con lo de antes: en la búsqueda de 30 s del 11-nov no se anunciaba porque dormía, y en un
   log de la P4 del 12-nov el teclado tardó 111 s porque nadie pulsó una tecla. **Al documentar V8:** en la referencia
   (§14.19) y en el manual, que un ratón Bluetooth dormido del todo puede no despertar al moverlo: con un clic, sí.
+  **Documentado el 15-nov** en la referencia, en español y en inglés: §14.19 («Dos cosas de los aparatos, no de la
+  placa») y §14.21 (el ratón en las placas); el manual no habla del ratón.
 
 #### 🧬 `#819` — el paso 6 de H2: el programa de configuración del Bluetooth, en BasicPlus (abierta el 14-nov, al cerrar H2; **a V9 el 14-nov**)
 
@@ -7587,7 +7602,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `/sys/bluetooth.json`.
 - **Por decidir** (Eduardo, 14-nov: *«El paso 6 apuntalo como pendiente y ya decidiremos si lo hacemos en V8 o en V9»*).
 - **14-nov, a V9** (Eduardo: *«a V9»*). Mientras, emparejar se hace con unas líneas de BP (`referencia.html` §14.19, con
-  su ejemplo); esa sección dice aún que en las placas `isAvailable()` es false: a corregir al documentar V8.
+  su ejemplo); esa sección dice aún que en las placas `isAvailable()` es false: a corregir al documentar V8
+  (**corregido el 15-nov**: el Bluetooth, en la P4, la S3 y la C5).
 
 #### ✅ `#818` — en las ESP con PSRAM, cada refresco de una pantalla SPI pedía a la RAM interna un búfer de rebote del tamaño de la franja de LVGL (11,5 KB en la C5), y con el Bluetooth y la WiFi encendidos no lo había: la pantalla dejaba de refrescarse (abierta y **CERRADA el 13-nov**, el commit de `#818`; salió en H2, en la C5; Eduardo: *«OK»*)
 

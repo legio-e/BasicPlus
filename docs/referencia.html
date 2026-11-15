@@ -726,6 +726,20 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   (<code>/../x</code>) no sale de ella: falla, como en la placa.
 </p>
 <p>
+  <strong>Una ruta relativa</strong> (sin <code>/</code> delante: <code>"lecturas.csv"</code>) no va al mismo sitio en
+  todas partes. Al <strong>leer</strong> (<code>readFile</code>, <code>fileExists</code>, <code>fileSize</code>, un
+  <code>File</code> para leer…) se busca, por orden, en la carpeta del programa (<code>App.projectPath()</code>), tal
+  cual, en <code>/app</code> y en los packs. Al <strong>escribir</strong> (<code>writeFile</code>,
+  <code>appendFile</code>, un <code>File</code> para escribir…) va tal cual: en la placa, a la raíz de la flash
+  (<code>/lecturas.csv</code>), no a la carpeta del programa; con el IDE del PC, a la carpeta del programa; y en una VM del
+  PC lanzada a mano, a la carpeta desde la que se lanzó, fuera de la flash. Por eso, en la placa, si el programa trae un
+  fichero con ese nombre, <code>readFile</code> lee el suyo y no el que acaba de escribir. Y una relativa que sube
+  (<code>"../x"</code>) falla en la placa y en el IDE.<br>
+  <strong>Para los datos de un programa, una ruta de <code>/data</code></strong>, cada programa en su carpeta
+  (<code>"/data/Termostato/lecturas.csv"</code>): es el mismo fichero en la placa, en el IDE y en una VM del PC, y el IDE
+  no la toca nunca. <em>V8</em>.
+</p>
+<p>
   Hay aparte un <code>IO.prompt(spec)</code> que pide al IDE conectado
   que renderice un formulario y devuelve el JSON con la respuesta del
   usuario (ver <a href="#stdlib-funcs">§13.1</a>: la primitiva BLOQUEA
@@ -2780,16 +2794,31 @@ bt.disconnect(d)                             // esa conexión; el Bluetooth sigu
 </p>
 <p>
   <strong>El fichero.</strong> <code>/sys/bluetooth.json</code> lo escribe la clase: <code>autoStart</code> y los
-  aparatos, por su dirección. La placa lo lee al arrancar: si dice <code>autoStart</code>, enciende y espera a los
-  recordados.
+  aparatos, por su dirección; y si hace falta, a mano, <code>autoOff</code> (segundos sin uso para apagarse solo; 600 por
+  defecto, 0 no se apaga; una tecla o el ratón cuentan como uso). La placa lo lee al arrancar: si dice
+  <code>autoStart</code>, enciende y espera a los recordados. La clave <code>bt</code> del ENV manda sobre
+  <code>autoStart</code> (<a href="#env">apéndice A</a>). Las claves de los emparejamientos las guarda la placa aparte, en
+  <code>/sys/bluetooth.keys</code>, y <code>forget</code> borra también las del aparato.
   <strong>Al acabar el programa</strong>, si lo ha tocado, el Bluetooth vuelve a lo que diga el fichero.
 </p>
 <pre><code>{ "autoStart": true,
   "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
 <p>
-  <strong>Dónde.</strong> En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs y en el micro simulado
-  del IDE, con dos aparatos de prueba: «Teclado simulado» y «Ratón simulado». En las placas (la S3, la C5 y la P4), lo siguiente; de momento,
-  <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un <code>RuntimeError</code>.
+  <strong>Dónde.</strong> En la <strong>P4</strong> (con <code>radio=c6</code> en su ENV: va por la misma C6 que la WiFi),
+  la <strong>S3</strong> y la <strong>C5</strong>, con teclados y ratones Bluetooth LE: lo que mandan llega a
+  <a href="#stdlib-keyboards"><code>Keyboards</code></a> y a <a href="#stdlib-mice"><code>Mice</code></a>, y en un
+  programa con GUI, a sus controles. Un aparato que no es un teclado ni un ratón no se queda: <code>connect</code> da
+  <code>false</code>, y el log dice por qué. La C3 y la C6 no lo llevan (van justas de RAM, sin PSRAM), ni la Pico&nbsp;2
+  ni las STM32: allí <code>isAvailable()</code> es <code>false</code> y <code>turnOn()</code> lanza un
+  <code>RuntimeError</code>. En el <strong>PC</strong>, un Bluetooth simulado, igual en las dos VMs y en el micro simulado
+  del IDE, con dos aparatos de prueba: «Teclado simulado» y «Ratón simulado».
+</p>
+<p>
+  <strong>Dos cosas de los aparatos, no de la placa.</strong> Un ratón dormido del todo (tras muchos minutos sin usarlo,
+  o tras un rato con el Bluetooth de la placa apagado) puede no despertar al moverlo: con un clic, sí, y en unos segundos
+  vuelve solo; un teclado despierta con cualquier tecla. Y algunos aparatos cambian de dirección cada vez que se emparejan con otro (otra
+  placa, el PC): la placa deja de reconocerlo, y hay que emparejarlo otra vez (<code>forget</code> el viejo y
+  <code>connect</code> el nuevo, desde <code>scan</code>).
 </p>
 
 <h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (el teclado)</h3>
@@ -2841,7 +2870,9 @@ tk.onKey := pant::tecla                  // un aviso por pulsación, en el hilo 
   simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Sin GUI, en el PC no hay
   teclado. El carácter es el del sistema (la distribución del teclado del PC). En un programa con GUI, la propia GUI lleva
   el teclado a sus controles (el foco, Tab, Enter), y la pantalla tiene sus teclas tal cual, <code>onKey</code>
-  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las placas, lo siguiente, con un teclado Bluetooth.
+  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las <strong>placas con Bluetooth</strong> (la P4, la C5 y la
+  S3, <a href="#stdlib-air-bt">§14.19</a>), un teclado Bluetooth, con pantalla o sin ella; el carácter, el de la
+  distribución americana (las de cada país, más adelante): un teclado español da su <code>ñ</code> como <code>;</code>.
 </p>
 
 <h3 id="stdlib-mice">14.21 <code>Mice</code> (el ratón)</h3>
@@ -2888,8 +2919,9 @@ ra.onWheel := pant::rueda
   simulado de <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». Como táctil, la ventana sigue
   igual: los botones y los campos de la GUI responden al ratón del PC, esté conectado o no. Sin GUI, en el PC no hay
   ratón. En un programa con GUI, la propia GUI lleva el ratón a sus controles, con una flecha, y con «Ratón simulado» el
-  ratón del PC deja de hacer de táctil (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las placas, lo siguiente,
-  con un ratón Bluetooth.
+  ratón del PC deja de hacer de táctil (<a href="gui.html#ev-teclado">gui.html §22.6</a>). En las <strong>placas con
+  Bluetooth y pantalla</strong> (la P4 y la C5, <a href="#stdlib-air-bt">§14.19</a>), un ratón Bluetooth, con la flecha
+  de la GUI; en la S3, que no tiene pantalla, se conecta pero no hace nada. Dormido del todo, se despierta con un clic.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>
@@ -3878,7 +3910,9 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <tr><td><code>audio</code></td><td><code>&lt;códec&gt;,mclk:N,bclk:N,ws:N,dout:N</code>; y <code>i2c:N</code> (0), <code>dir:N</code> (0x18), <code>pa:P</code> (ninguno), <code>paalto:1</code> (1); <code>sda</code> y <code>scl</code>, si ese bus no lo declara ya la placa</td><td>El sonido de la placa (<code>Sound</code>, <a href="#stdlib-sound">§14.18</a>): el códec —de momento, <code>es8311</code>—, los pines de su I²S, su I²C y el amplificador, que sólo se enciende mientras suena. Sus pines pasan a ser del sistema. Sin la línea, la placa no tiene sonido y <code>Sound.play</code> lo dice. La P4 de Waveshare: <code>audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53</code></td><td>P4</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>La WiFi</strong></td></tr>
   <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: se enciende al arrancar, con lo que diga <code>/sys/wifi.json</code>. 0: no se enciende, aunque el fichero diga <code>"autoStart": true</code>. Sin la clave, lo dice el fichero; y sin fichero, apagada</td><td>P4 · S3 · C5</td><td>al arrancar</td></tr>
-  <tr><td><code>radio</code></td><td><code>c6</code></td><td>La placa lleva una ESP32-C6 de radio (no todas las P4). Sin esta línea no tiene WiFi y sus pines son de quien los quiera; con ella, los de la SDIO y el reset de la C6 son del sistema</td><td>P4</td><td>al arrancar</td></tr>
+  <tr><td><code>radio</code></td><td><code>c6</code></td><td>La placa lleva una ESP32-C6 de radio (no todas las P4). Sin esta línea no tiene WiFi ni Bluetooth y sus pines son de quien los quiera; con ella, los de la SDIO y el reset de la C6 son del sistema</td><td>P4</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>El Bluetooth</strong></td></tr>
+  <tr><td><code>bt</code></td><td><code>1</code> / <code>0</code></td><td>1: se enciende al arrancar y espera a los recordados de <code>/sys/bluetooth.json</code> (<a href="#stdlib-air-bt">§14.19</a>). 0: no se enciende, aunque el fichero diga <code>"autoStart": true</code>. Sin la clave, lo dice el fichero; y sin fichero, apagado</td><td>P4 · S3 · C5</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>El almacenamiento</strong></td></tr>
   <tr><td><code>part.fs.size</code></td><td>bytes, múltiplo del sector (4 KB; en las STM32, 8 KB)</td><td>El tamaño del sistema de archivos; los packs se llevan el resto de la zona. No se edita a mano: lo pone el asistente de particiones del IDE</td><td>todas, salvo la C5 y la P4 de Waveshare (32 MB: el sistema de archivos va arriba)</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>El diagnóstico</strong></td></tr>

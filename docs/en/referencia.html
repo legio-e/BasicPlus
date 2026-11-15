@@ -720,6 +720,20 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   does not leave it: it fails, as on a board.
 </p>
 <p>
+  <strong>A relative path</strong> (no leading <code>/</code>: <code>"readings.csv"</code>) does not go to the same place
+  everywhere. When <strong>reading</strong> (<code>readFile</code>, <code>fileExists</code>, <code>fileSize</code>, a
+  <code>File</code> opened for reading…) it is looked up, in order, in the program's folder
+  (<code>App.projectPath()</code>), as is, in <code>/app</code> and in the packs. When <strong>writing</strong>
+  (<code>writeFile</code>, <code>appendFile</code>, a <code>File</code> opened for writing…) it is used as is: on a board,
+  at the root of the flash (<code>/readings.csv</code>), not in the program's folder; with the PC's IDE, in the program's
+  folder; and in a PC VM launched by hand, in the folder it was launched from, outside the flash. That is why, on a board,
+  if the program ships a file with that name, <code>readFile</code> reads that one and not the one it has just written.
+  And a relative path that climbs (<code>"../x"</code>) fails on a board and in the IDE.<br>
+  <strong>For a program's data, a path in <code>/data</code></strong>, each program in its own folder
+  (<code>"/data/Thermostat/readings.csv"</code>): it is the same file on a board, in the IDE and in a PC VM, and the IDE
+  never touches it. <em>V8</em>.
+</p>
+<p>
   Separately there is <code>IO.prompt(spec)</code>, which asks the connected IDE
   to render a form and returns the JSON with the user's
   response (see <a href="#stdlib-funcs">§13.1</a>: the primitive BLOCKS
@@ -2412,16 +2426,32 @@ bt.disconnect(d)                             // that connection; Bluetooth stays
 </p>
 <p>
   <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>autoStart</code> and the
-  devices, by address. The board reads it at boot: if it says <code>autoStart</code>, it turns on and waits for the
-  remembered ones. <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
+  devices, by address; and if needed, by hand, <code>autoOff</code> (seconds without use before it turns itself off; 600
+  by default, 0 never; a key or the mouse count as use). The board reads it at boot: if it says <code>autoStart</code>,
+  it turns on and waits for the remembered ones. The ENV key <code>bt</code> overrides <code>autoStart</code>
+  (<a href="#env">appendix A</a>). The pairing keys are kept by the board separately, in
+  <code>/sys/bluetooth.keys</code>, and <code>forget</code> also deletes the device's keys.
+  <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
 </p>
 <pre><code>{ "autoStart": true,
   "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
 <p>
-  <strong>Where.</strong> On the <strong>PC</strong>, a simulated Bluetooth, the same in both VMs and in the IDE's
-  simulated micro, with two test devices:
-  «Teclado simulado» (keyboard) and «Ratón simulado» (mouse). On the boards (the S3, the C5 and the P4), next; for now
-  <code>isAvailable()</code> is <code>false</code> and <code>turnOn()</code> throws a <code>RuntimeError</code>.
+  <strong>Where.</strong> On the <strong>P4</strong> (with <code>radio=c6</code> in its ENV: it goes through the same C6
+  as the WiFi), the <strong>S3</strong> and the <strong>C5</strong>, with Bluetooth LE keyboards and mice: what they send
+  reaches <a href="#stdlib-keyboards"><code>Keyboards</code></a> and <a href="#stdlib-mice"><code>Mice</code></a>, and
+  in a program with a GUI, its controls. A device that is neither a keyboard nor a mouse does not stay:
+  <code>connect</code> returns <code>false</code>, and the log says why. The C3 and the C6 do not carry it (they are short
+  of RAM, with no PSRAM), nor do the Pico&nbsp;2 or the STM32s: there <code>isAvailable()</code> is <code>false</code> and
+  <code>turnOn()</code> throws a <code>RuntimeError</code>. On the <strong>PC</strong>, a simulated Bluetooth, the same in
+  both VMs and in the IDE's simulated micro, with two test devices: «Teclado simulado» (keyboard) and «Ratón simulado»
+  (mouse).
+</p>
+<p>
+  <strong>Two things about the devices, not the board.</strong> A mouse that is fully asleep (after many minutes unused,
+  or after a while with the board's Bluetooth off) may not wake up when moved: a click does, and within a few seconds it
+  comes back on its own; a keyboard wakes up with any key. And some devices change address every time they are paired
+  with something else (another board, the PC): the board no longer recognises them, and they have to be paired again
+  (<code>forget</code> the old one and <code>connect</code> the new one, from <code>scan</code>).
 </p>
 
 <h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (the keyboard)</h3>
@@ -2473,7 +2503,9 @@ tk.onKey := screen::key                  // one notice per press, on the thread 
   simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Without a GUI there is
   no keyboard on the PC. The character is the system's (the PC keyboard layout). In a program with a GUI, the GUI itself
   takes the keyboard to its controls (the focus, Tab, Enter), and the screen has the keys as they come, <code>onKey</code>
-  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the boards, next, with a Bluetooth keyboard.
+  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the <strong>boards with Bluetooth</strong> (the P4, the C5 and
+  the S3, <a href="#stdlib-air-bt">§14.19</a>), a Bluetooth keyboard, with or without a screen; the character is the one
+  of the US layout (each country's, later on): a Spanish keyboard gives its <code>ñ</code> as <code>;</code>.
 </p>
 
 <h3 id="stdlib-mice">14.21 <code>Mice</code> (the mouse)</h3>
@@ -2521,8 +2553,10 @@ mo.onWheel := screen::wheel
   simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». As a touch screen, the
   window stays the same: the GUI buttons and fields respond to the PC mouse, connected or not. Without a GUI there is no
   mouse on the PC. In a program with a GUI, the GUI itself takes the mouse to its controls, with an arrow, and with «Ratón
-  simulado» the PC mouse stops acting as a touch screen (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the boards,
-  next, with a Bluetooth mouse.
+  simulado» the PC mouse stops acting as a touch screen (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the
+  <strong>boards with Bluetooth and a screen</strong> (the P4 and the C5, <a href="#stdlib-air-bt">§14.19</a>), a
+  Bluetooth mouse, with the GUI's arrow; on the S3, which has no screen, it connects but does nothing. When fully asleep,
+  a click wakes it up.
 </p>
 
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>
@@ -3786,7 +3820,9 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, and <code>d1</code>, <code>d2</code> and <code>d3</code> all three (4 bits) or none (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = no LDO)</td><td>The SDMMC card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>WiFi</strong></td></tr>
   <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: it is switched on at boot, with what <code>/sys/wifi.json</code> says. 0: it is not, even if the file says <code>"autoStart": true</code>. Without the key, the file decides; and without a file, it stays off</td><td>P4 · S3 · C5</td><td>at boot</td></tr>
-  <tr><td><code>radio</code></td><td><code>c6</code></td><td>The board carries an ESP32-C6 as its radio (not every P4 does). Without this line it has no WiFi and its pins are free; with it, the SDIO and reset pins of the C6 belong to the system</td><td>P4</td><td>at boot</td></tr>
+  <tr><td><code>radio</code></td><td><code>c6</code></td><td>The board carries an ESP32-C6 as its radio (not every P4 does). Without this line it has no WiFi or Bluetooth and its pins are free; with it, the SDIO and reset pins of the C6 belong to the system</td><td>P4</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Bluetooth</strong></td></tr>
+  <tr><td><code>bt</code></td><td><code>1</code> / <code>0</code></td><td>1: it is switched on at boot and waits for the remembered devices of <code>/sys/bluetooth.json</code> (<a href="#stdlib-air-bt">§14.19</a>). 0: it is not, even if the file says <code>"autoStart": true</code>. Without the key, the file decides; and without a file, it stays off</td><td>P4 · S3 · C5</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>Storage</strong></td></tr>
   <tr><td><code>part.fs.size</code></td><td>bytes, a multiple of the sector (4 KB; on the STM32s, 8 KB)</td><td>The size of the file system; the packs take the rest of the zone. Not edited by hand: the IDE's partition wizard sets it</td><td>all except the C5 and the Waveshare P4 (32 MB: the file system goes on top)</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>Diagnostics</strong></td></tr>

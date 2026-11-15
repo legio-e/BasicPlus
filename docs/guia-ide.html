@@ -319,7 +319,11 @@
   nombre que le daría la placa (<code>/app/&lt;proyecto&gt;</code>), o en
   <code>app</code> si no hay proyecto, y la carpeta se queda al acabar: lo que
   el programa guarda con una ruta relativa (<code>"lecturas.csv"</code>) sigue
-  ahí en el siguiente Run, y lo puedes mirar. Con proyecto, el IDE borra de esa
+  ahí en el siguiente Run, y lo puedes mirar. En la placa, en cambio, esa misma
+  ruta va a la raíz de la flash (<code>/lecturas.csv</code>), no a la carpeta
+  del programa: para que guarde lo mismo en el PC y en la placa, una ruta de
+  <code>/data</code> (<code>"/data/Termostato/lecturas.csv"</code>; referencia
+  §13.11). Con proyecto, el IDE borra de esa
   carpeta los <code>.mod</code>, <code>.bpi</code> y <code>.dbg</code> que ya
   no sube; lo que escribe el programa, nunca. Los <code>resources</code> del
   proyecto no se copian: si el programa los necesita en el PC, hazlo un pack

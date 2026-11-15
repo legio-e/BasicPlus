@@ -919,7 +919,10 @@ scr.onKey := screen::key
   <code>Air.Bluetooth</code> connected («Teclado simulado» and «Ratón simulado»), as on a board: with no keyboard connected
   the window does not type, not even the Swing one. With «Ratón simulado», the PC mouse stops acting as a touch screen and
   acts as a mouse, with the GUI's arrow in the window of the VM-C and the simulated micro (doing both, every click would
-  count twice); without it, it acts as a touch screen, as always. On the boards, next.
+  count twice); without it, it acts as a touch screen, as always. <strong>On the boards with Bluetooth and a
+  screen</strong> (the P4 and the C5), the same with a paired Bluetooth keyboard and mouse
+  (<a href="referencia.html#stdlib-air-bt">reference §14.19</a>): the mouse's arrow on the screen, the clicks and the
+  wheel, and the keyboard in the controls, with the focus and Tab.
 </p>
 
 <h2 id="ejecutar">23. Running (host and board)</h2>

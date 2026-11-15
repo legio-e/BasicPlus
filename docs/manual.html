@@ -2956,10 +2956,12 @@ threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la pl
       — despachar native→native directo, sin re-entrar al intérprete —
       tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v4).
       Dentro del mismo módulo ya es llamada C directa.</li>
-  <li>Red en los micros: el cliente TCP (módulo <code>Net</code>,
-      <a href="referencia.html#stdlib-net">§14.15</a>) funciona en PC; en las placas falta el
-      backend WiFi+lwIP — hoy allí lanza RuntimeError atrapable. Es lo de V8, con el
-      Bluetooth.</li>
+  <li>La red y el Bluetooth en los micros: desde V8, la WiFi (<code>Air.Wifi</code> y
+      <code>Net</code>, <a href="referencia.html#stdlib-net">§14.15</a> y
+      <a href="referencia.html#stdlib-air">§14.19</a>) y el Bluetooth, con teclados y ratones,
+      van en la P4, la S3 y la C5. La C3 y la C6 no los llevan (sin PSRAM, les quitarían la RAM
+      que necesitan los programas), y en la Pico&nbsp;2&nbsp;W, más adelante; allí lanzan
+      RuntimeError atrapable.</li>
   <li><code>owner</code> / <code>final</code> no aplican a property de
       módulo.</li>
   <li><code>Mutex</code> no reentrante; sin <code>Semaphore</code> /
