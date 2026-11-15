@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BasicPlus — Cómo se prueba</title>
+<style>
+  :root {
+    --bg: #fafafa; --bg-code: #f0f2f4; --fg: #222; --fg-muted: #666;
+    --accent: #2a6fbf; --accent-bg: #e8f1fb; --border: #ddd;
+    --warn: #b86e00; --warn-bg: #fff4e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.6; margin: 0; padding: 0;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+  h1 { color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 0.4rem; }
+  h2 { color: var(--accent); margin-top: 2.6rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  h3 { margin-top: 1.8rem; }
+  code, pre {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code); border-radius: 3px;
+  }
+  code { padding: 0.1rem 0.3rem; font-size: 0.9em; }
+  pre { padding: 0.9rem 1.1rem; font-size: 0.85em; overflow-x: auto; line-height: 1.5; }
+  a { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td.num { white-space: nowrap; }
+  .note {
+    background: var(--accent-bg); border-left: 3px solid var(--accent);
+    padding: 0.9rem 1.1rem; margin: 1.4rem 0; border-radius: 4px;
+  }
+  .note p { margin: 0.5rem 0; }
+  .lead { font-size: 1.06rem; }
+  .nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .nav a { margin-right: 1rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border);
+           color: var(--fg-muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+
+<p class="nav">
+  <a href="index.html">← Índice de documentación</a>
+  <a href="manual.html">Manual</a>
+  <a href="referencia.html">Referencia</a>
+  <a href="gui.html">Interfaz gráfica</a>
+  <a href="guia-ide.html">Guía del IDE</a>
+</p>
+
+<h1>Cómo se prueba BasicPlus</h1>
+
+<p class="lead">
+  BasicPlus corre en microcontroladores, y un microcontrolador puede pasar días encendido sin
+  que nadie lo mire, registrando datos o controlando algo. Un fallo ahí no se ve hasta que hace
+  daño. Por eso cada cambio pasa por una batería de pruebas en el PC, y cada versión, por otra
+  más larga en las placas de verdad.
+</p>
+<p class="lead">
+  Esta página las cuenta todas: qué comprueba cada una, cuántos casos tiene y, cuando lo hay, un
+  fallo real que cazó. Todas están en el repositorio; al final se explica cómo correrlas.
+</p>
+
+<h2>En números</h2>
+<p>
+  Medido el 15 de noviembre de 2026, con V8 a punto de publicarse. Los números se rehacen al
+  publicar cada versión.
+</p>
+<table>
+  <tr><th>Prueba</th><th>Qué comprueba</th><th>Resultado</th></tr>
+  <tr><td>El corpus, en las dos VMs</td>
+      <td>217 programas: la misma salida, byte a byte</td><td class="num">217 de 217</td></tr>
+  <tr><td>… en el formato de V7</td>
+      <td>los mismos, en el formato de módulo anterior</td>
+      <td>209 de 209 (8 usan lo que sólo tiene el formato nuevo)</td></tr>
+  <tr><td>… con dos hilos de trabajo</td>
+      <td>los mismos, con dos hilos de trabajo a la vez</td><td class="num">217 de 217</td></tr>
+  <tr><td>La cápsula de V6</td>
+      <td>59 programas compilados por el compilador publicado de V6</td><td class="num">59 de 59</td></tr>
+  <tr><td>Las pruebas de C</td>
+      <td>la VM-C por dentro</td><td class="num">114 de 114</td></tr>
+  <tr><td>El micro simulado · la sombra · la norma</td>
+      <td>el simulador del IDE · el orden en que se buscan los módulos · las versiones de los módulos</td>
+      <td class="num">15 · 15 · 9, todas</td></tr>
+  <tr><td>El compilador y la VM-Java</td>
+      <td>sus pruebas propias</td><td class="num">395 y 65, todas</td></tr>
+  <tr><td>Todos los samples</td>
+      <td>415 programas de ejemplo, compilados</td><td class="num">415 de 415</td></tr>
+  <tr><td>Los programas de error</td>
+      <td>39 programas que tienen que fallar, con lo que dice cada error</td>
+      <td class="num">151 de 151</td></tr>
+  <tr><td>Los ejemplos de la documentación</td>
+      <td>cada fragmento de código de los manuales, compilado</td>
+      <td>337 de 343; 6, por arreglar</td></tr>
+  <tr><td>La tanda en las placas</td>
+      <td>24 programas en nueve placas</td>
+      <td>como en el PC, salvo lo que difiere a propósito; y un cuelgue de la ESP32-P4, una vez,
+          que se está estudiando</td></tr>
+  <tr><td>La prueba de resistencia</td>
+      <td>días seguidos, en cuatro placas</td><td>en marcha</td></tr>
+</table>
+
+<h2>La regla de oro: dos máquinas, la misma salida</h2>
+<p>
+  Un programa de BasicPlus se compila a un bytecode (el <code>.mod</code>) que ejecutan dos
+  máquinas virtuales escritas por separado: la <strong>VM-Java</strong>, la de referencia, en el
+  PC, y la <strong>VM-C</strong>, en C, que corre en el PC y dentro del firmware de cada placa. La
+  regla es que, para el mismo <code>.mod</code>, las dos escriban <strong>exactamente lo mismo,
+  byte a byte</strong>. Una diferencia es un fallo, aunque el programa «funcione».
+</p>
+<p>
+  Para ti significa que lo que ves al depurar en el PC es lo que hará la placa. Y como son dos
+  implementaciones independientes del mismo algoritmo, un fallo de una casi nunca lo repite la
+  otra: la comparación lo delata.
+</p>
+<p>
+  Cada cosa nueva se prueba, además, en un orden fijo, de lo más barato de depurar a lo más caro:
+  primero en la VM-Java; luego en la VM-C, comparando con la Java; y sólo entonces en la placa. Lo
+  que no funciona en Java tampoco funcionará en C, y lo que no funciona en C tampoco en la placa:
+  así, en la placa sólo queda por cazar lo que es de verdad del hardware. Cómo están hechas las
+  dos VMs, en <a href="bp-desde-dentro.html#s15">Basic Plus desde dentro</a>.
+</p>
+
+<h2>En cada cambio: la red</h2>
+<p>
+  Ningún cambio en las máquinas virtuales, el compilador o la biblioteca estándar entra sin pasar
+  la red de seguridad —«la red», <code>compat.sh check</code>—: unos veinte minutos de pruebas en
+  el PC. Si una sola sale en rojo, el cambio no entra.
+</p>
+
+<h3>El corpus, en las dos VMs</h3>
+<p>
+  217 programas —los ejemplos, y muchos escritos al arreglar un fallo, para que no vuelva— se
+  compilan y se ejecutan en las dos VMs, y su salida tiene que ser idéntica. Y dos veces más: en el
+  formato de módulo de V7, porque los programas ya compilados tienen que seguir corriendo en las
+  VMs nuevas, y con dos hilos de trabajo a la vez, porque el mismo programa tiene que decir lo
+  mismo con uno que con dos. Y el corpus crece con cada versión: en V7 eran 149 programas; hoy,
+  217.
+</p>
+
+<h3>Lo de antes sigue funcionando</h3>
+<ul>
+  <li><strong>La cápsula de V6.</strong> 59 programas compilados con el compilador publicado de
+      V6 —sacado de su ZIP, tal como se publicó— se ejecutan en las VMs de hoy, y su salida tiene
+      que ser la de entonces, byte a byte. Un programa de hace dos versiones corre sin
+      recompilarlo.</li>
+  <li><strong>Hacia delante.</strong> Un programa compilado hoy, en la VM publicada de V6, tiene
+      que rechazarse con un mensaje que diga por qué: nunca cargarse mal ni romperla.</li>
+  <li><strong>La norma de versiones.</strong> Nueve casos de módulos compilados en momentos
+      distintos que se juntan en un programa: cuándo se aceptan y cuándo se rechazan con un
+      mensaje, igual en las dos VMs.</li>
+  <li><strong>Los packs.</strong> La parte nativa de los packs (SQLite, la interfaz gráfica) tiene
+      que hablar el mismo idioma que la VM, su ABI. Dos veces, una subida de esa ABI dejó SQLite
+      sin sus funciones nativas en todas las placas. Desde entonces la red lo mira, y no puede
+      volver a pasar sin ponerse en rojo.</li>
+  <li><strong>La biblioteca dentro del firmware.</strong> Cada imagen lleva dentro la biblioteca
+      estándar y la repone al arrancar; la red comprueba que es la misma que la de la biblioteca
+      (18 módulos en las RP2350 y en las ESP32, 17 en las STM32).</li>
+</ul>
+
+<h3>La VM-C por dentro</h3>
+<p>
+  114 pruebas escritas en C ejercitan lo que un programa de ejemplo no alcanza: el núcleo del
+  depurador (las pausas, los pasos, un Stop en un breakpoint, varios hilos), las funciones nativas
+  compiladas a C contra su versión interpretada (una sola de esas pruebas hace 494 comparaciones),
+  los sistemas de ficheros y la tarjeta SD, la flash, el recolector de basura, los hilos y su
+  planificador, los packs y la memoria justa. Las acompañan:
+</p>
+<ul>
+  <li><strong>El estrés:</strong> la tabla de objetos que crece sin parar, el heap justo con uno,
+      dos y cuatro hilos de trabajo en las dos VMs, y los hilos que se ceden el turno. El 15 de
+      noviembre cazó una carrera: dos hilos se quedaban a la vez sin sitio en la tabla de objetos;
+      uno recogía la basura, y cuando el otro volvía, los demás ya habían gastado el sitio
+      liberado y se rendía con un «no queda memoria» falso. Ahora recoge él antes de rendirse.</li>
+  <li><strong>El micro simulado,</strong> el que usa el IDE cuando no hay placa: se construye y se
+      prueba con sus 15 casos.</li>
+  <li><strong>La sombra:</strong> el orden en que se buscan los módulos (la carpeta del programa,
+      la biblioteca, los packs) es el mismo en las dos VMs, y si un módulo tuyo tapa a uno de la
+      biblioteca, se avisa. 15 casos.</li>
+</ul>
+
+<h2>Las pruebas que prueban las pruebas</h2>
+<p>
+  Una prueba en verde no dice nada si no es capaz de ponerse en rojo. Por eso las pruebas de lo
+  más delicado —los hilos, el recolector de basura, los ficheros, parar un programa— llevan su
+  <strong>sabotaje</strong>: un interruptor que deshace a propósito el arreglo que vigilan. La red
+  comprueba las dos cosas: que con el arreglo la prueba sale en verde, y que con el sabotaje sale
+  en rojo. Sólo la de la cola de hilos tiene veinte.
+</p>
+<p>
+  Y dos normas: una prueba que se salta cuenta como un fallo, y una que acaba bien sin decir su
+  «OK», también. Vienen de una lección: en V7, un repaso encontró pruebas que llevaban semanas sin
+  correr —una no enlazaba desde agosto— porque no estaban en ninguna red y nadie lo veía. Desde
+  entonces, todas las pruebas de C que pueden correr solas están en la red.
+</p>
+
+<h2>El compilador</h2>
+<ul>
+  <li><strong>Sus pruebas propias:</strong> 395 del compilador y 65 de la VM-Java.</li>
+  <li><strong>Los programas de error.</strong> 39 programas que tienen que fallar, con 151
+      comprobaciones. No basta con que fallen: cada error tiene que decir lo que tiene que decir.
+      Si uno que debía fallar empieza a compilar, se ha perdido una regla del lenguaje; si el
+      mensaje cambia, el diagnóstico ha empeorado —o ha mejorado, y se actualiza a conciencia—.</li>
+  <li><strong>Todos los samples:</strong> los 415 programas de ejemplo se compilan con el
+      compilador de hoy. Al preparar V6, este barrido encontró seis ejemplos publicados que ya no
+      compilaban.</li>
+  <li><strong>La documentación.</strong> Cada ejemplo de los manuales se compila —343 fragmentos
+      en 26 páginas—: un ejemplo que no compila es un fallo de la documentación. Y al montar el
+      paquete se comprueba que ningún enlace de la ayuda queda roto.</li>
+</ul>
+
+<h2>En las placas</h2>
+
+<h3>La tanda</h3>
+<p>
+  Antes de publicar, cada placa se graba con la imagen del ZIP que se va a publicar —la misma que
+  instalarás tú— y se le pasa la tanda: una serie de programas que se ejecutan en el PC y en la
+  placa. La salida del PC es la referencia, y la de la placa tiene que coincidir con ella, salvo lo
+  que difiere a propósito (un sistema de ficheros sin fecha de modificación, o una prueba de
+  pantalla en una placa que no la tiene). Para V7, 50 programas en diez placas; para V8, en el lote
+  del 15 de noviembre, los 24 programas nuevos en nueve placas de tres arquitecturas: ARM, Xtensa
+  y RISC-V.
+</p>
+<p>
+  Lo que caza la tanda no lo ve el PC. En ese mismo lote, la imagen nueva de la ESP32-C6 había
+  movido 4 KB su bloque de memoria, y los motores de la interfaz gráfica no cargaban hasta volver
+  a grabar sus packs.
+</p>
+
+<h3>La prueba de resistencia</h3>
+<p>
+  Un PC se enciende unas horas y se apaga; un dispositivo puede funcionar días sin que nadie lo
+  mire. Si tiene una fuga de memoria o de cualquier otro recurso, un día se queda sin él y falla, y
+  ninguna prueba de minutos lo ve.
+</p>
+<p>
+  La prueba de resistencia es un programa que corre solo, días seguidos, en cuatro placas: la Pico
+  2 y la Metro (el mismo chip, sin PSRAM y con ella: una hace de control de la otra), la ESP32-P4,
+  la que más recursos tiene, y la ESP32-C6, que tiene pocos; las dos, con su pantalla. En cada vuelta —unos
+  once segundos— calcula, crea y suelta listas y mapas, escribe, lee y borra un fichero, arranca
+  hilos y pinta en la pantalla. Cada error se atrapa y se apunta, sin parar la prueba. Cada diez
+  minutos apunta la memoria libre tras recoger la basura, y la temperatura del chip: si la
+  memoria libre baja día a día, hay una fuga.
+</p>
+<p>
+  La primera vez que corrió, la Pico 2 empezó a fallar a los 45 minutos, hacia la vuelta 257:
+  cada mapa lleva un mutex, y la VM no soltaba nunca su entrada en la tabla de mutex. En el PC la
+  tabla crecía sin que se notara; en la Pico 2 se acabó la memoria. Se arregló en las dos VMs, y
+  con el arreglo la Pico 2 pasó de las mil vueltas sin un error en tres horas.
+</p>
+<p>
+  La prueba está en el repositorio, en
+  <a href="https://github.com/legio-e/BasicPlus/tree/main/compat/resistencia">compat/resistencia</a>,
+  para repetirla.
+</p>
+
+<h3>El rendimiento y la memoria</h3>
+<p>
+  El rendimiento se compara con el de las versiones publicadas, en la placa (la Metro y la
+  ESP32-P4): cada versión se mide entera, tal como se publicó —su compilador, su biblioteca y su
+  firmware, sacados de su ZIP—, con los mismos programas de prueba. Si algo se ha vuelto más
+  lento, se ve antes de publicar. Y la memoria de cada placa está medida: cuánta queda para tu
+  programa y dónde se va el resto
+  (<a href="https://github.com/legio-e/BasicPlus/blob/main/docs/MEMORIA.md">MEMORIA.md</a>).
+</p>
+
+<h2>Antes de publicar</h2>
+<p>
+  Una lista de comprobación
+  (<a href="https://github.com/legio-e/BasicPlus/blob/main/docs/PUBLICAR.md">PUBLICAR.md</a>)
+  asegura que lo que se publica es lo que se probó: el ZIP se monta y se verifica por dentro, las
+  imágenes de firmware llevan su suma de comprobación, el pack de la biblioteca es igual byte a
+  byte a la biblioteca, y el paquete se despliega en una carpeta limpia y se prueba a mano: el
+  IDE, las placas, los ejemplos. En V7, esa lista cazó lo que se les había escapado a los pasos
+  anteriores: las pruebas del compilador y de la VM-Java no estaban en la red —ahora se pasan
+  siempre antes de publicar— y cinco frases seguían contando nueve placas cuando ya eran diez.
+</p>
+
+<h2>Lo que necesita a alguien delante</h2>
+<p>
+  Una parte no se puede automatizar del todo, porque necesita algo de fuera o a una persona: la
+  WiFi con una red de verdad, el teclado y el ratón Bluetooth, las pantallas táctiles y el IDE
+  entero —los proyectos, el depurador, grabar una placa—. Eso se prueba en las placas, con la
+  red, el aparato o la persona delante. Lo que el lenguaje todavía no hace, dicho sin adornos,
+  está en las <a href="PENDIENTES.md">limitaciones conocidas</a>.
+</p>
+
+<h2>Para correrlas tú</h2>
+<p>
+  Todas están en el repositorio. Con el compilador y las dos VMs construidos, como explica el
+  <a href="QUICKSTART.md">inicio rápido</a>, y con Python:
+</p>
+<pre>bash compat/compat.sh check                # la red: unos veinte minutos
+mvn -f lexer-java/pom.xml test             # las pruebas del compilador
+mvn -f miVM/pom.xml test                   # las de la VM-Java
+python bpgenvm-c/tools/samples_sweep.py    # todos los samples
+bash scripts/h13-errores.sh                # los programas de error
+python bpgenvm-c/tools/doc_frags.py        # los ejemplos de la documentación</pre>
+<p>
+  La tanda (<code>bpgenvm-c/tools/tanda.py</code>) y la prueba de resistencia necesitan placas;
+  cómo se usan, en sus propios ficheros.
+</p>
+
+<h2>Una nota final</h2>
+<div class="note">
+  <p>
+    Cada versión se verifica y se entrega sin fallos conocidos, pero eso no quiere decir que no
+    tenga errores: por mucho que se pruebe, siempre puede quedar alguno sin detectar. Lo que
+    consiguen las pruebas es que un fallo en circunstancias normales sea cada vez más difícil que
+    pase desapercibido, y que, con cada prueba nueva, las circunstancias en las que pueda aparecer
+    uno tengan que ser cada vez más extremas.
+  </p>
+  <p>
+    Pero la prueba definitiva es otra: que cada vez más gente use la herramienta. Por desgracia, el
+    proyecto todavía no tiene muchos usuarios; nosotros, al menos, intentamos cumplir nuestra
+    parte.
+  </p>
+</div>
+<p>
+  Si encuentras un fallo, <a href="https://github.com/legio-e/BasicPlus/issues">cuéntanoslo</a>:
+  es la mejor ayuda.
+</p>
+
+<footer>
+  Medido el 15 de noviembre de 2026, para V8. Los números se rehacen en la comprobación previa de
+  cada versión.
+</footer>
+
+</main>
+</body>
+</html>

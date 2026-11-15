@@ -7257,6 +7257,15 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > los motores con rc=0), y la Pico 2 sin el `stack=90` (su heap, 280 KB). El modo `fallos`, bien en las cuatro. Al
 > acabar cada RUN, la placa apunta `[bpvm] mutex: N creados, la tabla llegó a M` (con `fallos`: la Pico 2, 2 y 1; la P4
 > y la C6, 3 y 2); la Metro no, porque su ENV no lleva `log=1`. Lo bajado al empezar, en `C:\tmp\resistencia_v8_2\`.
+> **A las 18:52, mirada sin pararla** (Eduardo: *«mira la prueba»*): 3 h 18 min, las cuatro sin un error ni un reinicio
+> (una sola línea `ARRANQUE` en cada log). La Pico 2, 1027 vueltas: pasada la ~257 en la que fallaba, `#831` queda
+> arreglado también en la placa (Eduardo: *«Lo que dices de la Pico2 es lo que quería verificar, que se hubiese
+> solucionado el problema»*); la Metro, 1046; la P4, 1065; la C6, 949. Lo libre tras el GC, quieto: la Metro y la P4
+> bajaron 144 y 96 B en la primera hora, al pasar de 0 a 2–3 huecos, y desde entonces no se mueve; la C6, una muestra
+> suelta (vuelta 401) con 876 B menos, y a la siguiente como siempre. Los tiempos de cada fase, los del principio; la
+> temperatura, estable. El log cabe: ~1,7 KB por hora, día y medio por fichero. Y aparte, lo que dos días no enseñan:
+> a los ~24,8 días `uptimeMs()` da la vuelta, y la resta de dos lecturas sigue dando bien en las dos VMs (probado con
+> 1000 ms por encima del máximo: 1000), como dice la referencia.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7531,6 +7540,37 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+- **La página de las pruebas (15-nov), idea de Eduardo:** *«Hay que incluir en la documentación todas las pruebas que
+  se hacen para que los usuarios vean que se está probando a fondo todo el sistema.»* `docs/pruebas.html`, «Cómo se
+  prueba BasicPlus»: la regla de oro y la cascada; la red (el corpus, lo de antes, la VM-C por dentro); los sabotajes;
+  el compilador; las placas (la tanda, la resistencia, el rendimiento y la memoria); antes de publicar; lo que necesita
+  a alguien delante; y cómo correrlas. Con los números medidos el 15-nov (las suites de Maven, 395 y 65; los 415
+  samples; las 151 comprobaciones de los errores; la red de `#831`) y, al final, la nota de Eduardo: sin bugs conocidos
+  no es sin errores, y la prueba definitiva, que cada vez más gente use la herramienta. **El borrador en español,
+  hecho.** Lo demás, con la versión definitiva o casi (Eduardo: *«La versión inglesa de momento no hace falta hasta que
+  tengamos la versión definitiva o casi definitiva. Esperemos un poco a terminar las pruebas a ver como salen.»*): los
+  números finales (la resistencia, `#825`, los fragmentos de `#832`), la versión inglesa, la tarjeta en las dos
+  portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
+  día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
+  cuéntanoslo»), mía: se queda si Eduardo la quiere.
+
+#### 🔵 `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **V8: por analizar**)
+
+`doc_frags.py` (15-nov, 19:31): 641 bloques en 26 documentos; de los 343 de BP, 182 OK, 152 trozos, 3 errores
+esperados y **6 FALLO**: en `cheatsheet.html`, L246 («Typed lists»); y en `manual.html`, L687 (§4.6, los genéricos),
+L970 (§6.1, las asignaciones compuestas), L1643 (§9.2.1, la visibilidad), L2036 (§9.8, las interfaces) y L2861 (§15.2,
+los eventos). Todos, de lo que entró en V8; el manual inglés, sin ninguno (por mirar si tiene esos ejemplos). Lo que se
+ve sin analizar:
+- §4.6 y la guía rápida: `List<Sensor>` sin `Sensor` en el fragmento, y el tipo que falta arrastra otros errores
+  («llamada ambigua a `add`», «`Object` no tiene miembro…»), que la herramienta ya no cuenta como trozo;
+- §9.2.1: `class Perro extends Animal` sin `Animal` («clase base no existe»): lo mismo;
+- §9.8: «se esperaba una expresión, encontrado `function`» en la línea 4: parece que la herramienta mete el fragmento
+  en una función, porque no reconoce `public interface` como una declaración de módulo;
+- §6.1: «`*=`: `integer` * `float` da `float`…»: el fragmento parece enseñar ese error a propósito, sin la marca de
+  error esperado;
+- §15.2: «`raise` sólo vale dentro de una clase» y `onClick` sin resolver: por mirar.
+
+`PUBLICAR` §1 pide 0 FALLO. Lo que salga de cada uno, a la herramienta o al ejemplo.
 
 #### ✅ `#831` — un `Mutex` no se soltaba nunca: su entrada en la tabla de la VM se quedaba hasta el final del RUN, y un programa que crea mapas en un bucle se quedaba sin mutex (en la Pico 2, a las ~257 vueltas de la prueba de resistencia: «mutex.lock: id inválido -1») (abierta y **CERRADA el 15-nov**, el commit de `#831`; en la prueba de resistencia; preexistente; Eduardo: *«OK, adelante»*, por el GC)
 
