@@ -24,22 +24,54 @@
 
 int bpvm_mutex_alloc(bpvm_t* vm) {
     bpvm_smp_lock(vm);
-    if (vm->mutex_count >= vm->mutex_capacity) {
-        int new_cap = vm->mutex_capacity == 0 ? 8 : vm->mutex_capacity * 2;
-        bpvm_bp_mutex_t* arr = (bpvm_bp_mutex_t*) bpvm_realloc(vm->mutexes,
-                                (size_t) new_cap * sizeof(bpvm_bp_mutex_t));
-        if (!arr) { bpvm_smp_unlock(vm); return -1; }
-        vm->mutexes = arr;
-        vm->mutex_capacity = new_cap;
+    int mid;
+    if (vm->mutex_sueltos != 0 && !bpvm_la_cola.sabotaje_mutex) {
+        /* V8 #831 — primero, una suelta: la de un Mutex que murió (la soltaron el GC o su dueño, heap.c). Antes la
+         * tabla sólo crecía, hasta el final del RUN: en la Pico 2, a los ~256 mapas creados, su malloc no daba para
+         * doblarla y __mutexCreate devolvía -1 («mutex.lock: id inválido -1», la prueba de resistencia). */
+        mid = vm->mutex_sueltos - 1;
+        vm->mutex_sueltos = vm->mutexes[mid].sig_suelto;
+    } else {
+        if (vm->mutex_count >= vm->mutex_capacity) {
+            int new_cap = vm->mutex_capacity == 0 ? 8 : vm->mutex_capacity * 2;
+            bpvm_bp_mutex_t* arr = (bpvm_bp_mutex_t*) bpvm_realloc(vm->mutexes,
+                                    (size_t) new_cap * sizeof(bpvm_bp_mutex_t));
+            if (!arr) { bpvm_smp_unlock(vm); return -1; }
+            vm->mutexes = arr;
+            vm->mutex_capacity = new_cap;
+        }
+        mid = vm->mutex_count++;
     }
-    int mid = vm->mutex_count++;
     bpvm_bp_mutex_t* m = &vm->mutexes[mid];
     m->owner_tid = -1;
     m->waiters = NULL;
     m->waiter_count = 0;
     m->waiter_capacity = 0;
+    m->suelto = 0;
+    m->sig_suelto = 0;
+    vm->mutex_creados++;
     bpvm_smp_unlock(vm);
     return mid;
+}
+
+/* V8 #831 — LA ENTRADA DE UN MUTEX QUE MUERE, A LAS SUELTAS. La llama el GC al barrer un Core.Mutex muerto (o una
+ * hija), y su dueño al soltarlo (heap.c), con el cerrojo tomado. Si está tomada o alguien espera, se queda como estaba:
+ * no pasa —quien espera tiene el Mutex en su pila, y lo alcanza—, y soltarla dejaría a alguien esperando en una
+ * entrada de otro. */
+void bpvm_mutex_soltar_locked(bpvm_t* vm, int32_t mid) {
+    if (mid < 0 || mid >= vm->mutex_count) return;
+    bpvm_bp_mutex_t* m = &vm->mutexes[mid];
+    if (m->suelto || m->owner_tid != -1 || m->waiter_count != 0) return;
+    bpvm_free(m->waiters);
+    m->waiters = NULL;
+    m->waiter_capacity = 0;
+    m->suelto = 1;
+    m->sig_suelto = vm->mutex_sueltos;
+    vm->mutex_sueltos = mid + 1;
+}
+
+int bpvm_mutex_en_uso(const bpvm_t* vm, int32_t mid) {
+    return mid >= 0 && mid < vm->mutex_count && !vm->mutexes[mid].suelto;
 }
 
 /* ── LA PROPIEDAD DE UN MUTEX: UN SOLO SITIO QUE LA TOCA ───────────────────────

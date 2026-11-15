@@ -582,6 +582,11 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   Lock no reentrante para coordinar entre threads BP. Como <code>Thread</code>, es una
   clase de <code>Core</code> escrita en BP (V7); siempre disponible sin <code>import</code>.
   Internamente la instancia guarda un id <code>__mid</code> que apunta a un mutex de la VM.
+  Cuando el <code>Mutex</code> muere —lo recoge el GC o lo suelta su dueño—, ese mutex de la VM
+  queda libre para el siguiente. <em>Cambió en V8</em>: antes no se soltaba hasta el final del
+  programa, y uno que creaba mapas (<code>Collections.Map</code> lleva su propio
+  <code>Mutex</code>) o mutex en un bucle acababa sin ellos (en la Pico 2, hacia los 256:
+  «<code>mutex.lock: id inválido -1</code>»).
 </p>
 <table>
   <tr><th>Método</th><th>Descripción</th></tr>

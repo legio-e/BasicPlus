@@ -1872,6 +1872,10 @@ static void cerrar_run(bpvm_t* vm) {
      * así que «a la vez» es lo que hubo vivo, no lo que se arrancó (`make test-hilos`). */
     bpvm_diag("[bpvm] hilos: %ld arrancados, como mucho %ld a la vez (el main incluido)",
               (long) (vm->sig_tid - 1), (long) vm->hilos_max);
+    /* V8 #831 — y los mutex: los creados y hasta dónde llegó su tabla. La entrada de un Mutex que muere se reutiliza:
+     * si la tabla llega a lo creado, no se están soltando (`make test-cola`, la parte 23). */
+    if (vm->mutex_creados > 0)
+        bpvm_diag("[bpvm] mutex: %ld creados, la tabla llegó a %d", vm->mutex_creados, vm->mutex_count);
 }
 
 /* V7/H12, etapa 2a.2 — EL CIERRE del programa, cuando acaba: lo que algún hilo dejó a mitad de un `print` (#600) y

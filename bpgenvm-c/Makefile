@@ -1993,13 +1993,14 @@ test-frcond:
 # líneas que no caben en la cola, el join y la última línea, la zona de rascar, el gc() tras un mundo parado ajeno,
 # el error del programa y un File compartido; con --sabotaje-owner, -lineas, -suyo, -zona, -colecta y -error. Y la 21
 # (#762) y la 22 (#829): la reserva que no cabe y la tabla de handles sin sitio tras la colecta de otro, que tienen que
-# colectar ellas; con --sabotaje-reserva y --sabotaje-tabla.
+# colectar ellas; con --sabotaje-reserva y --sabotaje-tabla. Y la 23 (#831): los Mutex que mueren sueltan su entrada de
+# la tabla de mutex; con --sabotaje-mutex.
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo GuiDosRuns GuiAnidadaGc GuiMismoPadre ReservaAjena TablaAjena)
+	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo GuiDosRuns GuiAnidadaGc GuiMismoPadre ReservaAjena TablaAjena MutexSuelto)
 	$(call stdlibdep,Core Gui Json Collections Str)
-	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ] || [ ! -f samples/GuiDosRuns.mod ] || [ ! -f samples/GuiAnidadaGc.mod ] || [ ! -f samples/GuiMismoPadre.mod ] || [ ! -f samples/ReservaAjena.mod ] || [ ! -f samples/TablaAjena.mod ]; then \
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ] || [ ! -f samples/GuiDosRuns.mod ] || [ ! -f samples/GuiAnidadaGc.mod ] || [ ! -f samples/GuiMismoPadre.mod ] || [ ! -f samples/ReservaAjena.mod ] || [ ! -f samples/TablaAjena.mod ] || [ ! -f samples/MutexSuelto.mod ]; then \
 	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662; y CadenasUnHilo, de la 3.2; y GuiDosRuns y GuiAnidadaGc, de LVGL con dos runs) y no se han podido generar"; exit 1; \
 	fi
 	@# V7/H12, LVGL con dos runs: la lista de los builtins de la GUI que sólo ejecuta el run 0 (builtins.c,
@@ -2010,9 +2011,9 @@ test-cola: $(LIBOBJ)
 	 if [ -n "$$faltan" ]; then echo "FAIL test-cola: builtins de la GUI que no viajan al run 0 (bpvm_builtin_de_la_gui): $$faltan"; exit 1; \
 	 else echo "--- los $$(grep -o 'BUILTIN_GUI_[A-Z0-9_]*' src/builtin_ids.h | sort -u | wc -l) builtins de la GUI, todos en la lista del run 0 ---"; fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 22. PASS y la linea OK) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 23. PASS y la linea OK) ---"
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los diecinueve, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- y sus sabotajes (esperado: los veinte, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-contador \
@@ -2125,7 +2126,13 @@ test-cola: $(LIBOBJ)
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab19.out; then \
 	   echo "  (rojo, como debe: la tabla sin una colecta propia, un No space in heap falso)"; \
 	 else echo "FAIL test-cola: el sabotaje --sabotaje-tabla no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus diecinueve sabotajes, rojos)"
+	@# V8 #831: las entradas de los Mutex que mueren no se reutilizan, como antes: la tabla crece con cada uno.
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-mutex \
+	   >../build/cola_sab20.out 2>/dev/null); st=$$?; cat build/cola_sab20.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab20.out; then \
+	   echo "  (rojo, como debe: sin reutilizar las entradas, la tabla de mutex crece con cada uno)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-mutex no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus veinte sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

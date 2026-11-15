@@ -575,6 +575,11 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   Non-reentrant lock to coordinate between BP threads. Like <code>Thread</code>, it is a
   <code>Core</code> class written in BP (V7); always available without an <code>import</code>.
   Internally the instance holds an id <code>__mid</code> that points to a mutex of the VM.
+  When the <code>Mutex</code> dies —the GC collects it or its owner releases it—, that VM mutex
+  is free for the next one. <em>Changed in V8</em>: before, it was not released until the program
+  ended, and a program that created maps (<code>Collections.Map</code> carries its own
+  <code>Mutex</code>) or mutexes in a loop ran out of them (on the Pico 2, at around 256:
+  «<code>mutex.lock: id inválido -1</code>»).
 </p>
 <table>
   <tr><th>Method</th><th>Description</th></tr>

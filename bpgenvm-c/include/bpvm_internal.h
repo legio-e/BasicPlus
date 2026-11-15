@@ -497,6 +497,8 @@ typedef struct {
     int32_t* waiters;           /* array dinámico de tids */
     int      waiter_count;
     int      waiter_capacity;
+    int      suelto;            /* V8 #831: 1 = su Mutex murió y la entrada espera a otro (bpvm_mutex_soltar_locked) */
+    int      sig_suelto;        /* V8 #831: si está suelta, la siguiente suelta + 1 (0, ninguna) */
 } bpvm_bp_mutex_t;
 
 /* H3 #158 — forward del struct de helpers para código AOT. Definido
@@ -713,6 +715,13 @@ struct bpvm {
     bpvm_bp_mutex_t* mutexes;
     int              mutex_count;
     int              mutex_capacity;
+    /* V8 #831 — la entrada de un Mutex que muere se reutiliza (antes, ninguna se soltaba hasta el final del RUN, y un
+     * programa que crea mapas en un bucle se quedaba sin mutex). Las sueltas, una lista: la primera + 1 (0, ninguna;
+     * el vm nace a cero). Las suelta el GC al barrer un Core.Mutex muerto, o su dueño (heap.c); el descriptor de la
+     * clase lo apunta el enlace (link.c; 0, sin enlazar). */
+    int              mutex_sueltos;
+    long             mutex_creados;    /* los __mutexCreate del RUN (la línea del final: «mutex: N creados…») */
+    uint32_t         clase_mutex;
 
     /* F4 — preferencias de scheduler. */
     int             quantum_ops;       /* opcodes por quantum de un tc */
@@ -1622,6 +1631,11 @@ int  bpvm_mutex_release(bpvm_t* vm, int mid, int tid, int* owner_out);
 /* Variantes que asumen el cerrojo YA tomado (las usan las dos de arriba). */
 void bpvm_mutex_add_waiter_locked(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter_locked(bpvm_t* vm, int mid);
+/* V8 #831 — la entrada de un Mutex que muere, a las sueltas: la reutiliza el siguiente bpvm_mutex_alloc. Si está tomada
+   o alguien espera, se queda (no pasa: nadie alcanza su Mutex). Con el cerrojo YA tomado (el GC, heap.c). */
+void bpvm_mutex_soltar_locked(bpvm_t* vm, int32_t mid);
+/* V8 #831 — ¿el mid es una entrada en uso? (los builtins lock y unlock: una suelta es un id inválido) */
+int  bpvm_mutex_en_uso(const bpvm_t* vm, int32_t mid);
 
 void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);

@@ -1,0 +1,39 @@
+// MutexSuelto.bp — V8 #831 (15-nov): la entrada de un Mutex que muere, en la tabla de mutex de la VM, se reutiliza.
+// Antes no se soltaba hasta el final del RUN: cada Collections.Map lleva su Mutex, y en la Pico 2 la prueba de
+// resistencia se quedó sin mutex hacia los 256 mapas («mutex.lock: id inválido -1»). Aquí, 2000 mapas que se vuelven
+// basura (los recoge el GC: un gc() cada 100) y 2000 Mutex con dueño (los suelta su dueño al salir de su función), y
+// todos se usan: con una entrada reutilizada, igual. En la red, la salida de las dos VMs; en test_cola (la parte 23),
+// además, que la tabla no crece.
+module MutexSuelto
+  import Collections
+
+  function usaMapa(i: integer): integer
+    var m: Collections.Map := Collections.Map()
+    m.put("clave", "valor " + i)
+    var v: string := string(m.get("clave"))
+    if v == "valor " + i then
+      return 1
+    endif
+    return 0
+  end usaMapa
+
+  function usaMutex(): integer
+    var owner mx: Mutex := Mutex()
+    mx.lock()
+    mx.unlock()
+    return 1
+  end usaMutex
+
+  function Main()
+    var bien: integer := 0
+    var i: integer := 0
+    while i < 2000 do
+      bien := bien + usaMapa(i) + usaMutex()
+      i := i + 1
+      if i mod 100 == 0 then
+        gc()
+      endif
+    endwh
+    print "mapas y mutex que funcionan: " + bien + " de 4000"
+  end Main
+end MutexSuelto

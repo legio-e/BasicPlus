@@ -103,6 +103,8 @@ static char s_error[256];
 static int s_sin_umbral;
 /* La 22 (#829): el tope de la tabla de handles (0: sin tope), como --handlecap: con él, la tabla llena no puede crecer. */
 static uint32_t s_cap_handles;
+/* La 23 (#831): hasta dónde llegó la tabla de mutex en la última pasada (las entradas que se repartieron). */
+static int s_mutex_tabla;
 
 /* Una pasada: `mod` en un bloque de `mem_size` B con el heap hasta `heap` (0: la mitad), con `runs` runs; la salida, a
  * `cb` (con `user`). */
@@ -125,6 +127,7 @@ static bpvm_status_t corre_con(const char* mod, size_t mem_size, size_t heap, in
     if (s_sin_umbral) vm->gc_bump_threshold = 0;   /* lo fija el cargador; nadie más lo toca en el RUN */
     s = (runs > 1) ? bpvm_run_smp(vm, runs) : bpvm_run(vm);
     snprintf(s_error, sizeof s_error, "%s", bpvm_runtime_error(vm));
+    s_mutex_tabla = vm->mutex_count;   /* la 23 */
     bpvm_destroy(vm);
     free(mem);
     return s;
@@ -698,6 +701,37 @@ static int tabla_ajena(int sabotaje) {
                    "basura", sabotaje, malos, pasadas, detalle, ultimo);
 }
 
+/* 23. (#831) LA ENTRADA DE UN MUTEX QUE MUERE SE REUTILIZA (MutexSuelto: 2000 mapas que se vuelven basura, con un gc()
+ * cada 100, y 2000 Mutex con dueño, que se sueltan al salir de su función; todos se usan). Antes la tabla de mutex sólo
+ * crecía hasta el final del RUN: aquí llegaría a 4000 entradas, y en la Pico 2 la prueba de resistencia se quedó sin
+ * mutex hacia los 256. Con 1 run y con 2. Bien: «4000 de 4000» y la tabla, como mucho MUTEX_TABLA_TOPE (en el PC,
+ * medido el 15-nov: 82 con 1 run y 149 con 2). Sabotaje (--sabotaje-mutex: no se reutilizan, como antes): la tabla,
+ * 4000. */
+#define MUTEX_TABLA_TOPE 400
+static int mutex_suelto(int sabotaje) {
+    int malos = 0, pasadas = 0, mayor = 0; char ultimo[96] = ""; char detalle[96];
+    bpvm_la_cola.sabotaje_mutex = sabotaje;
+    for (int runs = 1; runs <= 2; runs++) {
+        for (int i = 0; i < 5; i++, pasadas++) {
+            salida_t o;
+            bpvm_status_t s = corre("MutexSuelto.mod", 512 * 1024, 0, runs, &o);
+            if (s_mutex_tabla > mayor) mayor = s_mutex_tabla;
+            if (s != BPVM_OK || strstr(o.buf, "4000 de 4000") == NULL) {
+                malos++;
+                resume(ultimo, sizeof ultimo, s, o.buf);
+            } else if (s_mutex_tabla > MUTEX_TABLA_TOPE) {
+                malos++;
+                snprintf(ultimo, sizeof ultimo, "con %d run%s, la tabla de mutex llegó a %d (tope, %d): no se sueltan",
+                         runs, runs > 1 ? "s" : "", s_mutex_tabla, MUTEX_TABLA_TOPE);
+            }
+        }
+    }
+    bpvm_la_cola.sabotaje_mutex = 0;
+    snprintf(detalle, sizeof detalle, " (la tabla de mutex, como mucho %d de 4000 creados)", mayor);
+    return informe("23. los Mutex que mueren sueltan su entrada, con 1 run y con 2: la tabla no crece", sabotaje, malos,
+                   pasadas, detalle, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -709,7 +743,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
-    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0, sab_reserva = 0, sab_tabla = 0;
+    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0, sab_reserva = 0, sab_tabla = 0, sab_mutex = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -730,10 +764,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-anidada")) sab_anidada = 1;
         else if (!strcmp(argv[i], "--sabotaje-reserva")) sab_reserva = 1;
         else if (!strcmp(argv[i], "--sabotaje-tabla")) sab_tabla = 1;
+        else if (!strcmp(argv[i], "--sabotaje-mutex")) sab_mutex = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
                 || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
-                || sab_mundo || sab_gui || sab_anidada || sab_reserva || sab_tabla;
+                || sab_mundo || sab_gui || sab_anidada || sab_reserva || sab_tabla || sab_mutex;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -758,12 +793,14 @@ int main(int argc, char** argv) {
     if (!sabotaje) fallos += gui_mismo_padre();   /* y el árbol de la librería, con su cerrojo */
     if (!sabotaje || sab_reserva) fallos += reserva_ajena(sab_reserva);   /* #762 */
     if (!sabotaje || sab_tabla) fallos += tabla_ajena(sab_tabla);   /* #829 */
+    if (!sabotaje || sab_mutex) fallos += mutex_suelto(sab_mutex);   /* #831 */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
                "compartido; un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
                "colecta (la 3.2); la GUI con dos runs, toda en el run 0, con su puente aparcado si otro run colecta; y "
-               "nadie sin sitio con el heap lleno de basura (#762), ni con la tabla de handles llena de basura (#829)\n");
+               "nadie sin sitio con el heap lleno de basura (#762), ni con la tabla de handles llena de basura (#829); "
+               "y los Mutex que mueren sueltan su entrada (#831)\n");
     return fallos ? 1 : 0;
 }

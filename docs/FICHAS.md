@@ -7527,7 +7527,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#831` — un `Mutex` no se suelta nunca: su entrada en la tabla de la VM se queda hasta el final del RUN, y un programa que crea mapas en un bucle se queda sin mutex (en la Pico 2, a las ~257 vueltas de la prueba de resistencia: «mutex.lock: id inválido -1») (abierta el 15-nov, en la prueba de resistencia; preexistente; **V8: el arreglo, por decidir cómo**)
+#### ✅ `#831` — un `Mutex` no se soltaba nunca: su entrada en la tabla de la VM se quedaba hasta el final del RUN, y un programa que crea mapas en un bucle se quedaba sin mutex (en la Pico 2, a las ~257 vueltas de la prueba de resistencia: «mutex.lock: id inválido -1») (abierta y **CERRADA el 15-nov**, el commit de `#831`; en la prueba de resistencia; preexistente; Eduardo: *«OK, adelante»*, por el GC)
 
 - **Lo que pasó** (15-nov, la prueba de resistencia, `compat/resistencia/`): en la Pico 2, desde la vuelta ~257 (a los 47
   minutos), la fase de memoria falla en cada vuelta con `RuntimeError: mutex.lock: id inválido -1`; las otras cuatro
@@ -7551,6 +7551,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - **el GC**, sólo en las dos VMs: al barrer un `Mutex` muerto, su id vuelve a una lista de libres, y `__mutexCreate`
     reutiliza primero; como la tabla de handles, que ya limpia el GC al barrer. Ni la stdlib, ni los packs, ni los
     programas; en las placas, la imagen (que se regraba igual por `#829`).
+- **Hecho, el GC** (Eduardo: *«OK, adelante»*), en las dos VMs, igual:
+  - **el enlace** apunta el descriptor de `Core.Mutex` (la VM-C, en `link.c`; la VM-Java, en `ModuleManager.linkAll`);
+  - **cuando muere un bloque** —en el barrido del GC, y cuando lo suelta su dueño: `bpvm_heap_free_block` en la VM-C,
+    `freeOwnedObjectLocked` y `liberaSolo` en la VM-Java—, si es un objeto de `Core.Mutex` o de una hija (su clase y la
+    cadena de padres, como `INSTANCEOF`), su entrada pasa a las sueltas (`soltar_si_mutex`, `soltarSiMutex`), salvo si
+    está tomada o alguien espera;
+  - **`__mutexCreate`** reutiliza primero una suelta; un `lock` o un `unlock` sobre una suelta, «id inválido»;
+  - **al acabar el RUN**, una línea más: `[bpvm] mutex: N creados, la tabla llegó a M`.
+  Con un `Core` MOD7 o MOD8 (sin enlace tardío) no hay descriptor, y es como antes.
+- **La prueba:** `MutexSuelto` (2000 mapas que se vuelven basura, con un `gc()` cada 100, y 2000 `Mutex` con dueño;
+  todos se usan): en la red, la salida de las dos VMs; y `test_cola`, la parte 23, con 1 run y con 2: «4000 de 4000» y
+  la tabla, como mucho 73 entradas (tope, 400); con `--sabotaje-mutex` (no se reutilizan, como antes), 4000. A mano: la
+  VM-C, 82 con un worker y 149 con dos; la VM-Java, 101 con uno y con dos.
+- **La referencia** (§13.9, `Mutex`), en los dos idiomas.
+- **En las placas**, con la imagen que se grabe para repetir la prueba de resistencia.
 
 #### 🧬 `#830` — la marca de la tabla de handles, un porcentaje y no 64 slots fijos: más margen con tablas grandes y varios hilos (abierta el 15-nov, de `#829`; idea de Eduardo; **a V9**)
 

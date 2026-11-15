@@ -469,8 +469,19 @@ public class VirtualMachine {
         static final int FREE = -1;
         int ownerTid = FREE;
         final List<Integer> waiters = new ArrayList<>();
+        /** V8 #831 — su Mutex murió y la entrada espera a otro (soltarMutexLocked); sigue en la lista, para los bucles. */
+        boolean suelto;
     }
     private final List<JavaMutex> mutexes = new ArrayList<>();
+    /** V8 #831 — las entradas sueltas, la última arriba (como la lista de la VM-C, threading.c): las reutiliza
+     *  MUTEX_CREATE. Antes la lista sólo crecía (aquí no se acaba nunca; en la VM-C, en la Pico 2, a los ~256 mapas). */
+    private final java.util.ArrayDeque<Integer> mutexSueltos = new java.util.ArrayDeque<>();
+    /** V8 #831 — los MUTEX_CREATE del RUN (la línea del final: «mutex: N creados…»). */
+    private long mutexCreados = 0;
+    /** V8 #831 — el descriptor de Core.Mutex (0: sin enlazar; un Core MOD7/MOD8 no pasa por el enlace tardío). Lo pone
+     *  el enlace (ModuleManager.linkAll); con él, el GC suelta la entrada de un Mutex que muere (soltarSiMutex). */
+    private int claseMutex = 0;
+    void setClaseMutex(int desc) { this.claseMutex = desc; }
 
     /** N20 — Prompts en vuelo desde el builtin PROMPT.
      *  Key = requestId asignado por la VM. Value = tc bloqueado.
@@ -2579,6 +2590,7 @@ public class VirtualMachine {
             boolean isUnmarked = !isFree && ((tag & TAG_MARK_BIT) == 0);
 
             if (isFree || isUnmarked) {
+                if (isUnmarked) soltarSiMutex(addr);   // V8 #831: un Mutex que el GC recoge, su entrada
                 if (pendingFreeStart == -1) {
                     pendingFreeStart = addr;
                     pendingFreeSize = 0;
@@ -3466,6 +3478,12 @@ public class VirtualMachine {
         if (anidadasAparcadas > 0) {
             System.err.println("[bpvm] llamadas anidadas aparcadas por el GC de otro worker: " + anidadasAparcadas);
             anidadasAparcadas = 0;
+        }
+        // V8 #831 — los mutex: los creados y hasta dónde llegó su tabla (la de un Mutex que muere se reutiliza). La misma
+        // línea que la VM-C (bpvm.c, bpvm_programa_cerrar).
+        synchronized (vmLock) {
+            if (mutexCreados > 0)
+                System.err.println("[bpvm] mutex: " + mutexCreados + " creados, la tabla llegó a " + mutexes.size());
         }
         // La ventana se cierra AQUI, con el programa ya terminado. Sin esto,
         // un programa que use Gui.stop() imprime todo y NO TERMINA: el EDT de
@@ -7065,8 +7083,18 @@ public class VirtualMachine {
             case MUTEX_CREATE: {
                 int newId;
                 synchronized (vmLock) {
-                    newId = mutexes.size();
-                    mutexes.add(new JavaMutex());
+                    if (!mutexSueltos.isEmpty()) {
+                        // V8 #831 — primero, una suelta: la de un Mutex que murió (la soltaron el GC o su dueño)
+                        newId = mutexSueltos.pop();
+                        JavaMutex jm = mutexes.get(newId);
+                        jm.suelto = false;
+                        jm.ownerTid = JavaMutex.FREE;
+                        jm.waiters.clear();
+                    } else {
+                        newId = mutexes.size();
+                        mutexes.add(new JavaMutex());
+                    }
+                    mutexCreados++;
                 }
                 pushTc(tc, newId);
                 break;
@@ -7080,7 +7108,7 @@ public class VirtualMachine {
                 // id 0 vivo, lo cerraba). Core.__mutexLock es público: un programa llega aquí.
                 if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.lock de un Mutex null");
                 int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
-                if (mid < 0 || mid >= mutexes.size()) {
+                if (!mutexEnUso(mid)) {   // V8 #831: una entrada suelta, también (la de un Mutex que murió)
                     // B3 v2 — lanzamos RuntimeError BP atrapable en lugar de
                     // BpThreadFault, así el código BP puede try/catch.
                     throwBpRuntimeError(tc, "mutex.lock: id inválido " + mid);
@@ -7109,7 +7137,7 @@ public class VirtualMachine {
                 int mutexRef = (int) popTcRef(tc);   // #811: una referencia, 8 B (ver MUTEX_LOCK)
                 if (mutexRef == 0) throwBpError(tc, CLASE_NULA, "referencia nula: mutex.unlock de un Mutex null");   // #805
                 int mid = readInt32(refDeref(mutexRef) + 4 + 0 * 4);   // V4: handle→addr
-                if (mid < 0 || mid >= mutexes.size()) {
+                if (!mutexEnUso(mid)) {   // V8 #831, como en el lock
                     throwBpRuntimeError(tc, "mutex.unlock: id inválido " + mid);
                 }
                 synchronized (vmLock) {
@@ -8651,6 +8679,36 @@ public class VirtualMachine {
         synchronized (vmLock) { freeOwnedObjectLocked(ref); }
     }
 
+    /** V8 #831 — ¿el mid es una entrada en uso? (MUTEX_LOCK y MUTEX_UNLOCK: una suelta es un id inválido). */
+    private boolean mutexEnUso(int mid) {
+        synchronized (vmLock) {
+            return mid >= 0 && mid < mutexes.size() && !mutexes.get(mid).suelto;
+        }
+    }
+
+    /** V8 #831 — la entrada de un Mutex que muere, a las sueltas (la reutiliza MUTEX_CREATE). Si está tomada o alguien
+     *  espera, se queda: no pasa —quien espera tiene el Mutex en su pila, y lo alcanza—. Bajo vmLock. Espejo de
+     *  bpvm_mutex_soltar_locked (threading.c). */
+    private void soltarMutexLocked(int mid) {
+        if (mid < 0 || mid >= mutexes.size()) return;
+        JavaMutex jm = mutexes.get(mid);
+        if (jm.suelto || jm.ownerTid != JavaMutex.FREE || !jm.waiters.isEmpty()) return;
+        jm.suelto = true;
+        mutexSueltos.push(mid);
+    }
+
+    /** V8 #831 — UN MUTEX QUE MUERE SUELTA SU ENTRADA: si el bloque es un objeto de Core.Mutex, o de una hija (su clase y
+     *  la cadena de padres, como INSTANCEOF), su campo 0 (__mid) va a las sueltas. Lo llaman el barrido del GC (lo que
+     *  recoge) y lo que suelta un dueño (freeOwnedObjectLocked, liberaSolo), con el bloque aún entero. Antes la entrada se
+     *  quedaba hasta el final del RUN. Espejo de soltar_si_mutex (heap.c). Bajo vmLock. */
+    private void soltarSiMutex(int headerAddr) {
+        if (claseMutex == 0) return;
+        int type = (readInt32(headerAddr) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+        if (type != TYPE_OBJECT) return;
+        int cls = readInt32(headerAddr + 4);
+        if (cls != 0 && isDescendantOf(cls, claseMutex)) soltarMutexLocked(readInt32(headerAddr + 8));   // __mid
+    }
+
     /**
      * Implementación de freeOwnedObject que asume vmLock ya adquirido.
      *
@@ -8678,6 +8736,7 @@ public class VirtualMachine {
             // procesar sus owners, simplemente liberamos el bloque.
             pila.pop();
             int totalSize = objectTotalSize(marco[0]);
+            soltarSiMutex(marco[0]);   // V8 #831: un Mutex con dueño, su entrada (el bloque, aún entero)
             addToFreeList(marco[0], totalSize);
             heapBloques--;   // V7/H7 #593: un bloque menos
         }
@@ -8986,6 +9045,7 @@ public class VirtualMachine {
         synchronized (vmLock) {
             int h = soltarEntra(ref);
             if (h < 0) return;
+            soltarSiMutex(h);   // V8 #831: y un Mutex que se destruye solo, su entrada
             addToFreeList(h, objectTotalSize(h));
             heapBloques--;   // V7/H7 #593: un bloque menos
         }

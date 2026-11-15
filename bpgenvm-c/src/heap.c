@@ -823,6 +823,29 @@ uint32_t bpvm_heap_release_reserve(bpvm_t* vm) {
     return r;
 }
 
+/* V8 #831 — UN MUTEX QUE MUERE SUELTA SU ENTRADA de la tabla de mutex de la VM (threading.c): si el bloque es un objeto
+ * de Core.Mutex, o de una hija —su clase y la cadena de padres, como INSTANCEOF—, su campo 0 (__mid) va a las sueltas,
+ * y el siguiente __mutexCreate la reutiliza. Lo llaman el barrido (lo que el GC recoge) y bpvm_heap_free_block (lo que
+ * suelta un dueño), los dos con el cerrojo tomado y el bloque aún entero. Antes la entrada se quedaba hasta el final del
+ * RUN: cada Collections.Map lleva su Mutex, y en la Pico 2 la prueba de resistencia se quedó sin mutex hacia los 256
+ * mapas. Es memoria de la VM ligada a un objeto, como la tabla de handles, que también la limpia el GC. Sin el descriptor
+ * (un Core MOD7/MOD8, que no pasa por el enlace tardío), nada: como antes. */
+static void soltar_si_mutex(bpvm_t* vm, uint32_t header) {
+    if (vm->clase_mutex == 0u) return;
+    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
+    if ((int) ((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) != BPVM_TYPE_OBJECT) return;
+    uint32_t cur = bpvm_read_u32_be(vm->memory + header + 4u);   /* el descriptor de su clase */
+    for (int n = 0; cur != 0u && n < 64; n++) {   /* 64: ninguna herencia es tan honda; un descriptor roto no da vueltas */
+        if (cur == vm->clase_mutex) {
+            bpvm_mutex_soltar_locked(vm, bpvm_read_i32_be(vm->memory + header + BPVM_OBJ_HEADER_SIZE));   /* __mid */
+            return;
+        }
+        int32_t parent_off = bpvm_read_i32_be(vm->memory + cur + BPVM_CLS_OFF_PARENT_OFF);
+        if (parent_off == 0) return;
+        cur = (uint32_t) ((int32_t) bpvm_get_cs_for_data_addr(vm, cur) + parent_off);
+    }
+}
+
 void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
     /* V7/H7 #603 (29-sep) — BAJO EL CERROJO: la lista de libres es de todos los workers. Aquí llega el FREE_REF de
      * un `var owner` (bpvm_free_owned, interp.c), que corre SIN cerrojo, mientras el alocador de otro worker recorre
@@ -840,6 +863,7 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
     }
     uint32_t size = block_total_size(vm, header_addr);
     if (size != 0) {   /* defensivo: 0 = no sabemos el tamaño, no tocar */
+        soltar_si_mutex(vm, header_addr);   /* V8 #831: un Mutex con dueño, su entrada (el bloque, aún entero) */
         add_to_free_list(vm, header_addr, size);   /* #718: a su lista, sin fundirse (lo hace el barrido) */
         vm->heap_bloques--;   /* V7/H7 #593: un bloque menos */
     }
@@ -1019,6 +1043,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
         int is_free     = (tag & BPVM_TAG_FREE_BIT) != 0;
         int is_unmarked = !is_free && !(tag & BPVM_TAG_MARK_BIT);
         if (is_free || is_unmarked) {
+            if (is_unmarked) soltar_si_mutex(vm, cur);   /* V8 #831: un Mutex que el GC recoge, su entrada */
             if (pend_start == 0) { pend_start = cur; pend_size = 0; }
             pend_size += total;
             freed += total;

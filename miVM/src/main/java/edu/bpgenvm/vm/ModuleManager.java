@@ -1089,6 +1089,10 @@ public class ModuleManager {
         final long t0 = System.nanoTime();
         enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
         int busquedas = enlaza(loadedModules, pendingLinks, 0);
+        // V8 #831 — el descriptor de Core.Mutex, ya definitivo: con él, el GC suelta la entrada de un Mutex que muere
+        // (VirtualMachine.soltarSiMutex). Como el enlace de la VM-C (link.c).
+        EnlaceTardio.Clase claseMutex = enlaceTardio.buscar("Core.Mutex");
+        vm.setClaseMutex(claseMutex != null ? claseMutex.descAbs : 0);
         vm.setPC(mainAbsoluteAddress);
         vm.setCS(getModuleBaseFromPC(mainAbsoluteAddress));
         System.err.printf("[miVM] tabla de simbolos: %d simbolos%n", globalSymbolTable.size());

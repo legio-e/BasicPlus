@@ -1183,6 +1183,15 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm, int desde) {
         x.arena = x.arena_ini = vm->next_free_address;
     }
     if (st == BPVM_OK) for (int i = viejas; i < x.n && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
+    /* V8 #831 — el descriptor de Core.Mutex, ya definitivo: con él, el GC suelta la entrada de un Mutex que muere
+     * (heap.c, soltar_si_mutex). En un overlay el registro se rehace con las clases de siempre delante: el mismo. */
+    if (st == BPVM_OK)
+        for (int i = 0; i < x.n; i++)
+            if (x.reg[i].desc_abs != 0u && strcmp(vm->modules[x.reg[i].mod].name, "Core") == 0
+                    && lt_utf_eq_c(x.reg[i].name, "Mutex")) {
+                vm->clase_mutex = x.reg[i].desc_abs;
+                break;
+            }
     /* V8 H7.3 (#756) — las interfaces de cada clase, con sus tablas, y la tabla ordenada que mira la VM (antes de las
      * refs: un SUBTIPO contra una interfaz mira la lista de la clase). Mismo orden que miVM. */
     if (st == BPVM_OK) st = lt_construir_interfaces(&x, x.n);

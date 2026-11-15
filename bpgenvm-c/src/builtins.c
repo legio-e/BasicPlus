@@ -4176,7 +4176,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * (BPVM_ERR_NULL_RECEIVER, BPVM_ERR_RUNTIME). Core.__mutexLock es público: un programa llega aquí. */
         if (mref == 0) return builtin_throw_nula(vm, tc, "referencia nula: mutex.lock de un Mutex null");
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
-        if (mid < 0 || mid >= vm->mutex_count) {
+        if (!bpvm_mutex_en_uso(vm, mid)) {   /* V8 #831: una entrada suelta, también (la de un Mutex que murió) */
             char em[48];
             snprintf(em, sizeof em, "mutex.lock: id inválido %" PRId32, mid);
             return builtin_throw(vm, tc, em);
@@ -4200,7 +4200,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t mref = pop_ref(vm, tc);
         if (mref == 0) return builtin_throw_nula(vm, tc, "referencia nula: mutex.unlock de un Mutex null");   /* #805 */
         int32_t mid = bpvm_read_i32_be(vm->memory + ref_addr(vm, mref) + 4 + 0 * 4);
-        if (mid < 0 || mid >= vm->mutex_count) {
+        if (!bpvm_mutex_en_uso(vm, mid)) {   /* V8 #831, como en el lock */
             char em[48];
             snprintf(em, sizeof em, "mutex.unlock: id inválido %" PRId32, mid);
             return builtin_throw(vm, tc, em);
