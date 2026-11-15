@@ -7252,6 +7252,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > error tras ~300 vueltas, con lo vivo tras el GC quieto y la temperatura estable (la Pico 2, 17 °C; la Metro, 24; la
 > C6, 33; la P4, 32–33). Lo bajado —los logs, el de la placa y el `INFO`—, en `C:\tmp\resistencia_v8\`. Se repite con el
 > arreglo.
+> **Repetida desde las 15:34**, con `#829` y `#831` (Eduardo: *«OK»* a grabar): las cuatro con la imagen del día (la
+> RP2350, de las 14:27; la P4 y la C6, sólo la aplicación, de las 14:30; en las dos, el bloque de los packs en su sitio y
+> los motores con rc=0), y la Pico 2 sin el `stack=90` (su heap, 280 KB). El modo `fallos`, bien en las cuatro. Al
+> acabar cada RUN, la placa apunta `[bpvm] mutex: N creados, la tabla llegó a M` (con `fallos`: la Pico 2, 2 y 1; la P4
+> y la C6, 3 y 2); la Metro no, porque su ENV no lleva `log=1`. Lo bajado al empezar, en `C:\tmp\resistencia_v8_2\`.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
