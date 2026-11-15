@@ -7232,6 +7232,19 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > C3, la C5 y la C6; `#769` y `#779`, repetidas toda la mañana (si no sale nada, se cierran, Eduardo: *«si, si no sale
 > nada se cierran.»*). Queda la prueba de resistencia, con la robustez.
 >
+> 🏁 **15-nov, la prueba de resistencia de días, en marcha** (Eduardo: *«Yo utilizaría la Pico2 y la Metro porque son la
+> misma imagen y la principal diferencia es la PSRAM, una sirve de control a la otra. También la P4 que es la que tiene
+> mas recursos de todas y si quieres otra ESP32, no se la C6 que tiene pocos recursos ( es probable que la C6 no llegue a
+> terminar pero eso también puede ser útil )»*): desde las 12:30 y unos dos días, con el autorun, en la Pico 2 y la
+> Metro (`Resistencia`, sin pantalla) y en la P4 y la C6 (`ResistenciaGui`, que pinta en la suya). El programa y su
+> script, en `compat/resistencia/` (Eduardo: *«guardalo y la podemos repetir mas adelante»*): cada vuelta, el cálculo,
+> la memoria, los ficheros, dos hilos y la pantalla, cada fase con su marca y su try/catch, y 10 s de espera; tras la
+> primera vuelta y cada 10 minutos, una línea de estado (los errores, el heap tras un `gc()`, el mayor hueco, el mínimo
+> entre fases, la temperatura y lo que tarda cada fase), en `/data/resistencia/log.txt` (y `log.1`). Antes de dejarla, el
+> modo `fallos` (un error de cada clase, que se atrapa y se apunta) en las dos VMs del PC, en el micro simulado (también
+> el paso a `log.1`) y en siete placas: la S3, la C5, la C3, la Pico 2, la Metro, la P4 y la C6. Salieron `#827` (la
+> VM-Java) y `#828` (la Pico 2 con `Gui`).
+>
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
 > número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
@@ -7505,6 +7518,35 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; **para decidir**)
+
+- **Lo que pasó:** la primera versión de `Resistencia` importaba `Gui` (probaba la pantalla y, si no había, seguía sin
+  ella). En la S3, la C3 y la Metro, sin pantalla, arranca: `Gui.Screen()` da un error que se atrapa. En la Pico 2,
+  `LINK_ERROR` antes de empezar, y su log: `mem: malloc en uso 56956 B | MAXIMO 61844 B de 65540`. Son ocho módulos: el
+  programa, y `IO`, `Core`, `Machine`, `Collections`, `Str`, `Gui` y `Json` desde el pack. Sin `Gui` (y sin `Json` ni
+  `Str`, que trae él), 39 092 B en uso, y arranca. Eduardo: *«Pero la Pico2 no necesita Gui»*: la prueba separó la
+  pantalla en `ResistenciaGui`.
+- **Por qué:** sin PSRAM, la VM de la Pico 2 se queda con toda la SRAM menos `VM_SRAM_MALLOC_MARGIN` (64 KB,
+  `pico/main.c`), y el techo de `malloc` es la base del bloque de la VM (`_sbrk`, `#440`). En `malloc` van las tablas del
+  cargador y del enlazador: de 3 a 6 KB por módulo aunque corra desde el pack (`#651`), y `Gui`, más. En la Metro la VM
+  va a la PSRAM y la SRAM entera es de `malloc`.
+- **Lo que hay:** la clave `vmheap` del ENV achica el bloque de la VM, y lo que suelta queda para `malloc` (no probado
+  con este programa). El mensaje no dice qué hacer.
+
+#### 🔵 `#827` — en la VM-Java, `Machine.uptimeMs()` es la hora del reloj del PC cortada a 32 bits: sale negativa y no cuenta desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta el 15-nov, al probar en el PC la prueba de resistencia; preexistente; **pendiente de decidir: V8 o V9**)
+
+- **Lo que pasa:** la prueba de resistencia apunta la hora desde el arranque (`Machine.uptimeMs() / 1000`). En la VM-C
+  del PC sale «0d 00:00:00» y sube; en la VM-Java, «-6d 0-10:0-26:0-34», y baja: los segundos son negativos, y el más
+  reciente es el menos negativo. `VirtualMachine.java` (`MACHINE_UPTIME_MS`) devuelve `(int) System.currentTimeMillis()`
+  —los milisegundos desde 1970, cortados a 32 bits—, aunque su comentario dice «ms del proceso JVM». La VM-C del PC
+  (`bpvm_machine_uptime_ms`, sin backend) usa el reloj monótono desde la primera vez que se pide (H13, hallazgo 41); las
+  placas, desde su arranque.
+- **Lo que no rompe:** las diferencias (`uptimeMs() - t0`) salen bien en las dos, porque la resta de 32 bits da la
+  vuelta igual: por eso los bancos y los plazos funcionaban. Ningún sample imprime el valor (cambia en cada ejecución),
+  así que la paridad estaba verde. En las placas no pasa.
+- **El arreglo** (unas líneas, sólo la VM-Java): el reloj monótono (`System.nanoTime()`) desde la primera vez que se
+  pide, como la VM-C del PC.
 
 #### ✅ `#826` — en las ESP, `Machine.tempC()` daba 0, y el `INFO` de las ESP y de las STM32 decía 0 grados: el sensor del chip no estaba conectado (abierta y **CERRADA el 15-nov**, `dd21a5c1`; al preparar la prueba de resistencia; Eduardo: *«OK A)»*)
 

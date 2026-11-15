@@ -1,0 +1,46 @@
+// ResistenciaGui.bp — la prueba de resistencia (Resistencia.bp) en una placa con pantalla: la misma prueba, y su fase
+// de la pantalla pinta en la de la placa (la vuelta, la hora, la temperatura y la memoria). Si la pantalla no arranca, lo
+// dice en la línea del arranque y la prueba corre igual, sin pintar.
+//
+// Lleva Gui aparte porque un programa con Gui no le cabe a la Pico 2 (Eduardo, 15-nov: «Pero la Pico2 no necesita
+// Gui»): las tablas del cargador y del enlazador de los ocho módulos no caben en los 64 KB que su imagen deja a malloc.
+module ResistenciaGui
+  import Resistencia
+  import Gui
+
+  // La pantalla de la placa: un rótulo que cambia en cada vuelta.
+  class PantallaGui extends Resistencia.Pantalla
+    var etiqueta: Gui.Label
+
+    public function PantallaGui(etiqueta: Gui.Label)
+      this.etiqueta := etiqueta
+    end PantallaGui
+
+    @override{}
+    public function pinta(texto: string)
+      this.etiqueta.setText(texto)
+    end pinta
+  end PantallaGui
+
+  function Main(arg: string)
+    var p: Resistencia.Pantalla := Resistencia.Pantalla()
+    var nota: string := "pantalla=la de la placa"
+    var conGui: boolean := false
+    try
+      var scr: Gui.Screen := Gui.Screen()
+      var t: Gui.Label := Gui.Label(scr, "BasicPlus - prueba de resistencia")
+      t.align(Gui.Align.TOP_MID, 0, 10)
+      var e: Gui.Label := Gui.Label(scr, "arrancando")
+      e.align(Gui.Align.CENTER, 0, 0)
+      Gui.start()
+      p := PantallaGui(e)
+      conGui := true
+    catch err: RuntimeError
+      nota := "pantalla=ninguna (" + err.msg + ")"
+    endtry
+    Resistencia.prueba(arg, p, nota)
+    if conGui then
+      Gui.stop()
+    endif
+  end Main
+end ResistenciaGui

@@ -1,0 +1,364 @@
+// Resistencia.bp — la prueba de resistencia de V8 (15-nov). Eduardo: «Lo de hacer un poco de todo está bien. Yo añadiría
+// un poco de cálculo también para hacer la prueba mas completa. Y como es una prueba de resistencia también registraría
+// la temperatura interna de la CPU a ver si tiene problemas de temperatura. [...] Se puede poner un try... exception y la
+// mayoría de errores los podemos atrapar y registrar.»
+//
+// Corre días, solo: arranca con /sys/auto.txt. Cada vuelta, cinco fases —el cálculo, la memoria, los ficheros, dos
+// hilos y la pantalla— y diez segundos de espera. Cada fase, con su marca (Machine.setMark: el rastro sobrevive a un
+// reinicio y se apunta al arrancar) y su try/catch: un error se cuenta, se apunta con su fase, su clase y su mensaje (los
+// 20 primeros de cada fase; los demás, sólo se cuentan), y se sigue. Tras la primera vuelta y después cada diez minutos,
+// una línea de estado (la memoria, la temperatura, lo que tarda cada fase). Todo a /data/resistencia/log.txt, que pasa a
+// log.1 al llegar a 64 KB (los dos, unos dos días y medio de líneas de estado).
+//
+// Este programa no importa Gui (la Pico 2: un programa con Gui no le cabe y no tiene pantalla): su pantalla no pinta
+// nada. En una placa con pantalla se ejecuta ResistenciaGui.bp, que hereda Pantalla para pintar en la de verdad y llama
+// a la misma prueba.
+//
+// Con «corta», tres vueltas de medio segundo, con una línea de estado en cada una (para probarlo en el PC); con
+// «fallos», lo mismo y, en la segunda vuelta, un error de cada clase.
+module Resistencia
+  import IO
+  import Machine
+  import Heap
+  import Math
+  import Collections
+
+  const DIR := "/data/resistencia"
+  const LOG := "/data/resistencia/log.txt"
+  const LOG1 := "/data/resistencia/log.1"
+  const DATOS := "/data/resistencia/datos.txt"
+  const TOPE_LOG := 65536
+  const FASES := 5
+  const APUNTADOS := 20        // los errores que se apuntan de cada fase; los demás, sólo se cuentan
+
+  var nombres: string[] := ["calculo", "memoria", "ficheros", "hilos", "pantalla"]
+  var errores: integer[] := [0, 0, 0, 0, 0]
+  var tiempos: integer[] := [0, 0, 0, 0, 0]
+  var vueltas: integer := 0
+  var semilla: integer := 12345
+  var minLibre: integer := -1
+  var sumaReales: float := 0.0
+  var hayReferencia: boolean := false
+  var provoca: boolean := false   // con «fallos»: en la segunda vuelta, un error de cada clase (uno por fase)
+  var pantalla: Pantalla := null
+
+  // La pantalla de la prueba. Ésta no pinta nada; ResistenciaGui.bp la hereda y pinta en la de la placa.
+  public class Pantalla
+    public function Pantalla()
+    end Pantalla
+
+    public function pinta(texto: string)
+    end pinta
+  end Pantalla
+
+  // Dos hilos que calculan lo mismo: tienen que dar lo mismo.
+  class Calcula extends Thread
+    var n: integer
+    var r: integer
+
+    public function Calcula(n: integer)
+      super(2048)
+      this.n := n
+      this.r := 0
+    end Calcula
+
+    public function run()
+      var s: integer := 0
+      var i: integer := 0
+      while i < this.n do
+        s := (s + i * 7 + (i / 3)) mod 1000003
+        i := i + 1
+      endwh
+      this.r := s
+    end run
+
+    public function getR(): integer
+      return this.r
+    end getR
+  end Calcula
+
+  function dos(n: integer): string
+    if n < 10 then
+      return "0" + n
+    endif
+    return "" + n
+  end dos
+
+  // Un real con una décima: «28.8».
+  function unaDecima(x: float): string
+    var d: integer := round(x * 10.0)
+    var signo: string := ""
+    if d < 0 then
+      signo := "-"
+      d := -d
+    endif
+    return signo + (d / 10) + "." + (d mod 10)
+  end unaDecima
+
+  // La hora desde el arranque: «1d 03:25:07».
+  function hora(): string
+    var s: integer := Machine.uptimeMs() / 1000
+    return (s / 86400) + "d " + dos((s mod 86400) / 3600) + ":" + dos((s mod 3600) / 60) + ":" + dos(s mod 60)
+  end hora
+
+  // Un número de 0 a n-1, siempre la misma serie (el generador del ZX81: cabe en 32 bits).
+  function aleatorio(n: integer): integer
+    semilla := (semilla * 75 + 74) mod 65537
+    return semilla mod n
+  end aleatorio
+
+  function lista(a: integer[]): string
+    var s: string := ""
+    var i: integer := 0
+    while i < FASES do
+      if i > 0 then
+        s := s + " "
+      endif
+      s := s + nombres[i] + "=" + a[i]
+      i := i + 1
+    endwh
+    return s
+  end lista
+
+  // Una línea al log (y a la salida); al llegar a TOPE_LOG, el log pasa a log.1.
+  function apunta(linea: string)
+    print linea
+    try
+      if fileExists(LOG) then
+        if IO.fileSize(LOG) > TOPE_LOG then
+          if fileExists(LOG1) then
+            IO.removeFile(LOG1)
+          endif
+          IO.rename(LOG, LOG1)
+        endif
+      endif
+      appendFile(LOG, linea + "\n")
+    catch e: RuntimeError
+      print "no se pudo apuntar en el log: " + e.msg
+    endtry
+  end apunta
+
+  function fib(n: integer): integer
+    if n <= 1 then
+      return n
+    endif
+    return fib(n - 1) + fib(n - 2)
+  end fib
+
+  // 1) El cálculo: enteros (fib) y reales; los dos tienen que dar siempre lo mismo.
+  function calculo()
+    if provoca and vueltas == 1 then
+      var cero: integer := vueltas - 1
+      print 10 / cero
+    endif
+    var f: integer := fib(20)
+    if f != 6765 then
+      throw RuntimeError("fib(20) dio " + f + " y no 6765")
+    endif
+    var x: float := 0.0
+    var i: integer := 1
+    while i <= 2000 do
+      x := x + sqrt(i * 1.0) * Math.sin(i * 0.001)
+      i := i + 1
+    endwh
+    if not hayReferencia then
+      sumaReales := x
+      hayReferencia := true
+    elseif x != sumaReales then
+      throw RuntimeError("la suma de reales dio " + x + " y la primera vez " + sumaReales)
+    endif
+  end calculo
+
+  // 2) La memoria: una lista de cadenas de tamaños variados y un mapa, que se sueltan al acabar.
+  function memoria()
+    if provoca and vueltas == 1 then
+      var a: integer[] := [1, 2, 3]
+      print a[2 + vueltas * 2]
+    endif
+    var l: List := List()
+    var n: integer := 50 + aleatorio(150)
+    var i: integer := 0
+    while i < n do
+      var s: string := ""
+      var k: integer := aleatorio(48)
+      var j: integer := 0
+      while j < k do
+        s := s + "ab"
+        j := j + 1
+      endwh
+      l.add(s)
+      i := i + 1
+    endwh
+    if l.length() != n then
+      throw RuntimeError("la lista tiene " + l.length() + " y no " + n)
+    endif
+    var m: Collections.Map := Collections.Map()
+    i := 0
+    while i < 100 do
+      m.put("clave" + i, "valor" + (i * 3))
+      i := i + 1
+    endwh
+    if m.size() != 100 then
+      throw RuntimeError("el mapa tiene " + m.size() + " y no 100")
+    endif
+  end memoria
+
+  // 3) Los ficheros: 4 KB con un patrón conocido; se escriben, se leen, se comparan y se borran.
+  function ficheros()
+    if provoca and vueltas == 1 then
+      print readFile(DIR + "/no_existe.txt")
+    endif
+    var c: string := ""
+    var i: integer := 0
+    while i < 64 do
+      c := c + "linea " + dos(i) + " de la prueba de resistencia de BasicPlus, vuelta " + vueltas + "\n"
+      i := i + 1
+    endwh
+    writeFile(DATOS, c)
+    var leido: string := readFile(DATOS)
+    if leido != c then
+      throw RuntimeError("lo leído (" + len(leido) + " B) no es lo escrito (" + len(c) + " B)")
+    endif
+    IO.removeFile(DATOS)
+  end ficheros
+
+  // 4) Dos hilos a la vez, que tienen que dar lo mismo.
+  function hilos()
+    if provoca and vueltas == 1 then
+      var nadie: Calcula := null
+      print nadie.getR()
+    endif
+    var a: Calcula := Calcula(20000)
+    var b: Calcula := Calcula(20000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    if a.getR() != b.getR() then
+      throw RuntimeError("los dos hilos dieron " + a.getR() + " y " + b.getR())
+    endif
+  end hilos
+
+  // 5) La pantalla: la vuelta, la hora, la temperatura y la memoria (sin pantalla, no pinta nada).
+  function pinta()
+    if provoca and vueltas == 1 then
+      throw RuntimeError("provocado en la fase de la pantalla")
+    endif
+    pantalla.pinta("vuelta " + vueltas + "  " + hora() + "\n" + unaDecima(Machine.tempC()) + " C  libre " +
+                   Heap.getFree())
+  end pinta
+
+  function falla(k: integer, clase: string, msg: string)
+    errores[k] := errores[k] + 1
+    if errores[k] <= APUNTADOS then
+      var nota: string := ""
+      if errores[k] == APUNTADOS then
+        nota := " (el " + APUNTADOS + "º de esta fase: los siguientes, sólo se cuentan)"
+      endif
+      apunta(hora() + " ERROR " + nombres[k] + " " + clase + ": " + msg + nota)
+    endif
+  end falla
+
+  function fase(k: integer)
+    Machine.setMark(k + 1)
+    var t0: integer := Machine.uptimeMs()
+    try
+      if k == 0 then
+        calculo()
+      elseif k == 1 then
+        memoria()
+      elseif k == 2 then
+        ficheros()
+      elseif k == 3 then
+        hilos()
+      else
+        pinta()
+      endif
+    catch e1: IOError
+      falla(k, "IOError", e1.msg)
+    catch e2: ArithmeticError
+      falla(k, "ArithmeticError", e2.msg)
+    catch e3: NullReferenceError
+      falla(k, "NullReferenceError", e3.msg)
+    catch e4: IndexError
+      falla(k, "IndexError", e4.msg)
+    catch e5: RuntimeError
+      falla(k, "RuntimeError", e5.msg)
+    endtry
+    tiempos[k] := Machine.uptimeMs() - t0
+    // Lo más bajo que llega lo libre al acabar una fase (con la basura que haya): lo cerca que se pasa del límite.
+    var libre: integer := Heap.getFree()
+    if minLibre < 0 or libre < minLibre then
+      minLibre := libre
+    endif
+  end fase
+
+  function arranque(nota: string)
+    var rastro: string := ""
+    var i: integer := 0
+    while i < Machine.markCount() do
+      rastro := rastro + " " + Machine.markAt(i)
+      i := i + 1
+    endwh
+    apunta(hora() + " ARRANQUE n=" + Machine.bootCount() + " motivo=" + Machine.resetCause() + " placa=" +
+           Machine.getBoard() + " " + nota + " rastro=[" + rastro +
+           " ] (1 calculo, 2 memoria, 3 ficheros, 4 hilos, 5 pantalla, 9 espera)")
+  end arranque
+
+  // Con un gc() antes, «libre tras el GC» es lo que no ocupa lo vivo: si baja día a día, hay una fuga.
+  function estado()
+    gc()
+    apunta(hora() + " estado: vueltas " + vueltas + "; errores " + lista(errores) + "; heap: libre tras el GC " +
+           Heap.getFree() + " de " + Heap.getSize() + ", mayor hueco " + Heap.getLargestFree() + ", " +
+           Heap.getFreeBlocks() + " huecos, minimo entre fases " + minLibre + ", " + Heap.getCollections() +
+           " GC; " + unaDecima(Machine.tempC()) + " C; ms " + lista(tiempos))
+  end estado
+
+  // La prueba entera, con su pantalla; `nota` va en la línea del arranque (con qué pantalla corre). Con «corta» o
+  // «fallos», vuelve tras tres vueltas; si no, no vuelve.
+  public function prueba(arg: string, p: Pantalla, nota: string)
+    pantalla := p
+    provoca := arg == "fallos"
+    var corta: boolean := arg == "corta" or provoca
+    if not IO.isDirectory("/data") then
+      IO.mkdir("/data")
+    endif
+    if not IO.isDirectory(DIR) then
+      IO.mkdir(DIR)
+    endif
+    arranque(nota)
+    var espera: integer := 10000
+    var cadaEstado: integer := 600000
+    var total: integer := -1
+    if corta then
+      espera := 500
+      cadaEstado := 0
+      total := 3
+    endif
+    var ultimo: integer := Machine.uptimeMs()
+    while total < 0 or vueltas < total do
+      var k: integer := 0
+      while k < FASES do
+        fase(k)
+        k := k + 1
+      endwh
+      vueltas := vueltas + 1
+      // Lo de fuera de las fases (la línea de estado), con su try también: un error aquí no para la prueba.
+      try
+        if vueltas == 1 or Machine.uptimeMs() - ultimo >= cadaEstado then
+          estado()
+          ultimo := Machine.uptimeMs()
+        endif
+      catch e: RuntimeError
+        apunta(hora() + " ERROR estado: " + e.msg)
+      endtry
+      Machine.setMark(9)
+      sleep(espera)
+    endwh
+    apunta(hora() + " fin de la prueba corta")
+  end prueba
+
+  function Main(arg: string)
+    prueba(arg, Pantalla(), "pantalla=ninguna")
+  end Main
+end Resistencia
