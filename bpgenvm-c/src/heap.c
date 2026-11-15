@@ -1729,7 +1729,9 @@ uint32_t bpvm_heap_reservar_pila(bpvm_t* vm, uint32_t bytes) {
 /* V7/H7 #610 — la puerta de la TABLA de handles, en su función porque se mira DOS veces en heap_reservar: antes de
  * reservar y tras la colecta del reintento (gc_stw suelta el cerrojo mientras espera, y otros workers pueden gastarse
  * los slots que había). El alta del handle va detrás de la reserva sin soltarlo, así que lo último que se mira es
- * esto: 1 = hay sitio para ella; 0 = no cabe, el OOM de siempre. Asume vm_lock tomado. */
+ * esto: 1 = hay sitio para ella; 0 = no cabe. V8 #829: 0 ya no es por sí solo el OOM —tras la colecta de otro, quien
+ * reserva colecta él y vuelve a mirar (heap_reservar)—, así que el aviso lo da quien se rinde (tabla_sin_sitio).
+ * Asume vm_lock tomado. */
 static int tabla_con_sitio(bpvm_t* vm) {
     /* #430 — resolver la presion de tabla, si la habia. Dos salidas buenas:
      * la colecta rellena la free-list (recicla) o, si todo sigue VIVO, se
@@ -1746,35 +1748,40 @@ static int tabla_con_sitio(bpvm_t* vm) {
         } else if (tabla_crecer(vm)) {   /* #610: con el mundo parado */
             vm->handles.pressure = 0;          /* todo vivo: tabla mas grande */
         } else {
-            /* ⚠️ EL AVISO ESTABA MUDO (29-ago). Era un `static` de fichero, o sea
-             * UNA VEZ POR ARRANQUE — no por ejecucion, que es lo que decia su
-             * propio texto. En la Pico, con la placa encendida y varias pruebas
-             * corridas, ya estaba gastado: `SyncListDiag` murio por la tabla y
-             * el unico mensaje que lo decia no salio. Se buscó el fallo en el
-             * heap durante media hora. Ahora vive en el `vm`, que nace a cero en
-             * cada RUN (calloc).
-             *
-             * Y dice el heap LIBRE a proposito: el OOM que el programa recibe se
-             * llama "No space in heap" —no se puede cambiar sin romper la
-             * paridad con la VM-Java— asi que sin este numero al lado, el
-             * mensaje manda a mirar precisamente donde no esta el problema. */
-            if (!vm->handles.oom_avisado) {
-                vm->handles.oom_avisado = 1;
-                /* #451 — desde que la tabla vive DENTRO del bloque, quedarse sin
-                 * handles ya significa quedarse sin memoria de verdad: la tabla
-                 * bajo hasta tocar el heap. Ya no hay que aclarar "no es el
-                 * heap", porque ahora si lo es — es la misma bolsa. */
-                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles: %u slots ocupan "
-                          "%u KB y la tabla ya toca el heap (vivo hasta %u, techo %u). "
-                          "OOM atrapable.",
-                          (unsigned) vm->handles.cap,
-                          (unsigned)((vm->handles.cap * 8u) / 1024u),
-                          (unsigned) vm->heap_next, (unsigned) vm->heap_top);
-            }
-            return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
+            return 0;   /* ni reciclado ni más grande: quien llama decide si es el OOM (V8 #829) */
         }
     }
     return 1;
+}
+
+/* El aviso de la tabla sin sitio, cuando de verdad no lo hay: tras una colecta propia (V8 #829; antes lo daba
+ * tabla_con_sitio, y con ella el OOM). Asume vm_lock tomado. */
+static void tabla_sin_sitio(bpvm_t* vm) {
+    /* ⚠️ EL AVISO ESTABA MUDO (29-ago). Era un `static` de fichero, o sea
+     * UNA VEZ POR ARRANQUE — no por ejecucion, que es lo que decia su
+     * propio texto. En la Pico, con la placa encendida y varias pruebas
+     * corridas, ya estaba gastado: `SyncListDiag` murio por la tabla y
+     * el unico mensaje que lo decia no salio. Se buscó el fallo en el
+     * heap durante media hora. Ahora vive en el `vm`, que nace a cero en
+     * cada RUN (calloc).
+     *
+     * Y dice el heap LIBRE a proposito: el OOM que el programa recibe se
+     * llama "No space in heap" —no se puede cambiar sin romper la
+     * paridad con la VM-Java— asi que sin este numero al lado, el
+     * mensaje manda a mirar precisamente donde no esta el problema. */
+    if (!vm->handles.oom_avisado) {
+        vm->handles.oom_avisado = 1;
+        /* #451 — desde que la tabla vive DENTRO del bloque, quedarse sin
+         * handles ya significa quedarse sin memoria de verdad: la tabla
+         * bajo hasta tocar el heap. Ya no hay que aclarar "no es el
+         * heap", porque ahora si lo es — es la misma bolsa. */
+        bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles: %u slots ocupan "
+                  "%u KB y la tabla ya toca el heap (vivo hasta %u, techo %u). "
+                  "OOM atrapable.",
+                  (unsigned) vm->handles.cap,
+                  (unsigned)((vm->handles.cap * 8u) / 1024u),
+                  (unsigned) vm->heap_next, (unsigned) vm->heap_top);
+    }
 }
 
 /* El hueco: el GC proactivo, la presión de la tabla, la lista de libres, el bump y el OOM. Con el vm_lock tomado
@@ -1784,6 +1791,9 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
                               int a_cero) {
     uint32_t total = align4(BPVM_OBJ_HEADER_SIZE + payload_bytes);
     if (total < BPVM_MIN_FREE_BLOCK) total = BPVM_MIN_FREE_BLOCK;
+    /* V8 #762 y #829 — si la última colecta la hizo ésta (o no ha habido): gc_stw lo dice. Quien sólo esperó la de
+     * otro llega tarde a lo que soltó, y antes de rendirse colecta ella. */
+    int propia = 1;
 
     /* H2 — Heap allocation y GC son críticos en SMP: bump pointer y
      * mark/sweep escriben estado compartido. Tomar el vm_lock global
@@ -1831,7 +1841,15 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
              * sweep RETROCEDE heap_next si la cola queda libre). Si los dos numeros
              * son iguales colecta a colecta, es que NO se esta reciclando. */
             uint32_t antes = vm->heap_next;
-            gc_stw(vm);
+            if (por_tabla && bpvm_la_cola.ensayo_tabla_ajena) {
+                /* SÓLO PRUEBAS (test_cola, la 22; #829): la colecta de la marca de la tabla, como si la hubiera hecho
+                 * otro y los demás se hubieran gastado los slots que soltó —lo que con dos runs pasa de vez en
+                 * cuando—, sin colectar. Si la tabla no tiene sitio, la reserva tiene que ir a colectar ella. */
+                propia = 0;
+                bpvm_la_cola.tablas_ajenas_fingidas++;
+            } else {
+                propia = gc_stw(vm);
+            }
             bpvm_diag("[bpvm] GC: bump %u -> %u (recupera %d B, tope %u, heap %u..%u)",
                       (unsigned) antes, (unsigned) vm->heap_next,
                       (int)((long) antes - (long) vm->heap_next),
@@ -1844,7 +1862,21 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
         }
     }
 
-    if (!tabla_con_sitio(vm)) return 0;   /* #430: la presión de la tabla, resuelta ANTES de reservar (#610) */
+    /* #430: la presión de la tabla, resuelta ANTES de reservar (#610). V8 #829 — como #762 con el bloque: si tras la
+     * colecta de otro la tabla no tiene sitio (los demás workers se gastaron los slots que soltó mientras ésta
+     * esperaba, y no cabe más grande), colecta ésta y vuelve a mirar; sólo tras una colecta propia no lo hay. Lo vio la
+     * red de #827: HeapEstres con dos workers, «No space in heap» con el heap lleno de basura. */
+    while (!tabla_con_sitio(vm)) {
+        if (propia || bpvm_la_cola.sabotaje_tabla) {   /* (sabotaje: SÓLO PRUEBAS, se rinde como antes) */
+            tabla_sin_sitio(vm);
+            return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
+        }
+        propia = gc_stw(vm);
+        if (vm->gc_descarrilo) {   /* V7 #494, como arriba (#659: la marca, de la tarea) */
+            bpvm_aot_callctx()->reserva_descarrilada = 1;
+            return 0;
+        }
+    }
 
     uint32_t addr = try_allocate_inner(vm, total);
     if (addr == 0) {
@@ -1852,7 +1884,6 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
          * el cerrojo y reserva el primero, y si ahí no cabe, no cabe. Quien sólo esperó la de otro llega tarde: lo que se
          * soltó puede habérselo gastado ya el resto, y rendirse entonces era un «No space in heap» con el heap lleno de
          * basura. (La VM-Java siempre colectó ella: heapAlloc.) */
-        int propia;
         int fingida = bpvm_la_cola.ensayo_colecta_ajena;   /* SÓLO PRUEBAS (test_cola, la 21; #800) */
         do {
             if (fingida) {
@@ -1869,8 +1900,15 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
                 return 0;
             }
             /* V7/H7 #610 — la tabla, otra vez: gc_stw soltó el cerrojo mientras esperaba, y otros workers pueden haberse
-             * gastado los slots que había. Aún no hay nada reservado: si hay que crecer, se puede esperar. */
-            if (!tabla_con_sitio(vm)) return 0;
+             * gastado los slots que había. Aún no hay nada reservado: si hay que crecer, se puede esperar. V8 #829: y si
+             * no hay sitio tras la colecta de otro, otra vuelta, que colecta ésta. */
+            if (!tabla_con_sitio(vm)) {
+                if (propia || bpvm_la_cola.sabotaje_tabla) {   /* (sabotaje: SÓLO PRUEBAS) */
+                    tabla_sin_sitio(vm);
+                    return 0;
+                }
+                continue;   /* al `while`: addr sigue en 0 y la colecta no fue propia */
+            }
             addr = try_allocate_inner(vm, total);
         } while (addr == 0 && !propia && !bpvm_la_cola.sabotaje_reserva);   /* (sabotaje: SÓLO PRUEBAS) */
         if (addr == 0) {

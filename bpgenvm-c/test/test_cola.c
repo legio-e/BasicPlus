@@ -74,6 +74,10 @@
 #ifndef RESERVA_AJENA_PASADAS
 #define RESERVA_AJENA_PASADAS 10   /* con cada número de runs (para medir, -DRESERVA_AJENA_PASADAS=N) */
 #endif
+#ifndef TABLA_AJENA_PASADAS
+#define TABLA_AJENA_PASADAS 10     /* la 22 (#829), igual */
+#endif
+#define TABLA_AJENA_CAP 256        /* la 22: el tope de la tabla, el tamaño con el que nace (no puede crecer) */
 
 typedef struct { char buf[8192]; size_t n; } salida_t;
 
@@ -97,6 +101,8 @@ static char s_error[256];
 
 /* La 21 (#800): sin la colecta por volumen (el umbral, a 0: el heap se llena de basura y la reserva que no cabe colecta). */
 static int s_sin_umbral;
+/* La 22 (#829): el tope de la tabla de handles (0: sin tope), como --handlecap: con él, la tabla llena no puede crecer. */
+static uint32_t s_cap_handles;
 
 /* Una pasada: `mod` en un bloque de `mem_size` B con el heap hasta `heap` (0: la mitad), con `runs` runs; la salida, a
  * `cb` (con `user`). */
@@ -107,6 +113,7 @@ static bpvm_status_t corre_con(const char* mod, size_t mem_size, size_t heap, in
     if (!mem) return BPVM_ERR_OOM;
     bpvm_t* vm = bpvm_init(mem, mem_size, heap);
     if (!vm) { free(mem); return BPVM_ERR_OOM; }
+    if (s_cap_handles) bpvm_set_handle_cap_max(vm, s_cap_handles);   /* la 22: antes de cargar, que crea la tabla */
     bpvm_status_t s = bpvm_load_mod(vm, mod);
     if (s != BPVM_OK) {
         fprintf(stderr, "load %s: %s\n", mod, bpvm_status_str(s));
@@ -650,6 +657,47 @@ static int reserva_ajena(int sabotaje) {
                    sabotaje, malos, pasadas, detalle, ultimo);
 }
 
+/* 22. (#829) LA TABLA DE HANDLES SIN SITIO TRAS LA COLECTA DE OTRO (TablaAjena: dos hilos piden bloques de 16 B sin
+ * guardar ninguno, con la colecta por volumen apagada y la tabla con tope: los slots se llenan de basura, y cada vez
+ * que se cruza la marca de la tabla hay que colectar; el heap, de sobra, no se llena). Se prueba la decisión de #829
+ * —la de #762, en la tabla: si la colecta fue de otro y la tabla sigue sin sitio, colecta ella— sin depender de que la
+ * carrera salga (la red de #827 la vio una vez, con HeapEstres y dos workers): el gancho da por hecha «por otro», sin
+ * colectar, la colecta de la marca. Con 1 run y con 2. Bien: «sin sitio: 0», con el gancho usado en cada pasada.
+ * Sabotaje (--sabotaje-tabla: se rinde, como antes): «sin sitio» con la tabla llena de basura. */
+static int tabla_ajena(int sabotaje) {
+    int malos = 0, pasadas = 0; char ultimo[96] = ""; char detalle[128];
+    uint32_t menos[3] = { 0, 0xFFFFFFFFu, 0xFFFFFFFFu };   /* con 1 y con 2 runs, las fingidas de la pasada que menos */
+    s_sin_umbral = 1;
+    s_cap_handles = TABLA_AJENA_CAP;
+    bpvm_la_cola.ensayo_tabla_ajena = 1;
+    bpvm_la_cola.sabotaje_tabla = sabotaje;
+    for (int runs = 1; runs <= 2; runs++) {
+        for (int i = 0; i < TABLA_AJENA_PASADAS; i++, pasadas++) {
+            salida_t o;
+            bpvm_la_cola.tablas_ajenas_fingidas = 0;
+            bpvm_status_t s = corre("TablaAjena.mod", 256 * 1024, 0, runs, &o);
+            uint32_t f = bpvm_la_cola.tablas_ajenas_fingidas;
+            if (f < menos[runs]) menos[runs] = f;
+            if (s != BPVM_OK || strstr(o.buf, "sin sitio: 0") == NULL) {
+                malos++;
+                resume(ultimo, sizeof ultimo, s, o.buf);
+            } else if (f == 0) {   /* un camino ejecutado no es un camino probado */
+                malos++;
+                snprintf(ultimo, sizeof ultimo, "con %d run%s, ninguna colecta por la tabla: el gancho, sin usar", runs,
+                         runs > 1 ? "s" : "");
+            }
+        }
+    }
+    s_sin_umbral = 0;
+    s_cap_handles = 0;
+    bpvm_la_cola.ensayo_tabla_ajena = 0;
+    bpvm_la_cola.sabotaje_tabla = 0;
+    snprintf(detalle, sizeof detalle, " (colectas por la tabla «de otro» fingidas por pasada: con 1 run, %u o más; con 2, "
+             "%u o más)", (unsigned) menos[1], (unsigned) menos[2]);
+    return informe("22. la tabla de handles sin sitio tras la colecta de otro, con 1 run y con 2: nadie sin sitio con "
+                   "basura", sabotaje, malos, pasadas, detalle, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -661,7 +709,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
-    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0, sab_reserva = 0;
+    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0, sab_reserva = 0, sab_tabla = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -681,10 +729,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-gui")) sab_gui = 1;
         else if (!strcmp(argv[i], "--sabotaje-anidada")) sab_anidada = 1;
         else if (!strcmp(argv[i], "--sabotaje-reserva")) sab_reserva = 1;
+        else if (!strcmp(argv[i], "--sabotaje-tabla")) sab_tabla = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
                 || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
-                || sab_mundo || sab_gui || sab_anidada || sab_reserva;
+                || sab_mundo || sab_gui || sab_anidada || sab_reserva || sab_tabla;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -708,12 +757,13 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_anidada) fallos += gui_anidada(sab_anidada);   /* y el puente, aparcado con el mundo */
     if (!sabotaje) fallos += gui_mismo_padre();   /* y el árbol de la librería, con su cerrojo */
     if (!sabotaje || sab_reserva) fallos += reserva_ajena(sab_reserva);   /* #762 */
+    if (!sabotaje || sab_tabla) fallos += tabla_ajena(sab_tabla);   /* #829 */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
                "compartido; un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
                "colecta (la 3.2); la GUI con dos runs, toda en el run 0, con su puente aparcado si otro run colecta; y "
-               "nadie sin sitio con el heap lleno de basura (#762)\n");
+               "nadie sin sitio con el heap lleno de basura (#762), ni con la tabla de handles llena de basura (#829)\n");
     return fallos ? 1 : 0;
 }

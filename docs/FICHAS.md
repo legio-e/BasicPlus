@@ -7522,7 +7522,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#829` — la red: `HeapEstres` en la VM-C con dos workers, otra vez «No space in heap» en un hilo después del arreglo de `#762`; esta vez, la tabla de handles se rinde sin una colecta propia (abierta el 15-nov, en la red de `#827`; preexistente; **para decidir**)
+#### 🧬 `#830` — la marca de la tabla de handles, un porcentaje y no 64 slots fijos: más margen con tablas grandes y varios hilos (abierta el 15-nov, de `#829`; idea de Eduardo; **a V9**)
+
+- Eduardo (15-nov): *«Lo de el número de handlers se podría hacer que tenga que crecer cuando llegué al 90% y no esperar
+  al 100%, así igual hay menos problemas.»*; y *«Si, para V9. Ahora solamente cambiamos lo imprescindible.»*
+- **Lo que hay:** la marca son los últimos 64 slots (`BPVM_HANDLE_MARCA`; en la VM-Java, `HANDLE_MARCA`): al repartir uno,
+  la reserva siguiente colecta; si recicla, la tabla no crece; si todo está vivo, crece al doble. Con 512 slots cae en
+  el 87,5 %; con 4096, en el 98,4 %. En `#829` no habría servido crecer antes: la tabla no cabía más grande (el heap
+  llegaba a donde tenía que bajar), y lo arregló la colecta propia.
+- **Lo que se estudia en V9:** la marca, un porcentaje de la tabla (un 10 %); y si crecer antes de colectar, que gasta 8 B
+  por slot de basura dentro del bloque de la VM (en la C3 y la C6 cuenta). La misma regla en las dos VMs.
+
+#### ✅ `#829` — la red: `HeapEstres` en la VM-C con dos workers, otra vez «No space in heap» en un hilo después del arreglo de `#762`; esta vez, la tabla de handles se rendía sin una colecta propia (abierta y **CERRADA el 15-nov**, el commit de `#829`; en la red de `#827`; preexistente; Eduardo: *«Lo arreglamos en V8.»*)
 
 - **Cómo salió:** la red de `#827` (15-nov, 12:56), en ROJO sólo por esto: `HeapEstres VM-C --smp=2`, «excepcion no
   atrapada en un hilo (el hilo termina): No space in heap», con 1479 creados. Lo demás, verde, y `check-estres` suelto,
@@ -7546,6 +7557,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **El arreglo, sin hacer** (Eduardo, 14-nov: *«a estas alturas de V8 no vamos a cambiar las VMs […] Pero si lo podemos
   analizar»*): como el de `#762` —si la tabla no tiene sitio y la colecta no fue propia, colectar él y volver a
   mirar—, con su prueba (como la parte 21 de `test_cola`: una ventana de ensayo, para que no dependa de la suerte).
+- **Hecho** (Eduardo: *«Lo arreglamos en V8.»*; es un bug, y no se publica con uno conocido): en `heap_reservar`, si la
+  tabla no tiene sitio y la última colecta no fue de ésta —la de la entrada (la de la marca) o la del reintento de
+  `#762`—, colecta ella y vuelve a mirar; sólo tras una propia, el OOM. `tabla_con_sitio` ya no da el aviso «SIN
+  SITIO»: lo da quien se rinde (`tabla_sin_sitio`), y así no sale cuando la colecta propia encuentra sitio. Sólo cambia
+  lo que antes acababa en el OOM; lo que ya salía bien, no.
+- **La prueba:** `test_cola`, la parte 22, con `TablaAjena` (dos hilos que piden bloques de 16 B sin guardar ninguno),
+  la colecta por volumen apagada y la tabla con tope (256 slots, el tamaño con el que nace: no puede crecer); el gancho
+  `ensayo_tabla_ajena` da por ajena la colecta de la marca. Con el arreglo, 20 de 20 (con 1 run y con 2; unas 20
+  colectas fingidas por pasada); con `--sabotaje-tabla` (se rinde como antes), 0 de 20: «No space in heap» con la tabla
+  llena de basura. La prueba ejercita el primer sitio, el que salió en la red; el segundo lleva el mismo cambio. Y el
+  reactivo, con la máquina cargada: 0 de 60 con dos workers y 0 de 60 con cuatro (antes, 1 de 40 con cuatro).
+- **La VM-Java no cambia:** su tabla crece con `Arrays.copyOf`, sin tope, y su `heapAlloc` colecta ella.
+- **En las placas**, con la imagen que se grabe al acabar la prueba de resistencia: es código común, de las nueve.
 
 #### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; **para decidir**)
 

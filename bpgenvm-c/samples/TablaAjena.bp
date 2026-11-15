@@ -1,0 +1,45 @@
+// TablaAjena.bp — V8 #829 (15-nov): la tabla de handles sin sitio tras la colecta de otro. Dos hilos piden bloques
+// pequeños (16 B) sin guardar ninguno, y la prueba apaga la colecta por volumen y le pone tope a la tabla: los slots se
+// llenan de basura, y cada vez que se cruza la marca de la tabla hay que colectar (el heap, de sobra, no se llena). La
+// prueba (test/test_cola.c, la parte 22) da esa colecta por hecha «por otro», sin colectar: si la reserva se rinde ahí,
+// «No space in heap» con la tabla llena de basura; tiene que colectar ella. Con 1 run y con 2 (uno en cada uno).
+// Determinista en el resultado: «sin sitio: 0».
+module TablaAjena
+  class Pide extends Thread
+    var n: integer
+    var sinSitio: integer
+
+    public function Pide(n: integer)
+      super(4096)
+      this.n := n
+      this.sinSitio := 0
+    end Pide
+
+    public function run()
+      var i: integer := 0
+      while i < this.n do
+        try
+          var b: byte[] := newByteArray(16)
+          b[0] := 1
+        catch e: Exception
+          this.sinSitio := this.sinSitio + 1
+        endtry
+        i := i + 1
+      endwh
+    end run
+
+    public function fallos(): integer
+      return this.sinSitio
+    end fallos
+  end Pide
+
+  function Main()
+    var a: Pide := Pide(2000)
+    var b: Pide := Pide(2000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "sin sitio: " + (a.fallos() + b.fallos())
+  end Main
+end TablaAjena

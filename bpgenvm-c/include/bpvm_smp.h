@@ -194,6 +194,10 @@ typedef struct bpvm_cola {
     int     ensayo_reserva_nativa_us;/* H12: una reserva desde una native tarda en llegar, sin el cerrojo (N3, heap.c) */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
+    /* V8 #829 (al final, para no mover nada de lo de arriba) */
+    int     sabotaje_tabla;          /* #829: sin sitio en la tabla tras la colecta de otro, se rinde, como antes */
+    int     ensayo_tabla_ajena;      /* #829: la colecta de la marca de la tabla, «de otro» y sin colectar */
+    uint32_t tablas_ajenas_fingidas; /* #829: cuántas veces (heap.c): la pasada buena tiene que pasar por ahí */
 } bpvm_cola_t;
 
 /* El nombre de antes: `vm->smp` es la cola, cuando el programa lo ejecuta más de un run. */
