@@ -7534,7 +7534,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que hay:** la clave `vmheap` del ENV achica el bloque de la VM, y lo que suelta queda para `malloc` (no probado
   con este programa). El mensaje no dice qué hacer.
 
-#### 🔵 `#827` — en la VM-Java, `Machine.uptimeMs()` es la hora del reloj del PC cortada a 32 bits: sale negativa y no cuenta desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta el 15-nov, al probar en el PC la prueba de resistencia; preexistente; **pendiente de decidir: V8 o V9**)
+#### ✅ `#827` — en la VM-Java, `Machine.uptimeMs()` era la hora del reloj del PC cortada a 32 bits: salía negativa y no contaba desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta y **CERRADA el 15-nov**, el commit de `#827`; al probar en el PC la prueba de resistencia; preexistente; Eduardo: *«Si se arregla, parece poco.»*)
 
 - **Lo que pasa:** la prueba de resistencia apunta la hora desde el arranque (`Machine.uptimeMs() / 1000`). En la VM-C
   del PC sale «0d 00:00:00» y sube; en la VM-Java, «-6d 0-10:0-26:0-34», y baja: los segundos son negativos, y el más
@@ -7547,6 +7547,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   así que la paridad estaba verde. En las placas no pasa.
 - **El arreglo** (unas líneas, sólo la VM-Java): el reloj monótono (`System.nanoTime()`) desde la primera vez que se
   pide, como la VM-C del PC.
+- **Hecho** (Eduardo: *«Si se arregla, parece poco.»*): en la VM-Java, `UPTIME_T0`, el instante de la primera vez que
+  se pide, como el static de la VM-C; `bpgenvm-c/samples/UptimeArranque.bp` en la red, sólo en el PC como `RtcPc` (una
+  relación: empieza cerca de 0 y cuenta los 100 ms de un `sleep`; con la VM-Java de antes, «FALLO empieza en
+  -553825806»); y la referencia (§14.9, `uptimeMs`), en los dos idiomas: en el PC, desde la primera vez que se pide, y
+  que a los ~24,8 días pasa a negativo —es un `integer`; decía «wrap a ~49 días»—, aunque las restas sigan bien.
 
 #### ✅ `#826` — en las ESP, `Machine.tempC()` daba 0, y el `INFO` de las ESP y de las STM32 decía 0 grados: el sensor del chip no estaba conectado (abierta y **CERRADA el 15-nov**, `dd21a5c1`; al preparar la prueba de resistencia; Eduardo: *«OK A)»*)
 

@@ -1,0 +1,25 @@
+// UptimeArranque.bp — V8 #827 (15-nov): Machine.uptimeMs() cuenta desde el arranque —en el PC, desde la primera vez que
+// se pide—, en las dos VMs. La VM-Java daba los ms desde 1970 cortados a 32 bits, que salían negativos («-6d 0-10:0-26»
+// en la prueba de resistencia); las restas salían bien, y por eso nadie lo veía. Se comprueba una RELACIÓN —el valor
+// cambia en cada ejecución—: «ok» o «FALLO». Sólo en el PC: una placa cuenta desde su arranque, que puede ser de hace
+// horas.
+module UptimeArranque
+  import Machine
+
+  function Main()
+    var t0: integer := Machine.uptimeMs()
+    sleep(100)
+    var t1: integer := Machine.uptimeMs()
+    if t0 >= 0 and t0 < 60000 then
+      print "ok empieza cerca de 0"
+    else
+      print "FALLO empieza en " + t0
+    endif
+    if t1 - t0 >= 90 and t1 - t0 < 10000 then
+      print "ok cuenta el tiempo"
+    else
+      print "FALLO en 100 ms conto " + (t1 - t0)
+    endif
+    print "fin"
+  end Main
+end UptimeArranque

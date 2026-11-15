@@ -1954,7 +1954,11 @@ port.write(tx, <span class="num">4</span>)
       <td>Frecuencia actual de la CPU en Hz: la que lleva de verdad (en las ESP32, desde V8; antes decía
           una nominal, y en la S3, la C3 y la C6 decía 240 yendo a 160).</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
-      <td>Ms desde el boot del firmware (32-bit, wrap a ~49 días).</td></tr>
+      <td>Ms desde el arranque de la placa; en el PC, desde la primera vez que se pide. Es un
+          <code>integer</code> de 32 bits: a los ~24,8 días pasa a negativo y a los ~49,7 vuelve a 0,
+          pero la resta de dos lecturas (<code>uptimeMs() - t0</code>) sigue dando lo que pasó entre
+          ellas. <em>Cambió en V8</em> (antes, en la VM-Java del PC era la hora del reloj cortada a 32
+          bits, que salía negativa).</td></tr>
   <tr><td><code>gpioCount(): integer</code></td>
       <td>GPIO disponibles en la placa, según la variante: 30 en RP2350A, 48 en RP2350B;
           30 en el PC.</td></tr>

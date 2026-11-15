@@ -1952,7 +1952,11 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>cpuFreqHz(): integer</code></td>
       <td>Current clk_sys frequency in Hz.</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
-      <td>Ms since firmware boot (32-bit, wraps at ~49 days).</td></tr>
+      <td>Ms since the board booted; on the PC, since the first call. It is a 32-bit
+          <code>integer</code>: after ~24.8 days it turns negative and after ~49.7 it wraps to 0, but
+          subtracting two readings (<code>uptimeMs() - t0</code>) still gives the time between them.
+          <em>Changed in V8</em> (before, on the PC's Java VM it was the wall-clock time cut to 32 bits,
+          which came out negative).</td></tr>
   <tr><td><code>gpioCount(): integer</code></td>
       <td>GPIOs available on the board, by variant: 30 on RP2350A, 48 on RP2350B;
           30 on the PC.</td></tr>

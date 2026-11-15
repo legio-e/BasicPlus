@@ -1575,6 +1575,11 @@ public class VirtualMachine {
         System.out.println(sb + (hayLectura ? " (sim → ceros)" : ""));
     }
 
+    /** V8 #827 — el instante de la primera vez que un programa pide `Machine.uptimeMs()`, en ns del reloj monótono
+     *  (Long.MIN_VALUE, aún no): de él cuenta el uptime del PC, como la VM-C, que lo guarda en un static del proceso. */
+    private static final java.util.concurrent.atomic.AtomicLong UPTIME_T0 =
+            new java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE);
+
     /** V8 #808 (8-nov) — LA FLASH DE LA VM DEL PC, una carpeta (Eduardo: «las VM del PC deberían tener una carpeta que
      *  simule la flash, así que lo se guarde ahí no borre»): una ruta de la placa, absoluta ("/sys/bluetooth.json"), va
      *  dentro de ella; antes iba a la raíz del disco, o, con --workdir, era un error. La fija Main (--flash-dir, o
@@ -8335,8 +8340,14 @@ public class VirtualMachine {
                 break;
             }
             case MACHINE_UPTIME_MS: {
-                /* Sirve algo útil en host: ms del proceso JVM. */
-                pushTc(tc, (int) System.currentTimeMillis());
+                /* V8 #827 — el reloj MONÓTONO desde la primera vez que se pide, como la VM-C del PC
+                 * (bpvm_machine_uptime_ms, H13 hallazgo 41); en una placa, desde su arranque. Hasta el 15-nov
+                 * era `(int) System.currentTimeMillis()`: los ms desde 1970 cortados a 32 bits, que salían
+                 * negativos («-6d 0-10:0-26:0-34» en la prueba de resistencia). Las diferencias salían bien
+                 * —la resta de 32 bits da la vuelta igual—, y por eso nadie lo veía. */
+                long ahora = System.nanoTime();
+                UPTIME_T0.compareAndSet(Long.MIN_VALUE, ahora);
+                pushTc(tc, (int) ((ahora - UPTIME_T0.get()) / 1_000_000L));
                 break;
             }
             case MACHINE_SET_CPU_FREQ_MHZ: {
