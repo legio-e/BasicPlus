@@ -1522,7 +1522,7 @@ hija no pública, las dos VMs daban `suma = 0` en MOD8 —en MOD8 `__guiSlotOf` 
 y en las dos VMs igual: la hija del sample, `public` (como toda ventana de Forms), y la diferencia, anotada en
 `PUBLICAR.md` para la decisión de `--formato=8`.
 
-#### 🔵 `#665` — la imagen de DOS núcleos de la RP2350, más lenta de lo que debería: PrintBench +19 % en la Pico 2 desde el 5-oct, y en la Metro `fib(26)` +35 % (abierta el 6-oct, en las medidas finales de H12; **a V8**, Eduardo, al cerrar H12: *«Todo esto son cosas que hay que investigar pero ya en V8»* · **14-nov: se mide en las pruebas finales de V8**: parecida, se cierra; más lenta, a V9)
+#### 🧬 `#665` — la imagen de DOS núcleos de la RP2350, más lenta de lo que debería: PrintBench +19 % en la Pico 2 desde el 5-oct, y en la Metro `fib(26)` +35 % (abierta el 6-oct, en las medidas finales de H12; **a V8**, Eduardo, al cerrar H12: *«Todo esto son cosas que hay que investigar pero ya en V8»* · **14-nov: se mide en las pruebas finales de V8**: parecida, se cierra; más lenta, a V9 · **15-nov, medida: a V9**, a saber por qué imprimir va tan lento en la Pico 2)
 
 **La Metro** (6-oct, tarde; Eduardo: repetir las medidas en ella): con la imagen de dos núcleos, `fib(26)` 3 908 ms con
 un run y 4 095 con dos, frente a **2 892 con la de uno: +35 %** (en la Pico 2, +1,8 %). Con `vm.cores=1` —todo en el
@@ -1605,6 +1605,23 @@ caché del XIP.
   `PrintBench` y el programa de dos hilos de `#743`). Lo que cambió desde el 12-oct: en la Metro, el firmware M desde el
   22-oct (el intérprete, los builtins, la reserva y el cerrojo de FreeRTOS en la SRAM, y los `mem*`); en la Pico 2, todo
   en la flash (`#720`). Una pista: con el intérprete en la SRAM, `fib(22)` no cambió (22-oct).
+- **15-nov, medido en el lote final, y a V9** (Eduardo: *«#665 a V9. No me preocupa mucho que la impresión vaya mas
+  lenta pero deberíamos saber el por que ocurre.»*). Las dos imágenes del día (la de dos núcleos, `pico/build`, y la de
+  uno, `pico/build2` con `BPVM_PICO_NUM_CORES=1`), las dos en las dos placas, con `Nucleos665` (`fib(26)`, un hilo que
+  calcula 300 000 vueltas y dos a la vez) y `PrintBench`, dos vueltas cada uno (casi iguales):
+
+  | | la Pico 2: dos núcleos / uno | la Metro: dos núcleos / uno |
+  |---|---|---|
+  | `fib(26)` | 3 575 / 3 320 ms (**+7,7 %**) | 3 536 / 3 417 ms (+3,5 %) |
+  | un hilo | 3 838 / 3 572 ms (+7,4 %) | 3 880 / 3 652 ms (+6,2 %) |
+  | `PrintBench` (2 000 líneas) | 1 321 / 745 ms (**+77 %**) | 613 / 564–590 ms (+4 a +9 %) |
+  | dos hilos a la vez | 4 254 / 7 149 ms (×1,68) | 4 176 / 7 307 ms (×1,75) |
+
+  En la Metro, la imagen de dos núcleos ya casi no cuesta (el `fib(26)` del 6-oct, +35 %; hoy, +3,5 %: el firmware M);
+  en la Pico 2, que lo lleva todo en la flash, cuesta más que el 6-oct (`fib(26)`, de +1,8 a +7,7 %; imprimir, de +19 a
+  +77 %). Con dos hilos, la de dos núcleos gana en las dos. **Para V9:** saber por qué imprimir va tan lento con la de dos
+  núcleos en la Pico 2 (la pista de siempre: el otro núcleo ejecuta desde la flash y compiten por la caché del XIP; y el
+  camino de la salida, que cruza de un núcleo al otro). Las dos placas, con la imagen de dos núcleos otra vez.
 
 #### ✅ `#666` — lo que un programa enciende —PWM, contador de pulsos, NeoPixel— sigue encendido y OCUPADO después de su RUN: el PWM sigue sacando la señal, y en las ESP los canales no se sueltan (abierta el 7-oct, al pasar la ronda de V7 en la C6; SUELTA · **CERRADA el 9-oct**, con `#667` y `#668`: la C3, la última)
 
@@ -7204,6 +7221,17 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > propósito en la prueba de días. Con eso se decide qué se hace de las tres piezas (contener el fallo en el run, el MPU y
 > el contador de reinicios).
 >
+> 🏁 **15-nov, el lote final, hecho** (Eduardo: *«Tenemos varios pendientes para probar. Aprovechemos que tenemos mas
+> tiempo para hacer pruebas pendientes y vamos cerrando temas.»*; de 4 en 4: la P4, la C5, la S3 y la C6; la Pico 2, la
+> Metro, la DK2 y la C3; y la Nucleo y la P4). Las nueve placas, con la imagen del día (las ESP, sólo la aplicación), el
+> `Stdlib.pack` del 11-nov, la GUI arreglada de `#817` y, en la Metro, el `SQLite.pack` de `#724`; y la tanda de 24
+> pruebas en las nueve (la prueba de fuego y lo nuevo desde el 3-nov; informe `compat/informes/lote_v8_15nov.md`), como
+> en el PC salvo lo que difiere a propósito (`lastModified`, que littlefs no tiene, en `RutaFueraFlash` y
+> `ErroresConTipo`; y las de GUI, saltadas sin pantalla) y un cuelgue de `GuiShot` en la P4, una vez (`#825`). De la
+> lista: `#665`, medido y a V9; `#708`, a V9; `#815`, cerrada (no se repite); `#824`, vista en la SD; `#784`, vista en la
+> C3, la C5 y la C6; `#769` y `#779`, repetidas toda la mañana (si no sale nada, se cierran, Eduardo: *«si, si no sale
+> nada se cierran.»*). Queda la prueba de resistencia, con la robustez.
+>
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
 > número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
@@ -7478,7 +7506,47 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### ✅ `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente** · **CERRADA el 14-nov**, el commit de `#824`; la SD de una placa, en las pruebas finales)
+#### ✅ `#826` — en las ESP, `Machine.tempC()` daba 0, y el `INFO` de las ESP y de las STM32 decía 0 grados: el sensor del chip no estaba conectado (abierta y **CERRADA el 15-nov**, `dd21a5c1`; al preparar la prueba de resistencia; Eduardo: *«OK A)»*)
+
+- **Lo que pasaba:** la prueba de resistencia apunta la temperatura de la CPU (Eduardo: *«como es una prueba de
+  resistencia también registraría la temperatura interna de la CPU a ver si tiene problemas de temperatura»*), y en
+  las ESP no había. `Machine.tempC()`: en la RP2350 y en las STM32, el sensor del ADC; en la P4, el del chip
+  (`p4_board_id.c`); en la S3, la C3, la C5 y la C6, un 0 escrito a mano («no cableado en el MVP»). Y el
+  `tempMilliC` del `INFO`, un 0 escrito a mano en las ESP y en las STM32 («para más adelante»); sólo la Pico lo leía de
+  `tempC()`. Un 0 pasa por una temperatura, y el diálogo del IDE oculta la línea cuando vale 0 (Eduardo: *«diría que
+  en Info pintábamos la temperatura»*: en la Pico).
+- **Hecho** (Eduardo: *«OK A)»*; y *«Hazlo para las STM32 aprovechando que las dos están conectadas.»*):
+  - **las ESP:** `esp32_temp_c` en `gpio_esp32.c`, con el driver del IDF (`esp_driver_tsens`, en las cinco imágenes):
+    se enciende la primera vez que se pide, una sola vez aunque la pidan dos hilos a la vez, y se lee bajo un cerrojo;
+    el rango, de 20 a 100 °C (menos de 2 °C de error), porque en una prueba de días puede pasar de 80. La P4 usa la
+    misma (la suya, con el rango de -10 a 80, fuera);
+  - **el `INFO`** de las ESP y de las STM32 la lee de la fachada (`Machine.tempC`), como la Pico;
+  - **la referencia** (§14.9, `tempC`), en los dos idiomas.
+- **En placa**, las siete con la imagen nueva, el `INFO` y `Temp826` (tres lecturas y dos hilos a la vez): la S3,
+  26,8–27,8 °C; la C3, 33,2; la C5, 22,2; la C6, 22,8–23,8; la P4, 28,6–30,6; la Nucleo, 27–28; la DK2, 29–30. Los packs
+  de la P4, la C5 y la C6 cargan con la imagen nueva (el texto y el rodata en sus páginas; el bloque de RAM de la C6,
+  que está en la SRAM, en su sitio pese a los 720 B más de la imagen).
+
+#### 🔵 `#825` — la P4 se colgó una vez en `GuiShot`, en la tanda del lote final: ni EXITED en 60 s ni tras el KILL, y el wire sin contestar (abierta el 15-nov, en el lote final; **V8: una prueba específica**)
+
+- **Lo que pasó** (15-nov, la tanda del lote, `compat/informes/lote_v8_15nov.md`): la P4, con la imagen del día y la
+  GUI recién grabada (`#817`), con la WiFi conectada y el Bluetooth esperando al teclado y al ratón (`bt=1`). `GuiShot`
+  corrió justo después de `GuiWinJson`, que acabó bien, y no acabó: sin EXITED en 60 s, y tras el KILL tampoco en 5 s.
+  El RESET por el wire no tuvo respuesta, y la tanda la recuperó por el cable (RTS). El log de después sólo tiene el
+  arranque nuevo. No fue un pánico, que reinicia la placa solo y deja su motivo: se pararon el programa y el wire.
+- **No se repitió:** a mano, `GuiShot` acabó bien; y ocho vueltas de `GuiWinJson` y `GuiShot` seguidas, bien, de 1 a
+  2 s cada una. El 3-nov, en la P4, `GuiShot` acababa bien (622 ms).
+- **15-nov, una prueba específica** (Eduardo: *«Abre una ficha y hacemos una prueba específica para el.»*): la misma
+  secuencia que la tanda (subir el `.mod`, borrar el artefacto, el RUN, bajar la captura, el `INFO`) muchas veces
+  seguidas, en las mismas condiciones. Si sale, ya se sabe cómo provocarlo, y entonces una imagen de prueba que deje
+  rastro de dónde se queda.
+- **15-nov, la prueba hecha: no sale.** `tanda.py` en la P4, con una lista de 15 parejas `GuiWinJson`–`GuiShot` (como
+  en el lote: la WiFi, el Bluetooth esperando y la imagen y los packs del día): las 30, bien (`GuiShot`, de 623 a 721
+  ms). Con las nueve de antes, 24 veces seguidas sin colgarse tras la que se colgó. Lo que lo haría visible si vuelve: en
+  la P4 la consola está apagada y el vigilante de tareas del IDF avisa sin reiniciar (`CONFIG_ESP_TASK_WDT_PANIC`
+  apagado), así que un cuelgue no deja rastro.
+
+#### ✅ `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente** · **CERRADA el 14-nov**, el commit de `#824`; la SD de una placa, en las pruebas finales: **vista el 15-nov**, en la P4 y la C5)
 
 - **Lo medido** (14-nov, dentro de la flash: `/data/f824`, un fichero, y `/data/d824`, una carpeta vacía): la VM-Java,
   `rmdir` del fichero, bien, y el fichero ya no está; `removeFile` de la carpeta, bien, y la carpeta tampoco. La VM-C,
@@ -7502,6 +7570,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   VMs, la misma salida (9 líneas), en MOD9 y en MOD8. La red, VERDE (la paridad, 215; MOD8, 207 y los 8 SKIP de siempre);
   check-jc, 213 PASS y los 2 SKIP; BpIde, rehecho (lleva la VM-Java). La referencia, al día (la tabla de IO, «Cambió en
   V8»). **En las pruebas finales:** en la SD de una placa con la imagen nueva, que las dos fallen como en la flash.
+- **15-nov, en la SD de la P4 (SDMMC) y de la C5 (SPI)**, con la imagen del día: `BorraSd`, la misma prueba en `/sd`.
+  `rmdir` de un fichero y `removeFile` de una carpeta fallan, y lo de siempre va; ni una línea FALLO. Antes, en la SD
+  (FAT), las dos iban.
 
 #### ✅ `#823` — en el PC, una ruta RELATIVA de un programa se resuelve contra la carpeta del proceso, fuera de la flash: `writeFile("../x")` escribe fuera (abierta el 14-nov, al cerrar `#810`; **decidido el 14-nov**: se queda como está; documentarlo y recomendar `/data` · **CERRADA el 15-nov**, documentada, el commit de la documentación)
 
@@ -7642,6 +7713,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   encima del final de la GUI (0x42210EF4). `GuiClickDemo`, bien, y la pantalla se ve (Eduardo: *«Se ve bien»*).
 - **Lo que queda:** las demás placas con GUI reciben los packs arreglados en el lote final. La C6 tiene el mismo solape
   con `GuiMini` (12 B) si su driver está grabado encima: mirarla entonces.
+- **15-nov, el lote final:** los packs arreglados, en las tres que faltaban.
+  - **La P4:** la GUI, de `.bss 392736` a `392740 B`.
+  - **La C6:** con la zona vaciada, `GuiMini` (`.bss 132416 B`, +12) y el driver justo detrás, en 0x40847600: no se
+    solapaban, por la alineación. La C6 llevaba la imagen del 3-nov, y al grabar la de hoy su bloque de RAM de los
+    packs se movió 4 KB: sus dos motores no cargaban («realojado para OTRA direccion»). Con el OK de Eduardo, la zona
+    vaciada y los tres packs grabados otra vez.
+  - **La DK2:** con la zona vaciada, la GUI de ARM (`.bss 392740 B`).
+
+  En las tres, los motores cargan con rc=0, y `GuiWinJson` y `GuiShot`, bien en la tanda.
 
 #### ✅ `#816` — la flash, con `/data` para los datos de los programas; y la del PC y la del micro simulado, con sus carpetas, como la de una placa (abierta y **CERRADA el 13-nov**, el commit de `#816`; salió en `#808`; Eduardo: *«si»*)
 
@@ -7673,7 +7753,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (`REPL_LIST_MAX_DIRS`). `/data` es una más, y cada `/data/<proyecto>`, otra. Pasado el tope, el listado lo dice
   (`#425`), no lo calla.
 
-#### 🔵 `#815` — la P4 se reinició con un pánico buscando aparatos Bluetooth, la segunda vez que se encendía la radio en el mismo arranque (abierta el 11-nov, en el paso 5 de H2; una vez, sin repetirse · **14-nov: se prueba a propósito en las pruebas finales**)
+#### ✅ `#815` — la P4 se reinició con un pánico buscando aparatos Bluetooth, la segunda vez que se encendía la radio en el mismo arranque (abierta el 11-nov, en el paso 5 de H2; una vez, sin repetirse · **14-nov: se prueba a propósito en las pruebas finales** · **CERRADA el 15-nov**: no se repite en la prueba final)
 
 - **Lo visto** (11-nov): `BtBusca` encendió el Bluetooth, buscó 10 s y lo apagó; 40 s después, `BtConecta` lo volvió a
   encender y, buscando 15 s con el teclado y el ratón en modo de emparejar, la placa se reinició. El `INFO` de después:
@@ -7688,6 +7768,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **14-nov, a las pruebas finales** (Eduardo: *«OK»*): en la P4, encender, apagar y volver a encender el Bluetooth y
   buscar con los aparatos en modo de emparejar, unas cuantas veces; si sale, una imagen de prueba con la consola
   encendida para tener la traza.
+- **15-nov, la prueba final, y CERRADA** (Eduardo: *«la cerramos . La prueba de resistencia es para ver si salen
+  problemas que en las tandas cortas que hacemos no se ven. Si sale algún problema lo estudiamos y vemos que hay que
+  hacer.»*): en la P4, con la imagen del día, `Bt815` hizo tres vueltas de encender y buscar 10 s, apagar 40 s, y encender
+  otra vez y buscar 15 s con el teclado y el ratón en modo de emparejar. Fueron seis encendidos en el mismo arranque,
+  más el del arranque (`bt=1`). Vio siempre los tres aparatos de la sala y no se reinició ni una vez («fin: sin
+  reiniciarse»). Después, el teclado y el ratón volvieron solos, sin emparejarlos otra vez.
 
 #### ✅ `#814` — en el PC, el fin de RUN avisa de una FUGA del programa que no es suya: lo que la GUI del PC pide para sí, el búfer de dibujo sin ventana (`--no-screen`) y el guion de la ventana (abierta el 11-nov, en las pruebas de `#813` · **CERRADA el 13-nov**, el commit de `#814`; Eduardo: *«si»*)
 
@@ -8448,7 +8534,9 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
     se queda en 160; sin ella, 160;
   - **en la P4:** el `INFO` dice 360; con la imagen nueva sus packs cargan sin regrabarlos (`SQLite` y `LVGL`, rc=0: la
     misma `packRamBase`, el texto y el rodata en las mismas páginas); `MIN_CPU_MHZ()` y `MAX_CPU_MHZ()`, 360;
-  - **la C3, la C5 y la C6:** compiladas, sin conectar: a la placa en el próximo lote;
+  - **la C3, la C5 y la C6:** compiladas, sin conectar: a la placa en el próximo lote (**vistas el 15-nov**, en el
+    lote final: `Freq784` dice 160, 240 y 160 MHz; a 80, el bucle tarda ×2,01, ×3,02 y ×2,01, y `sleep(500)`, 502–504
+    ms; de vuelta, lo de antes);
   - **docs:** `referencia.html` (la clave, en el apéndice A; `setCpuFreqMHz`, `cpuFreqHz` y `MAX_CPU_MHZ`).
 - **Decidido** (Eduardo, 3-nov: *«lo dejamos a 160»*): sin la clave, la S3 arranca a 160 MHz, el valor del IDF, escrito
   explícito en `esp32/sdkconfig.defaults` para que la decisión se vea. A 240, con `cpu.mhz` o `Machine.setCpuFreqMHz`.
@@ -8512,7 +8600,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   (El de `#768` no entró: un ejemplo de más de 64 KB de datos pide más de 64 KB de fuente; lo prueba
   `ModuloNoCabeTest`.)
 
-#### 🔵 `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis** · **14-nov: se mira en las pruebas finales**)
+#### ✅ `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis** · **14-nov: se mira en las pruebas finales** · **CERRADA el 15-nov**: 30 vueltas sin una roja)
 
 - **Cómo salió:** la red de las 23:16 (2-nov), en ROJO sólo por esto, en el grupo de las pruebas de C; lo demás, verde.
   Lo que guardó el log: lo suyo, todo PASS, la línea «OK: la cola…» y el principio de los sabotajes; no cuál falló (la
@@ -8529,6 +8617,9 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   después, hasta 8, lo demás. Abierta hasta que se repita: entonces se verá qué sabotaje fue.
 - **14-nov, a las pruebas finales** (Eduardo: *«OK, lo miramos en las pruebas finales que para eso estan.»*), con la
   pista del sabotaje 13 (se caza en 2 de cada 20 vueltas).
+- **15-nov, la prueba final, y CERRADA** (Eduardo: *«si, si no sale nada se cierran.»*): `make test-cola` 30 veces
+  seguidas, alternando con `test-trazasbus` (`#769`), de 10:08 a 11:48 y con la máquina cargada (las compilaciones de
+  las imágenes y las tandas del lote): las 30, «PASS test-cola (y sus dieciocho sabotajes, rojos)». Ninguna roja.
 
 #### ✅ `#778` — el traductor de C#: dos huecos que tapaba el rechazo del `null` de las cadenas —un enum en una cadena (C#, su nombre; JC, su número) se traduce sin decirlo, y una variable que C# ve con valor tras un `switch` sobre una constante y JC, como Java, no— (abierta el 2-nov, en el lote de `#774`; **CERRADA el 3-nov**, el commit de `#778`: `Enum.getName`, y la local sin valor con el de su tipo)
 
@@ -8806,7 +8897,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   próximo lote (`builtins.c` es de todas). **En placa, el 3-nov (el lote):** `SleepCede` y `CedeCero`, IDÉNTICOS al PC
   en las nueve.
 
-#### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis** · **14-nov: se vuelve a probar en las pruebas finales**)
+#### ✅ `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis** · **14-nov: se vuelve a probar en las pruebas finales** · **CERRADA el 15-nov**: 30 vueltas sin una roja)
 
 - **Cómo salió:** la red del 2-nov a las 12:51, en ROJO sólo por esto (lo demás, verde); el cambio de esa red sólo
   tocaba un sample BP que la prueba no usa. La red de las 12:12, con la misma VM-C, la pasó.
@@ -8824,6 +8915,9 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   En las pruebas finales lo volvemos a probar a ver si vuelve a aparecer. Los problemas de memoria y de Threads son así,
   aparecen alguna vez. Si no vuelve a aparecer es una falsa alarma pero si aparece otra vez es que tenemos un cabo
   suelto por algún siti0.»*). Desde el 3-nov no ha vuelto a salir (no hay `build/trazasbus.diff`).
+- **15-nov, la prueba final, y CERRADA** (Eduardo: *«si, si no sale nada se cierran.»*): `make test-trazasbus` 30 veces
+  seguidas (cada una, cinco pasadas con dos runs), alternando con `test-cola` (`#779`), de 10:08 a 11:48 y con la
+  máquina cargada: las 30, «PASS test-trazasbus», sin un `build/trazasbus.diff`.
 
 #### ✅ `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **CERRADA el 3-nov**, el commit de `#768`: el bloque de datos, hasta 64 KB, y un error claro si no cabe)
 
@@ -10522,6 +10616,9 @@ blob. Lo hecho, con la regla de `#711` —los bytes por un lado y el descodifica
 - **los artefactos**: `SQLite.mdn.ARMV8` y `.RISCV` regenerados (3 276 y 4 176 B, ABI 9) y el `SQLite.pack` rehecho
   (las mismas entradas). **En placa, en el próximo lote**: el `SQLite.pack` nuevo en la Metro y en la P4 (con
   `SqlTexto` y `SqlDemo`) y el texto del motivo 3 en las imágenes. Hasta entonces, las placas siguen como hoy.
+- **15-nov, el lote final:** la Metro llevaba el `SQLite.pack` de antes. `SqlTexto` no enlazaba («'SqlTexto' necesita
+  'SQLite.Query.getStr(iz)s' y 'SQLite' (gen 0) no lo tiene»), y `SqlDemo` iba. Con el OK de Eduardo, cambiado por el del
+  repositorio: las dos, bien. La P4 ya lo tenía: `SqlTexto`, bien.
 
 #### 🧬 `#723` — los streams: las fuentes de bytes, y un `Reader` encima que espera el resto de un carácter (la idea de Eduardo del 22-oct), por diseñar (abierta el 23-oct, al cerrar `#711` · **a V9 el 7-nov, como tema importante, con los dispositivos**)
 
@@ -11502,7 +11599,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   **Por ver en el lote:** tras `idf flash`, el `INFO` de la C3 o la C5 dice «USB».
 - **Visto en el lote del 3-nov:** tras `idf flash`, el `INFO` de la C3, la C5 y la C6 dice `"resetReason": "USB"`.
 
-#### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»* · **14-nov: la C5, en las pruebas finales**)
+#### 🧬 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»* · **14-nov: la C5, en las pruebas finales** · **15-nov: la C5, a V9**)
 
 - **Lo que dijo Eduardo**, tras el análisis: *«La placa tiene una salida speaker y la placa venía con unos pequeños
   altavoces. Y sí, podemos empezar con .wav.»*
@@ -11545,6 +11642,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   («27-oct, la C5»). La ficha sigue abierta con ella.
 - **14-nov, sigue igual** (Eduardo: *«Sigue igual. Tengo que buscar un conector que entre y probar. Lo decidimos en las
   pruebas finales.»*): la C5, en las pruebas finales; si no se puede, a V9, y H4 se cierra con el PC y la P4.
+- **15-nov, a V9** (Eduardo, en las pruebas finales: *«lo pasamos a v9»*): el sonido de la C5, a V9.
 
 #### ✅ `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3 · **CERRADA el 19-oct**, `fdc212cf`, `b3015a2b` y el commit del perro: las cinco placas, 0 de 250 pruebas cambian)
 
