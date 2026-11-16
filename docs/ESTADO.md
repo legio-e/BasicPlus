@@ -27,6 +27,10 @@
 
 ## Última sesión
 
+> **16-nov** — **La prueba de resistencia, a las 15 horas** (Eduardo: *«como va la prueba de resistencia?»*).
+> - **A las 6:22** (14 h 45 min): las cuatro sin un error ni un reinicio, de 4339 a 4929 vueltas cada una; lo libre tras el GC, el de siempre, y los tiempos de cada fase y la temperatura, los del principio. En la C6, 1080 B retenidos nueve horas y media y soltados después: no es una fuga; qué los retenía, al balance. Lo bajado y `analiza.py`, en `C:\tmp\resistencia_v8_2\mirada_16nov\`.
+> - **Lo siguiente** (*«Seguiremos así, mirando los logs cada cierto tiempo hasta que termine la prueba. Y cuando termine hacemos balance y revisamos los pendientes que queden.»*): mirarla de vez en cuando; al acabar (el 17-nov hacia las 15:30), `acabar` en las cuatro, el balance y el repaso de los pendientes.
+>
 > **15-nov** — **La documentación, el lote final, y la prueba de resistencia, que encontró dos fallos de verdad** (Eduardo: *«Continuamos con la documentación.»*; *«Tenemos varios pendientes para probar. Aprovechemos que tenemos mas tiempo para hacer pruebas pendientes y vamos cerrando temas.»*).
 > - **La documentación de V8** (`3deff110`): `#823` (las rutas relativas, la referencia §13.11 y la guía del IDE §5) y el Bluetooth en las placas (§14.19 a §14.21, el ENV, `gui.html` §22.6 y el manual §17), en los dos idiomas.
 > - **El lote final** (`96aafd48`): las nueve placas, de 4 en 4, con la imagen del día; la tanda de 24 pruebas, como en el PC (salvo `lastModified` en littlefs y la GUI sin pantalla) y un cuelgue de `GuiShot` en la P4, una vez (`#825`, abierta: 24 veces bien después). `#665` y `#708`, a V9; `#769`, `#779` y `#815`, cerradas; `#824` en la SD, `#784` en la C3, la C5 y la C6.

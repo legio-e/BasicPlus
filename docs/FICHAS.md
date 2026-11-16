@@ -7266,6 +7266,18 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > temperatura, estable. El log cabe: ~1,7 KB por hora, día y medio por fichero. Y aparte, lo que dos días no enseñan:
 > a los ~24,8 días `uptimeMs()` da la vuelta, y la resta de dos lecturas sigue dando bien en las dos VMs (probado con
 > 1000 ms por encima del máximo: 1000), como dice la referencia.
+> **El 16-nov a las 6:22, otra mirada** (Eduardo: *«como va la prueba de resistencia?»*): 14 h 45 min, las cuatro sin
+> un error ni un reinicio. La Pico 2, 4753 vueltas; la Metro, 4842; la P4, 4929; la C6, 4339. Lo libre tras el GC, el de
+> siempre (la Pico 2, 279 408 B; la Metro, 6 165 600; la P4, 24 722 340; la C6, 80 268), salvo muestras sueltas con algo
+> menos (de 12 a 28 B, y la de 876 B de la C6 en la vuelta 401), que a la siguiente vuelven; los tiempos de cada fase
+> y la temperatura, los del principio; la C6, 90 269 colectas (21 por vuelta), y la Pico 2, 50 827 (11). **En la C6, un
+> bloque retenido, que se soltó:** desde la vuelta ~1097 (a las 3 h 43 min) hasta la ~3890 (a las 13 h 12 min), 1080 B
+> menos libres tras el GC y un bloque vivo que partía lo libre en dos (el mayor hueco, de 80 100 a 49 600); después, lo
+> libre volvió a 80 268 y el hueco, a 80 100. No es una fuga, porque se soltó, pero no se sabe qué lo retenía (la P4, con
+> el mismo programa, no lo ha tenido): al balance. Los logs llegan a 64 KB y pasan a `log.1` el 17-nov hacia las 7–8. Lo
+> bajado y el resumen (`analiza.py`), en `C:\tmp\resistencia_v8_2\mirada_16nov\`. Hasta que acabe, se mira cada cierto
+> tiempo; al acabar, el balance y los pendientes (Eduardo: *«Seguiremos así, mirando los logs cada cierto tiempo hasta
+> que termine la prueba. Y cuando termine hacemos balance y revisamos los pendientes que queden.»*).
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
