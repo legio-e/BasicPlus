@@ -7286,6 +7286,27 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > 4 B más (medido en la VM-C del PC: 4 B menos con 10 000 que con 9 999, y vuelve con 9 999). Y dos bloques retenidos:
 > en la Pico 2, 1 928 B desde las 0:55; en la C6, 968 B desde las 1:57, la tercera vez. Es un número que el GC confunde
 > con una referencia: **`#833`**. Lo bajado, en `C:\tmp\resistencia_v8_2\mirada_17nov\`.
+> **Acabada el 17-nov a las 15:37, a las 48 horas** (Eduardo: *«como va la prueba de resistencia?»*, a las 15:36), con
+> `acabar` en las cuatro (el `KILL`, los dos trozos del log, el log de la placa y el `INFO`, y fuera el autorun). **Las
+> cuatro, 48 horas sin un error ni un reinicio:** una sola línea `ARRANQUE` en cada log, encendidas 2 d 00:03 y el
+> último reinicio, el que la puso en marcha. En la última línea de estado (a las 47 h 56 min), la Pico 2 llevaba 15 445
+> vueltas; la Metro, 15 787; la P4, 16 017; y la C6, 14 111 (61 360 entre las cuatro; 11,2, 10,9, 10,8 y 12,2 s por
+> vuelta). Los tiempos de cada fase, los del principio (las diez primeras líneas frente a las diez últimas; la de
+> memoria varía con sus tamaños al azar), y la temperatura, estable (la Pico 2, de 16 a 20 °C; la Metro, de 23 a 27; la
+> P4, de 32 a 35; la C6, de 32 a 37). Colectas: la C6, 294 262 (21 por vuelta); la Pico 2, 166 007 (11); la Metro,
+> 7171; la P4, 1507. Lo libre tras el GC, el de siempre (4 B menos desde la vuelta 10 000), salvo muestras sueltas de 12
+> a 60 B que a la siguiente vuelven, y los bloques de `#833`. El log pasó a `log.1` entre la 1d 15 h 32 min y la 1d 17 h
+> 30 min de prueba (el 17-nov, de 7:06 a 8:54), sin perder una línea. Al acabar el RUN, en el log de la placa (no en la
+> Metro, sin `log=1`): `mutex: 15482 creados, la tabla llegó a 1` en la Pico 2, 14 142 y 2 en la C6, y 16 058 y 14 en la
+> P4 (allí el GC pasa una vez cada ~10 vueltas, y los `Mutex` mueren con él): `#831`, bien en 48 horas. Los hilos,
+> 30 964, 28 281 y 32 115 arrancados, como mucho 3 o 4 a la vez; la pila del main llegó a 612–664 B de 16 KB, y la de un
+> hilo, a 28 B de 2 KB; y «fin de RUN: … 0 bloques sin liberar» en las tres (los de la plataforma, de la GUI: 0, 1 y 3).
+> En el `INFO`, la flash con 80–86 KB más que al empezar (los dos trozos del log; con la rotación, como mucho unos
+> 130 KB), y la RAM del RTOS, con el mínimo de siempre (la P4, 140 432 B; la C6, 23 816; la Pico 2, 6632 de 24 576). Y
+> con el log de la placa, `#833` aclarada en las dos: en la Pico 2 el número es `TOPE_LOG`, una constante (el bloque,
+> vivo hasta el final), y en la C6, los tres bloques, al byte. Lo bajado, en `C:\tmp\resistencia_v8_2\<placa>\`; las dos
+> partes del log juntas, con `analiza.py`, `serie.py` y `retenidos.py` (las tandas con un bloque retenido), en
+> `C:\tmp\resistencia_v8_2\final\`. Quedan, del balance, la tabla de la robustez (arriba) y decidir `#833`.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7574,36 +7595,46 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#833` — un número en una global retiene el objeto que empieza justo en esa dirección: el GC mira las globales de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas (abierta el 17-nov, en la prueba de resistencia; **V8 o V9: se decide por la tarde**)
+#### 🔵 `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **V8 o V9: se decide por la tarde**)
 
 - **Lo que pasa** (la prueba de resistencia, `compat/resistencia/`): tras el `gc()` de la línea de estado, un bloque que el
   programa ya no usa sigue vivo y parte lo libre en dos. En la C6, tres veces: 876 B en una sola medida (a la 1 h 21 min
   de prueba), 1 080 B nueve horas y media (de las 3 h 43 min a las 13 h 12 min) y 968 B desde la 1d 10 h 23 min (el
-  17-nov, a las 1:57), que sigue; el mayor hueco, de 80 100 a ~49 600–49 912 B. En la Pico 2, 1 928 B desde la 1d 9 h
-  21 min (el 17-nov, a las 0:55), que sigue; el mayor hueco, de 279 240 a 222 356. Sin un error. En la Metro y la P4, con
-  mucho heap (el GC pasa una vez cada dos vueltas, o menos), nada así: sólo medidas sueltas de 12 a 28 B, como en las
-  otras dos.
+  17-nov, a las 1:57) hasta el final; el mayor hueco, de 80 100 a ~49 600–49 912 B. En la Pico 2, 1 928 B desde la 1d 9 h
+  21 min (el 17-nov, a las 0:55) hasta el final; el mayor hueco, de 279 240 a 222 356. Sin un error. En la Metro y la
+  P4, con mucho heap (el GC pasa una vez cada dos vueltas, o menos), nada así: sólo medidas sueltas de 12 a 60 B, como en
+  las otras dos.
 - **La causa** (Eduardo: *«Podría ser un valor que se confundiera con una referencia?»*): sí. El GC de las dos VMs recorre
   los bloques de datos de los módulos —las globales y las constantes— palabra a palabra y de forma conservadora
   (`gc_mark_phase`, paso 3, en `heap.c`; `getDataRegions` y `scanRegion` en miVM): una palabra que vale justo la dirección
-  de un objeto (su cabecera + 4, `is_heap_ref`) lo marca, sea una referencia o un número. Con `Core` en un pack el heap
-  empieza abajo ([[heap-abajo-con-core-en-pack]]; en la C6, hacia los 20 KB), donde caen números corrientes, y este GC no
-  compacta: el objeto retenido se queda en su sitio. `#799` (13-nov) lo quitó de las pilas de los hilos BP (allí sólo
+  de un objeto (su cabecera + 4, `is_heap_ref`) lo marca, sea una referencia o un número (y con él, lo que cuelgue de
+  él). Con `Core` en un pack el heap empieza abajo ([[heap-abajo-con-core-en-pack]]; según el log de la placa, en la C6
+  en 19 904 y en la Pico 2 en 9 664), donde caen números corrientes, y este GC no compacta: el objeto retenido se queda en
+  su sitio. `#799` (13-nov) lo quitó de las pilas de los hilos BP (allí sólo
   cuentan las palabras con `TAG`) y dejó como estaban, a propósito, las globales y las pilas de C de las natives.
 - **En la C6, el número es `minLibre`**, la global de `Resistencia` con lo libre mínimo entre fases (un múltiplo de 4, como
   las direcciones). Con lo libre y el mayor hueco de cada línea de estado (el mayor es el de encima del bloque) sale dónde
   empieza cada bloque: los tres están a 1 068 y 200 B unos de otros, justo lo que se diferencian los valores de
   `minLibre` en cada momento (59 960, 58 892 y 58 692). Los dos que se soltaron lo hicieron en la misma medida en que
-  `minLibre` cambió (a la 1 h 31 min y a las 13 h 12 min), y el de ahora sigue porque vale 58 692 desde entonces.
-- **En la Pico 2, por saber:** no es `minLibre` (cambió tres veces y el bloque siguió), sino otro número que no cambia
-  desde las 0:55. Encaja `TOPE_LOG` (65 536, una constante) si su heap empieza hacia los 9,7 KB: sin comprobar (al acabar
-  la prueba, o en el micro simulado con el pack). Si es una constante, ese bloque no se suelta hasta el final del RUN.
-  Las medidas sueltas de 12 a 28 B, en las cuatro, pueden ser lo mismo con números que cambian enseguida (la semilla de
-  los aleatorios vale menos de 65 537): sin comprobar.
+  `minLibre` cambió (a la 1 h 31 min y a las 13 h 12 min), y el tercero siguió hasta el final porque ya no cambió. **Al
+  acabar, con el log de la placa, al byte:** lo que se puede pedir del heap llega hasta 109 568 (19 904 + 89 664), así que
+  con el tercero el tope (`bump`) está en 109 568 − 49 912 = 59 656 —lo que apunta el log, «`bump 59656 -> 59656
+  (recupera 0 B…)`»— y el bloque va de 58 688 (la cabecera de un objeto en 58 692, el `minLibre` de entonces) a 59 656:
+  los 968 B que faltan. Los otros dos, igual: de 58 888 a 59 968, 1 080 B; y de 59 956 a 60 832, 876 B.
+- **En la Pico 2, el número es `TOPE_LOG`** (`const TOPE_LOG := 65536`, el tope del log antes de pasarlo a `log.1`): una
+  constante entera es una palabra con su valor en la sección DATA del módulo (`MOD_FORMAT` §5), y el GC la lee como una
+  global más. Con el log de la placa, al byte: su heap va de 9 664 a 290 840, y lo que se puede pedir, hasta 289 816
+  (9 664 + 280 152); el tope con el bloque vivo, 67 460 —lo que apunta el log, «`bump 67460 -> 67460 (recupera 0 B…)`»—
+  es 289 816 − 222 356, el mayor hueco de cada línea de estado mientras duró; y de 65 532 (la cabecera de un objeto en
+  65 536) a 67 460 van justo los 1 928 B que faltan. No era `minLibre` (cambió tres veces y el bloque siguió). Como una
+  constante no cambia, el bloque siguió vivo hasta el final de la prueba (14 h 42 min), y no se habría soltado hasta el
+  final del RUN. Las medidas sueltas de 12 a 60 B, en las cuatro, pueden ser lo mismo con números que cambian enseguida
+  (la semilla de los aleatorios vale menos de 65 537): sin comprobar.
 - **Lo que supone:** no es una fuga ni corrompe nada (cada número retiene como mucho un objeto, el que empieza justo en su
-  dirección, y sólo mientras vale eso), pero el objeto puede ser grande y, sobre todo, parte el heap: en la C6, el mayor
-  bloque que se puede pedir baja de 80 a 50 KB, y un programa que necesite uno grande se podría quedar sin memoria con
-  memoria de sobra. En un dispositivo que corre días, la coincidencia acaba llegando: en la C6, tres veces en 38 horas.
+  dirección, y lo que cuelgue de él, mientras vale eso; una constante, siempre), pero el objeto puede ser grande y, sobre
+  todo, parte el heap: el mayor bloque que se puede pedir baja, en la C6, de 80 a 50 KB, y en la Pico 2, de 279 a 222 KB;
+  un programa que necesite uno grande se podría quedar sin memoria con memoria de sobra. En un dispositivo que corre
+  días, la coincidencia acaba llegando: en 48 horas, tres veces en la C6 y una en la Pico 2 (ésa, para siempre).
 - **El arreglo, propuesto:** lo de `#799` en los bloques de datos: sólo cuentan las palabras con `TAG`, en las dos VMs.
   Antes, comprobar que ninguna global guarda la dirección cruda de un objeto del heap (sin handle): lo que escriben ahí
   la VM y las natives. La prueba, como `raices_smoke` (`#799`): una global entera que vale la dirección de un objeto que

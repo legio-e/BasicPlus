@@ -27,10 +27,12 @@
 
 ## Última sesión
 
-> **17-nov** — **La prueba de resistencia, a las 38 horas, y `#833`** (Eduardo: *«como va la prueba de resistencia?»*).
+> **17-nov** — **La prueba de resistencia, acabada: 48 horas sin un error, y `#833`** (Eduardo: *«como va la prueba de resistencia?»*, a las 6:19 y a las 15:36).
 > - **A las 6:20** (38 h 45 min): las cuatro sin un error ni un reinicio. Los 4 B de menos al pasar la vuelta 10 000, explicados: la línea de estado se mide a mitad de escribirse, con el número ya en texto (medido en la VM-C del PC). Y dos bloques retenidos: en la Pico 2, 1 928 B; en la C6, 968 B, la tercera vez.
 > - **`#833`, abierta** (*«Podría ser un valor que se confundiera con una referencia?»*; *«Abre ficha si. A la tarde decidimos si va en V8 o en V9.»*): el GC mira las globales de forma conservadora, y en la C6 el número es `minLibre` (los tres bloques, a las mismas distancias que sus valores, y soltados cuando cambia); en la Pico 2, por saber (¿`TOPE_LOG`?). `#799` lo quitó de las pilas; el arreglo sería lo mismo en las globales.
-> - **Lo siguiente:** a las 15:34, las 48 horas: `acabar` en las cuatro, el balance (con la tabla de la robustez) y los pendientes; y decidir si `#833` va en V8 o en V9.
+> - **A las 15:37, acabada, a las 48 horas** (con `acabar` en las cuatro): sin un error ni un reinicio en ninguna; de 14 111 a 16 017 vueltas cada una (61 360 entre las cuatro); los tiempos de cada fase y la temperatura, los del principio; el log pasó a `log.1` sin perder una línea. Al acabar el RUN, `#831` bien (la tabla de los mutex llegó a 1, 2 y 14, con 14 000–16 000 creados) y «0 bloques sin liberar». Lo bajado y el análisis de la prueba entera, en `C:\tmp\resistencia_v8_2\final\`.
+> - **`#833`, aclarada con el log de la placa** (los límites del heap y su tope): en la Pico 2 el número es `TOPE_LOG` (65 536), una constante, y el bloque siguió vivo hasta el final; en la C6, `minLibre`, los tres bloques al byte.
+> - **Lo siguiente:** decidir si `#833` va en V8 o en V9; la tabla de la robustez (lo que queda del balance); y los pendientes: `#825`, `#828` (`vmheap` en la Pico 2, ya libre), `#832`, grabar las cinco placas que faltan y la documentación (`D1`).
 >
 > **16-nov** — **La prueba de resistencia, a las 15 horas** (Eduardo: *«como va la prueba de resistencia?»*).
 > - **A las 6:22** (14 h 45 min): las cuatro sin un error ni un reinicio, de 4339 a 4929 vueltas cada una; lo libre tras el GC, el de siempre, y los tiempos de cada fase y la temperatura, los del principio. En la C6, 1080 B retenidos nueve horas y media y soltados después: no es una fuga; qué los retenía, al balance. Lo bajado y `analiza.py`, en `C:\tmp\resistencia_v8_2\mirada_16nov\`.
