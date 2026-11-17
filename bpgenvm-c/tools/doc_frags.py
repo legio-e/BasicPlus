@@ -56,7 +56,8 @@ LOS TROZOS (la mitad de los fragmentos de un manual)
     «identificador no resuelto: 'edad'» y nada mas — y ESO es lo que se usa
     para clasificarlo, sin marcar nada en el doc: un trozo suelto cuyos
     UNICOS errores son de contexto (un nombre SIN cualificar que el trozo no
-    declara — variable, tipo, funcion —, un `this` fuera de un metodo, o el
+    declara — variable, tipo, funcion, la clase base de una clase suya —, un
+    `this` o un `raise` fuera de una clase (un metodo ensenado sin ella), o el
     import de un modulo que no es de la stdlib ni de los packs) se cuenta como
     TROZO, con la lista de nombres que le faltan, y no como FALLO. Todo lo
     demas sigue siendo FALLO: un miembro que no existe (`'Label' no tiene
@@ -67,7 +68,9 @@ LOS TROZOS (la mitad de los fragmentos de un manual)
     MISMA LINEA que uno de contexto se toleran (son la cascada del nombre
     sin tipo), igual que las que el propio compilador marca con `<error>`,
     y los miembros de una clase que extiende algo de un modulo que el doc no
-    trae (el DAO generado de basedatos). El punto ciego, dicho: un nombre sin cualificar mal escrito
+    trae (el DAO generado de basedatos) o una clase que el trozo no trae
+    (`class Perro extends Animal`, sin `Animal`: lo que hereda, y sus hijas).
+    El punto ciego, dicho: un nombre sin cualificar mal escrito
     (`Excepcion` por `Exception`) sale como «falta» y no como fallo — por
     eso el informe los lista, para que un ojo los lea.
 
@@ -82,6 +85,13 @@ MARCAS EN EL DOCUMENTO (para lo que a proposito no compila solo)
     Ademas, un fragmento con una linea que es o termina en `...` / `…` es un
     ESQUEMA: se lista, no se compila y no cuenta como fallo. Que se vea, no
     que muerda. El texto de interfaz (`bpi 7`) no es BP y se salta solo.
+    Y una LINEA que el doc da por error (V8, #832): con codigo y un comentario
+    que empieza por `error` (`i *= 1.5   // error: integer * float da float...`;
+    en ingles, `// compile error`). No hace falta marcar nada: el lector ya lo
+    ve. Tiene que dar error, y en un fragmento entero, solo esas lineas; el
+    informe ensena el error de cada una («= da error, como dice el doc»). En un
+    trozo no se puede saber (le falta lo que daria el error) y no se mira. Una
+    linea comentada entera (`// a.edad   // error: ...`) no es codigo: no cuenta.
     Las marcas son para lo que el LECTOR ya entiende que no es un programa
     entero. Un ejemplo que deberia compilar y no compila se arregla, no se
     marca.
@@ -212,7 +222,7 @@ def es_bp(f):
 
 RE_MODULE = re.compile(r"^(module)\s+(\w+)")
 RE_LIBRARY = re.compile(r"^library\s+\"")
-RE_ABRE = re.compile(r"^(public\s+|private\s+)?(final\s+)?(native\s+|sync\s+)?(function|class|enum)\b")
+RE_ABRE = re.compile(r"^(public\s+|private\s+)?(final\s+)?(native\s+|sync\s+)?(function|class|enum|interface)\b")
 RE_INTRINSIC = re.compile(r"^(public\s+|private\s+)?(final\s+)?intrinsic\s+function\b")
 RE_CIERRA = re.compile(r"^end(\s+[\w.]+)?\s*$")      # end Counter.bump (estatico) tambien
 RE_DECL1 = re.compile(r"^(public\s+|private\s+)?(final\s+)?(const\s+\w+\s*:|property\s+\w+\s*:|event\s+\w+\s*\(|"
@@ -293,8 +303,11 @@ def envolver(nombre, codigo, stdlib):
             pend = []
             imports.append(l)
             continue
-        if RE_ABRE.match(s) and not RE_INTRINSIC.match(s):
-            # bloque class/enum/function hasta su `end` (anidamiento incluido)
+        m_abre = RE_ABRE.match(s)
+        if m_abre and not RE_INTRINSIC.match(s):
+            # bloque class/enum/function/interface hasta su `end` (anidamiento incluido);
+            # los metodos de una interfaz son solo su firma, sin `end`: no abren nada (V8, #832)
+            es_interfaz = m_abre.group(4) == "interface"
             decls += pend
             pend = []
             decls.append(l)
@@ -304,7 +317,7 @@ def envolver(nombre, codigo, stdlib):
                 s2 = sin_comentario(l2)
                 i += 1
                 decls.append(l2)
-                if RE_ABRE.match(s2) and not RE_INTRINSIC.match(s2):
+                if RE_ABRE.match(s2) and not RE_INTRINSIC.match(s2) and not es_interfaz:
                     prof += 1
                 elif RE_CIERRA.match(s2):
                     prof -= 1
@@ -391,6 +404,8 @@ RE_CTX = [
     re.compile(r"el m.dulo importado '([^'.]+)' no expone"),
     re.compile(r"no se puede llamar a '([^'.]+)'"),
     re.compile(r"'(this|super)' s.lo es v.lido"),
+    re.compile(r"'(raise)' s.lo vale dentro de una clase"),   # un metodo ensenado sin su clase, como `this` (#832)
+    re.compile(r"clase base '([^'.]+)' no existe"),          # la base, que el trozo no trae (#832)
     re.compile(r"no se localiz. \.bp ni \.bpi para import '([^']+)'"),
     re.compile(r"no se encuentra el pack '([^']+)'"),
 ]
@@ -404,6 +419,8 @@ RE_CASCADA = [
 
 
 RE_EXTIENDE = re.compile(r"^\s*(?:public\s+)?class\s+(\w+)\s+extends\s+(\w+)\.\w+", re.M)
+RE_EXTIENDE_SIMPLE = re.compile(r"^\s*(?:public\s+)?(?:final\s+)?class\s+(\w+)\s+extends\s+(\w+)\b(?!\.)", re.M)
+RE_BASE_FALTA = re.compile(r"clase base '([^'.]+)' no existe")
 RE_MIEMBRO = re.compile(r"'(\w+)' no tiene miembro")
 
 
@@ -418,6 +435,17 @@ def clasificar_trozo(errs, stdlib, codigo=""):
     # sus miembros heredados no se pueden comprobar (cascada de la base)
     sin_base = {c for c, m in RE_EXTIENDE.findall(codigo)
                 if m.lower() not in {x.lower() for x in stdlib}}
+    # y las que extienden una clase que el trozo no trae (`clase base 'Animal'
+    # no existe`), y las hijas de esas: lo mismo (#832)
+    falta_base = {m.group(1) for e in errs for m in [RE_BASE_FALTA.search(e)] if m}
+    hijas = RE_EXTIENDE_SIMPLE.findall(codigo)
+    cambia = True
+    while cambia:
+        cambia = False
+        for c, b in hijas:
+            if (b in falta_base or b in sin_base) and c not in sin_base:
+                sin_base.add(c)
+                cambia = True
     for e in errs:
         if "compilaci" in e and "abortada" in e:
             continue
@@ -502,7 +530,42 @@ def compilar(work, nombre):
     ok = rc == 0 and os.path.exists(mod) and not errs
     if not ok and not errs:
         errs = ["rc=%d sin diagnostico; cola del log: %s" % (rc, log.strip()[-300:].replace("\n", " | "))]
-    return ok, rc, errs[:8], log
+    return ok, rc, errs, log
+
+
+# Una linea que el doc da por error (#832): lleva codigo y su comentario empieza
+# por `error` (`i *= 1.5   // error: ...`; en ingles, `// compile error`). Una
+# linea comentada entera (`// a.edad   // error: ...`) no lleva codigo: no cuenta.
+RE_LINEA_ERROR = re.compile(r"//\s*(compile\s+)?error\b", re.I)
+
+
+def lineas_de_error_esperado(texto):
+    marcadas = set()
+    for k, l in enumerate(texto.split("\n"), 1):
+        p = l.find("//")
+        if p > 0 and l[:p].strip() and RE_LINEA_ERROR.match(l[p:]):
+            marcadas.add(k)
+    return marcadas
+
+
+def es_cabecera(e):
+    return e.startswith("-- Errores") or ("compilaci" in e and "abortada" in e)
+
+
+def separar_esperados(errs, marcadas):
+    """Los errores de las lineas marcadas, aparte. Devuelve (los demas, {linea: su primer
+    error}). Si no queda ningun error de verdad, tampoco las cabeceras («-- Errores ...»,
+    «compilacion abortada»), que solo los acompanan."""
+    resto, fallaron = [], {}
+    for e in errs:
+        pos = RE_POS.search(e)
+        if pos and int(pos.group(1)) in marcadas:
+            fallaron.setdefault(int(pos.group(1)), e)
+        else:
+            resto.append(e)
+    if all(es_cabecera(e) for e in resto):
+        resto = []
+    return resto, fallaron
 
 
 def procesar_doc(ruta, base_work, slug, stdlib):
@@ -539,14 +602,23 @@ def procesar_doc(ruta, base_work, slug, stdlib):
                 r["andamio"] = andamio
         r["modulos"] = [n for n, _ in piezas]
         ok_todos, errs_todos, rc_ult = True, [], 0
+        comprobadas, no_fallan = [], []          # las lineas `// error` del doc (#832)
         for n, t in piezas:          # todos los .bp antes de compilar el primero:
             escribir(work, n, t)     # un modulo puede importar al que viene detras
-        for n, _t in piezas:
+        for n, t in piezas:
             ok, rc, errs, _log = compilar(work, n)
             rc_ult = rc
+            marcadas = lineas_de_error_esperado(t) if f["marca"] != "error" else set()
+            if marcadas:
+                lineas = t.split("\n")
+                errs, fallaron = separar_esperados(errs, marcadas)
+                comprobadas += [lineas[k - 1].strip() + "  =>  " + e for k, e in sorted(fallaron.items())]
+                no_fallan += [n + ": el doc dice que esta linea da error, y compila: " + lineas[k - 1].strip()
+                              for k in sorted(marcadas - set(fallaron))]
+                ok = not errs
             if not ok:
                 ok_todos = False
-                errs_todos += [n + ": " + e for e in errs] or [n + ": rc=%d sin diagnostico" % rc]
+                errs_todos += [n + ": " + e for e in errs[:8]] or [n + ": rc=%d sin diagnostico" % rc]
         if f["marca"] == "error":
             r["estado"] = "ERROR-ESPERADO" if not ok_todos else "FALLO"
             if ok_todos:
@@ -554,9 +626,13 @@ def procesar_doc(ruta, base_work, slug, stdlib):
             else:
                 r["errores"] = errs_todos[:3]
         else:
-            r["estado"] = "OK" if ok_todos else "FALLO"
-            r["errores"] = errs_todos
+            # compila salvo sus lineas `// error`, y cada una da su error: OK. Si alguna
+            # compila, FALLO; en un trozo no se sabe (le falta lo que daria el error)
+            r["estado"] = "OK" if ok_todos and not no_fallan else "FALLO"
+            r["errores"] = errs_todos + no_fallan
             r["rc"] = rc_ult
+            if comprobadas:
+                r["comprobadas"] = comprobadas
             if not ok_todos and suelto:           # solo los trozos sueltos
                 faltan = clasificar_trozo(errs_todos, stdlib, codigo)
                 if faltan:
@@ -576,11 +652,13 @@ def imprimir_doc(ruta, res, verbose):
     cnt = {}
     for r in res:
         cnt[r["estado"]] = cnt.get(r["estado"], 0) + 1
-        mostrar = r["estado"] in ("FALLO", "TROZO", "ESQUEMA", "ERROR-ESPERADO") or verbose
+        mostrar = r["estado"] in ("FALLO", "TROZO", "ESQUEMA", "ERROR-ESPERADO") or verbose or r.get("comprobadas")
         if not mostrar:
             continue
         sec = (r["sec"][:48] + "..") if len(r["sec"]) > 50 else r["sec"]
         lineas.append("  %-14s L%-5d [%s] %s" % (r["estado"], r["linea"], sec, r["primera"]))
+        for c in r.get("comprobadas", []):
+            lineas.append("      = da error, como dice el doc: " + c[:200])
         if verbose and r.get("andamio"):
             lineas.append("      + andamio: import " + ", ".join(r["andamio"]))
         if r["estado"] == "TROZO":

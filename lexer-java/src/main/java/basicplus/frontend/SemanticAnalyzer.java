@@ -1625,13 +1625,16 @@ public final class SemanticAnalyzer {
      * compilador, para que sepa que tipo de objetos guarda»). La clase es la de siempre, con su tipo base en las firmas
      * (`Object` en una List; el de `@element{B}` en las demás), y los argumentos no llegan al bytecode. Si algo no cuadra,
      * el error, y se devuelve la clase sin argumentos para no encadenar errores.
+     * V8 #832 — salvo si un argumento no existe (`List<Sensor>` sin `Sensor`): entonces el tipo entero es el error, como el
+     * de `var s: Sensr`, y lo que cuelga de él calla. Con la clase sin argumentos, `Sensor` pasaba a ser `Object` sin
+     * decirlo, y cada uso de un elemento daba otro error, en otra línea: «'Object' no tiene miembro de instancia 'valor'».
      */
     private BpType resolveTipoGenerico(SimpleTypeRef st) {
         BpType base = resolveNamedType(st);
         if (base instanceof ErrorType) return base;
         List<BpType> args = new ArrayList<>();
         for (TypeRef a : st.argumentos) args.add(resolveType(a));
-        for (BpType a : args) if (a instanceof ErrorType) return base;
+        for (BpType a : args) if (a instanceof ErrorType) return a;
         if (!(base instanceof ClassType)) {
             err(st.line, st.column, "'" + st.name + "' no es una clase: no lleva argumentos de tipo");
             return base;

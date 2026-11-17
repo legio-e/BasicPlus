@@ -7591,7 +7591,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   no es sin errores, y la prueba definitiva, que cada vez más gente use la herramienta. **El borrador en español,
   hecho.** Lo demás, con la versión definitiva o casi (Eduardo: *«La versión inglesa de momento no hace falta hasta que
   tengamos la versión definitiva o casi definitiva. Esperemos un poco a terminar las pruebas a ver como salen.»*): los
-  números finales (la resistencia, `#825`, los fragmentos de `#832`), la versión inglesa, la tarjeta en las dos
+  números finales (la resistencia, `#825`; los fragmentos, ya: 343 de 343, `#832`), la versión inglesa, la tarjeta en las dos
   portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
@@ -7707,7 +7707,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **En las placas**, con la imagen que se grabe con los demás pendientes; y en una prueba de resistencia, si se repite:
   lo libre tras el GC, sin bloques retenidos.
 
-#### 🔵 `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **V8: por analizar**)
+#### ✅ `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **CERRADA el 17-nov**, el commit de `#832`: los seis estaban bien; cuatro arreglos en la herramienta y una línea del compilador; Eduardo: *«OK»*)
 
 `doc_frags.py` (15-nov, 19:31): 641 bloques en 26 documentos; de los 343 de BP, 182 OK, 152 trozos, 3 errores
 esperados y **6 FALLO**: en `cheatsheet.html`, L246 («Typed lists»); y en `manual.html`, L687 (§4.6, los genéricos),
@@ -7724,6 +7724,46 @@ ve sin analizar:
 - §15.2: «`raise` sólo vale dentro de una clase» y `onClick` sin resolver: por mirar.
 
 `PUBLICAR` §1 pide 0 FALLO. Lo que salga de cada uno, a la herramienta o al ejemplo.
+
+- **Analizado (17-nov): los seis estaban bien.** Con lo que el texto da por sabido puesto a mano (`Sensor`; `Animal` y su
+  hija `Cachorro`; `Figura`; el `Boton` de §15.1), cada uno compila y da en las dos VMs lo que dicen sus comentarios
+  (`figura 4`, `4 true`, `0`, `1099511627776`, `n=5`, `4`), y sus líneas de error dan ese error, con el mensaje que cita
+  el manual. Lo que fallaba:
+  - **la herramienta no conocía `interface`** (§9.8; es de V8): metía `public interface Forma` en `main()`. Y los métodos
+    de una interfaz no llevan `end`;
+  - **«clase base 'Animal' no existe»** (§9.2.1, y `Figura` en §9.8) no contaba como un nombre que le falta al trozo, ni
+    lo que la clase heredaría de ella (`this.edad`); con una base de otro módulo, ya;
+  - **`raise` fuera de una clase** (§15.2: `pulsa` es un método de `Boton`, enseñado suelto): el caso de `this`, que ya
+    contaba;
+  - **una línea que enseña un error a propósito** (§6.1: `i *= 1.5   // error: …`): la herramienta no tenía forma de
+    saberlo;
+  - **y el compilador** (§4.6 y la guía rápida): con un tipo que no existe entre `< >` (`List<Sensor>` sin `Sensor`), tras
+    «tipo 'Sensor' no encontrado» daba «'Object' no tiene miembro de instancia 'valor'» en cada uso de un elemento, en
+    otras líneas: cambiaba `Sensor` por `Object` sin decirlo. Su comentario decía que devolvía la clase sin argumentos
+    «para no encadenar errores», y con un tipo que no existe hacía lo contrario. Con `var s: Sensr`, en cambio, la
+    variable queda con error y lo demás calla.
+- **Hecho** (Eduardo: *«OK»*):
+  - **el compilador**, una línea de `resolveTipoGenerico`: si un argumento no existe, el tipo entero es el error, como el
+    de `var s: Sensr`. Sólo cambia lo que dice de un programa que no compila. La prueba,
+    `TipoGenericoTest.argumentoQueNoExiste` (con la línea de antes, falla con los dos errores en cadena);
+  - **la herramienta** (`doc_frags.py`): `interface` abre un bloque (y sus métodos, no); «clase base 'X' no existe» y el
+    `raise` fuera de una clase son de contexto, y lo que hereda una clase sin su base (y sus hijas), cascada; y **una
+    línea con código cuyo comentario empieza por `error`** (`// error: …`; en inglés, `// compile error`) tiene que dar
+    error, y en un fragmento entero, sólo ella: el informe enseña el error de cada una. En un trozo no se mira (le falta
+    lo que daría el error), y una línea comentada entera, como la de §9.2.1, no cuenta. Los caminos nuevos, probados con
+    un documento de siete casos, también el que tiene que fallar (una línea que dice error y compila).
+- **Medido:** los 26 documentos, de 182 OK, 152 trozos y 6 FALLO a **183 OK, 157 trozos y 0 FALLO** (y los 3 errores
+  esperados); los otros 635 bloques, sin cambiar de estado ni de lo que les falta. Con sólo la herramienta quedaban los
+  dos de genéricos. El de §6.1, OK, con su línea comprobada. En `pruebas.html`, 343 de 343.
+- **El compilador nuevo, comprobado:** las suites de Maven (el compilador, 396, con la nueva); los 764 `.bp` de
+  `samples/`, `samples/errores/`, `bpgenvm-c/samples/` y los benchmarks, con el jar de antes y el nuevo: 762 `.mod`
+  iguales byte a byte, ninguno que compile en uno solo, y de los 54 que no compilan, los mismos errores; la stdlib
+  compilada como proyecto, sus 35 `.mod` y el `Stdlib.pack`, iguales; `h13-errores.sh`, 151 de 151; `check-jc`, 214
+  y los 2 SKIP de siempre, y un FAIL ajeno: `UptimeArranque`, en la VM-Java, un `sleep(100)` medido como 86 ms (su
+  `.mod`, el mismo con los dos compiladores; es `#834`); y el IDE, rehecho (su compilador ya sólo dice «tipo no
+  encontrado»).
+- **El manual inglés** no tiene esas secciones (son de V8): van con su traducción, en la documentación (`D1`), y la
+  herramienta las mirará entonces.
 
 #### ✅ `#831` — un `Mutex` no se soltaba nunca: su entrada en la tabla de la VM se quedaba hasta el final del RUN, y un programa que crea mapas en un bucle se quedaba sin mutex (en la Pico 2, a las ~257 vueltas de la prueba de resistencia: «mutex.lock: id inválido -1») (abierta y **CERRADA el 15-nov**, el commit de `#831`; en la prueba de resistencia; preexistente; Eduardo: *«OK, adelante»*, por el GC)
 

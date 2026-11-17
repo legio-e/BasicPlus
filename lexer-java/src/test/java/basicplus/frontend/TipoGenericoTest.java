@@ -91,6 +91,16 @@ class TipoGenericoTest {
                 .contains("'List<Long>' guarda 'Long', no 'integer' (add)"));
     }
 
+    @Test @DisplayName("#832: un tipo que no existe entre `<` y `>` da su error, y lo que cuelga de la variable calla")
+    void argumentoQueNoExiste(@TempDir Path tmp) throws IOException {
+        // antes, `Sensor` pasaba a ser `Object` sin decirlo: «'Object' no tiene miembro de instancia 'valor'», dos veces
+        String dijo = error(tmp, conClases("    var l: List<Sensor> := List()\n    l.add(Perro())\n"
+                + "    print l.get(0).valor()\n    for s in l do\n      print s.valor()\n    next\n"));
+        assertTrue(dijo.contains("tipo 'Sensor' no encontrado"), dijo);
+        assertFalse(dijo.contains("no tiene miembro"), dijo);
+        assertFalse(dijo.contains("llamada ambigua"), dijo);
+    }
+
     @Test @DisplayName("#793: `Object` en la firma de la raíz no es el elemento: toString y compareTo, como siempre")
     void loDeLaRaiz(@TempDir Path tmp) throws IOException {
         compilaBien(tmp, conClases("    var a: List<Perro> := List()\n    print a.toString() == \"\"\n"));
