@@ -1580,8 +1580,8 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     return vm->memory + base;
 }
 
-/* Lo que un módulo cargado tiene fuera del bloque de la VM. */
-static void modulo_suelta(bpvm_module_t* m) {
+/* Lo que un módulo cargado tiene fuera del bloque de la VM. V8 #835: también la del que falla a medias (loader.c). */
+void bpvm_modulo_suelta(bpvm_module_t* m) {
     bpvm_free(m->imports);     /* V7 #651: sus nombres viven en m->nombres */
     bpvm_free(m->dep_names);   /* V7/H2 (MOD8) */
     bpvm_free(m->dep_gen);
@@ -1606,7 +1606,7 @@ int bpvm_sabotaje_overlay = 0;   /* SÓLO PRUEBAS: bpvm_internal.h */
 
 /* Vuelve todo a como estaba, salvo la memoria del heap, que devuelve quien llama. */
 static void overlay_deshaz(bpvm_t* vm, const bpvm_overlay_t* o) {
-    for (int i = o->modulos; i < vm->module_count; i++) modulo_suelta(&vm->modules[i]);
+    for (int i = o->modulos; i < vm->module_count; i++) bpvm_modulo_suelta(&vm->modules[i]);
     vm->module_count = o->modulos;
     if (bpvm_sabotaje_overlay != 6) {
         vm->symbol_count = o->simbolos;
@@ -2089,7 +2089,7 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_handles_destroy(vm);          /* V4/paso 4c: la free-list (la tabla se va con el bloque) */
     bpvm_destruir_liberar(vm);         /* V7 #668: el registro, la cola y la marca por clase */
     /* Liberar módulos cargados. */
-    for (int i = 0; i < vm->module_count; i++) modulo_suelta(&vm->modules[i]);
+    for (int i = 0; i < vm->module_count; i++) bpvm_modulo_suelta(&vm->modules[i]);
     bpvm_free(vm->overlay);            /* V8 H9 (#786): si el programa acabó con uno cargado */
     bpvm_free(vm->raiz_dir);
     /* Liberar los hilos —sus structs, sus EH stacks y la línea de su `print` (#600): toda la cola (H12)— y los

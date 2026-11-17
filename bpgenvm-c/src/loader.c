@@ -219,9 +219,10 @@ static bpvm_status_t sin_bloque(bpvm_t* vm, const bpvm_module_t* mod) {
     return BPVM_ERR_OOM;
 }
 
-static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
-                                      bpvm_read_at_fn rd, void* rd_user,
-                                      size_t size, const char* name_hint, int xip) {
+/* El cuerpo de la carga; lo llama load_buffer_impl, que suelta lo suyo si falla (V8 #835). */
+static bpvm_status_t load_buffer_cuerpo(bpvm_t* vm, const uint8_t* data,
+                                        bpvm_read_at_fn rd, void* rd_user,
+                                        size_t size, const char* name_hint, int xip) {
     if (vm->module_count >= BPVM_MAX_MODULES) return BPVM_ERR_OOM;
     if (!data && !rd) return BPVM_ERR_IO;
     if (size < 28) return BPVM_ERR_BAD_HEADER;
@@ -753,6 +754,29 @@ fin_nativo:
     (void) 0;
 
     return BPVM_OK;
+}
+
+/* V8 #835 — LA CARGA QUE FALLA A MEDIAS SUELTA LO SUYO. El cuerpo pide las tablas del módulo al sistema (sus nombres, lo
+ * que importa, sus dependencias, sus referencias, los arreglos de sus clases) según lee, y el módulo sólo cuenta
+ * (module_count++) al final. Si algo fallaba en medio —no cabe en el bloque, falta memoria del sistema, la tabla de
+ * símbolos (#639), un export demasiado largo (#685), un fichero que no cuadra—, nadie las soltaba: bpvm_modulo_suelta
+ * sólo recorre los que cuentan, y la carga siguiente pisaba el hueco. En una placa, unos KB de malloc perdidos por cada
+ * intento, hasta reiniciar (con Json, 8 bloques y 5 KB; lo destapó test-sinmemoria, de #828). Ahora, si el módulo no
+ * llegó a contar, se sueltan aquí. El hueco libre se pone a cero ANTES: lo que quedara en él (de un módulo que ya se
+ * soltó, al descargar un overlay) no es de nadie, y un fallo antes de que el cuerpo lo limpie no lo soltaría otra vez. */
+static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
+                                      bpvm_read_at_fn rd, void* rd_user,
+                                      size_t size, const char* name_hint, int xip) {
+    if (vm->module_count >= BPVM_MAX_MODULES) return BPVM_ERR_OOM;
+    int n = vm->module_count;
+    bpvm_module_t* hueco = &vm->modules[n];
+    memset(hueco, 0, sizeof *hueco);
+    bpvm_status_t s = load_buffer_cuerpo(vm, data, rd, rd_user, size, name_hint, xip);
+    if (s != BPVM_OK && vm->module_count == n) {
+        bpvm_modulo_suelta(hueco);
+        memset(hueco, 0, sizeof *hueco);
+    }
+    return s;
 }
 
 bpvm_status_t bpvm_loader_load_buffer(bpvm_t* vm, const uint8_t* data,

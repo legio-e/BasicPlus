@@ -7596,7 +7596,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **V8 o V9: por decidir**)
+#### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 
 - **Cómo salió:** `make test-sinmemoria` (`#828`), en el caso 4 (`Json.mod` no cabe en el bloque de la VM): el
   guardián de fin de RUN dice «FUGA — 8 bloque(s) del programa sin liberar, 5010 B; el mayor (2549 B) se pidio en
@@ -7613,6 +7613,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   el enlace tardío, que sí suelta lo suyo. En el PC, hasta salir.
 - **El arreglo propuesto** (la VM-C): si la carga falla, soltar las tablas del hueco que estaba llenando, con lo mismo
   que `modulo_suelta`; y que `test-sinmemoria` mire que no queda fuga en sus cuatro casos.
+- **Hecho** (Eduardo: *«Lo arreglamos ahora»*), en la VM-C (la VM-Java no pide memoria al sistema para esto):
+  `load_buffer_impl` (`loader.c`) envuelve el cuerpo de siempre (`load_buffer_cuerpo`): pone a cero el hueco libre antes
+  —lo que quedara en él, de un módulo ya soltado al descargar un overlay, no es de nadie— y, si la carga falla y el
+  módulo no llegó a contar, suelta sus tablas con `bpvm_modulo_suelta` (la de `bpvm.c`, ahora pública: la misma lista de
+  tablas para el final del RUN, la descarga de un overlay y esto). Después de contarlo no falla nada (el código nativo
+  embebido es tolerante).
+- **La prueba**, `test-sinmemoria` (de `#828`), ampliada: en cada caso, los bloques vivos de la VM antes de crearla y
+  después de destruirla (`bpvm_alloc_live_blocks`), los mismos; y un caso 5: la memoria del sistema se acaba en CADA
+  punto de la carga —un presupuesto para lo que pide `loader.c`, de 0 a lo que pide la carga entera (8 112 B), de 64 en
+  64—: 127 cargas, 87 fallan, ninguna con fuga y todas diciendo que es la memoria del sistema (las demás cargan: lo último,
+  encoger los nombres, puede no caber y se sigue con el bloque de antes). Con el `loader.c` y el `bpvm.c` de antes, falla
+  en el 4 (8 bloques) y en el 5 (38 de las 87 con fuga, 263 bloques).
+- **Comprobado:** la red, VERDE (paridad, 217; MOD8, 209 y los 8 SKIP; dos workers, 217; la cápsula, 59; las 116 pruebas
+  de C; el micro simulado, la sombra y el estrés). En las placas, al grabarlas.
 
 #### ✅ `#834` — en la VM-Java, un `sleep(100)` puede durar 84–100 ms medido con `Machine.uptimeMs()`: el `sleep` decide cuándo despertar con el reloj de pared (`System.currentTimeMillis()`, a saltos de ~15,6 ms en Windows), y desde `#827` el uptime mide con el monótono (`System.nanoTime()`) (abierta el 17-nov, en el `check-jc` de `#832`: `UptimeArranque` en ROJO; **CERRADA el mismo día**, el commit de `#834`: la VM-Java despierta con el reloj de `uptimeMs()`; Eduardo: *«OK, lo arreglamos en V8»*)
 

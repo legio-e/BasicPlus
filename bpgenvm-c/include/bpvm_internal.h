@@ -1353,6 +1353,9 @@ bpvm_status_t bpvm_loader_load_xip(bpvm_t* vm, const uint8_t* data,
 /* H11 — carga por trozos (ver bpvm_load_mod_stream en bpvm.h). */
 bpvm_status_t bpvm_loader_load_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
                                        size_t size, const char* name_hint);
+/* bpvm.c — lo que un módulo tiene fuera del bloque de la VM (sus tablas, pedidas al sistema), suelto. La usan el final
+ * del RUN, la descarga de un overlay y, V8 #835, la carga que falla a medias (loader.c). No pone los punteros a NULL. */
+void bpvm_modulo_suelta(bpvm_module_t* m);
 
 /* H3.c — cb del módulo cuyo CS es `cs` (caché 1-entrada en tc; módulos RAM
  * devuelven cs). Transitoria hasta CALL_REL (#307). */

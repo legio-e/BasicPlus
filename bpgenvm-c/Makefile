@@ -591,7 +591,8 @@ test-tablasim: $(LIBOBJ)
 
 # V8 #828 (17-nov) -- sin memoria al cargar y al enlazar, DE CUAL: la del sistema (malloc), con que hacer (vmheap), o
 # el sitio del bloque de la VM. En la Pico 2 faltaba la del sistema y el mensaje hacia pensar en la de la VM. Cada caso,
-# forzado (bpvm_alloc_prueba_fallar, y el techo del heap bajado a mano). Ver test/test_sinmemoria.c.
+# forzado (bpvm_alloc_prueba_fallar, y el techo del heap bajado a mano). Y #835: ninguno deja FUGA, tampoco con la
+# memoria del sistema acabandose en cada punto de la carga. Ver test/test_sinmemoria.c.
 test-sinmemoria: $(LIBOBJ)
 	@mkdir -p build
 	$(call stdlibdep,Json Collections Str Core)
