@@ -7596,6 +7596,27 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### 🔵 `#834` — en la VM-Java, un `sleep(100)` puede durar 84–100 ms medido con `Machine.uptimeMs()`: el `sleep` decide cuándo despertar con el reloj de pared (`System.currentTimeMillis()`, a saltos de ~15,6 ms en Windows), y desde `#827` el uptime mide con el monótono (`System.nanoTime()`) (abierta el 17-nov, en el `check-jc` de `#832`: `UptimeArranque` en ROJO; **V8 o V9: por decidir**)
+
+- **Lo que pasó:** en el `check-jc` de `#832`, `UptimeArranque` (el sample de `#827`, en la red desde el 15-nov) dio «FALLO
+  en 100 ms conto 86» en la versión JC, en una de las VMs. Su `.mod` es el mismo con el compilador de antes y el nuevo:
+  no viene de `#832`.
+- **Repetido** (el `.mod` de BP, 40 veces en cada VM): la VM-Java, 1 de 40 por debajo de 90 ms (85); la VM-C, 0 de 40.
+- **La causa:** la VM-Java duerme un hilo BP con `wakeAtMs = System.currentTimeMillis() + ms`, y lo despierta cuando
+  `System.currentTimeMillis() >= wakeAtMs` (`VirtualMachine`: el `sleep`, `pickNextRunnableTc` y la espera de los
+  workers). En Windows ese reloj avanza a saltos de ~15,6 ms, y `uptimeMs()`, desde `#827`, mide con `System.nanoTime()`:
+  medido con éste, un `sleep(100)` dura entre ~84 y 100 ms. Antes de `#827` los dos eran el mismo reloj y no se veía. La
+  VM-C del PC duerme y mide con el mismo reloj monótono (`bpvm_platform_now_ms`, `CLOCK_MONOTONIC`): nunca se queda
+  corta.
+- **Además**, el reloj de pared salta si se cambia la hora del sistema (o la ajusta NTP): un `sleep` en curso duraría de
+  más o de menos.
+- **Dónde se nota:** un programa que mide un `sleep` con `uptimeMs()` en el PC con la VM-Java (la de referencia, la del
+  depurador): puede ver menos de lo pedido, y la VM-C, no; las dos VMs dan salidas distintas. Las placas no tienen la
+  VM-Java. Y en la red, `UptimeArranque` en ROJO de vez en cuando.
+- **El arreglo propuesto** (sólo la VM-Java, tres líneas): la hora de despertar con el reloj monótono, el de
+  `uptimeMs()` (`System.nanoTime()`, en ms), al dormir y en los dos sitios que la comparan. `now()` y el RTC siguen con
+  el reloj de pared, que es lo suyo.
+
 #### ✅ `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **CERRADA el mismo día**, el commit de `#833`: el GC verifica el contador de cada referencia, la regla de Eduardo; en las placas, al grabarlas)
 
 - **Lo que pasa** (la prueba de resistencia, `compat/resistencia/`): tras el `gc()` de la línea de estado, un bloque que el
