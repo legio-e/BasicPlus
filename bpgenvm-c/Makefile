@@ -108,7 +108,7 @@ ifeq ($(OS),Windows_NT)
   OBJ    += $(WIN_RES)
 endif
 
-.PHONY: all clean smoke test-wifi test-cables medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aoterrores test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke test-wifi test-cables medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aoterrores test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-sinmemoria test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -588,6 +588,16 @@ test-tablasim: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_tablasim.c $(LIBOBJ) -o build/test_tablasim.exe $(LDFLAGS)
 	@echo "--- #639: la tabla de simbolos con poca memoria (esperado: solo 'ok', [status=OK]) ---"
 	cd samples && ../build/test_tablasim.exe Json.mod
+
+# V8 #828 (17-nov) -- sin memoria al cargar y al enlazar, DE CUAL: la del sistema (malloc), con que hacer (vmheap), o
+# el sitio del bloque de la VM. En la Pico 2 faltaba la del sistema y el mensaje hacia pensar en la de la VM. Cada caso,
+# forzado (bpvm_alloc_prueba_fallar, y el techo del heap bajado a mano). Ver test/test_sinmemoria.c.
+test-sinmemoria: $(LIBOBJ)
+	@mkdir -p build
+	$(call stdlibdep,Json Collections Str Core)
+	$(CC) $(CFLAGS) -Isrc test/test_sinmemoria.c $(LIBOBJ) -o build/test_sinmemoria.exe $(LDFLAGS)
+	@echo "--- #828: sin memoria al cargar y al enlazar, de cual (esperado: solo 'ok', [status=OK]) ---"
+	cd samples && ../build/test_sinmemoria.exe Json.mod
 
 # V7 #494 (27-sep) — el HEAP DESCARRILADO es UNA excepcion (decision de Eduardo): un gancho de depuracion
 # estropea la cabecera del primer bloque y el GC siguiente no barre; la reserva que lo pidio lanza la

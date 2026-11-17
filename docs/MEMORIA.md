@@ -25,7 +25,10 @@
 
 Un programa puede tener el heap de BP medio vacío y quedarse sin RAM del sistema: «enlace tardío: sin memoria para
 construir las clases» en GuiArbolG2 (`#651`) es eso —la tabla de clases del enlace se pide en C, de una vez, y no
-encuentra un bloque contiguo—.
+encuentra un bloque contiguo—. Desde V8 (`#828`) el mensaje dice cuál de las dos memorias faltó: «no hay memoria del
+sistema (malloc) para las tablas de las clases», con qué hacer —sin PSRAM, un `vmheap=` menor deja más al sistema—, o
+«no hay sitio en el bloque de la VM»; y el cargador, lo mismo. En la Pico 2 el bloque deja 64 KB al sistema, y un
+programa de nueve módulos con `Gui` y `Json` pide unos 80: con `vmheap=288`, 96.
 
 ## 2. El reparto al arrancar: la C6
 

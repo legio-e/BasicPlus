@@ -336,6 +336,7 @@ typedef struct {
     int         construidas, refs;
     int         fallo;            /* 1 = link_error puesto */
     int         repaso;           /* V8 H9 (#786): rehaciendo lo de siempre, sobre su arena: los símbolos ya están */
+    int         sin_sistema;      /* V8 #828: lo que faltó es memoria del sistema (malloc), no sitio en el bloque */
 } lt_ctx_t;
 
 static uint16_t lt_u16(const uint8_t* p) { return bpvm_read_u16_be(p); }
@@ -372,6 +373,14 @@ static void lt_error(lt_ctx_t* x, const char* fmt, ...) {
     va_end(ap);
     con_la_causa(x->vm);
     x->fallo = 1;
+}
+
+/* V8 #828 — una reserva del sistema (malloc) que falla: se apunta, para que el mensaje del final diga cuál de las dos
+ * memorias faltó. Las tablas del enlace van al sistema; lo que construye, a la arena, dentro del bloque de la VM. En la
+ * Pico 2 faltaba la del sistema, y «sin memoria» hacía pensar en darle más a la VM: justo al revés. */
+static bpvm_status_t lt_sin_sistema(lt_ctx_t* x) {
+    x->sin_sistema = 1;
+    return BPVM_ERR_OOM;
 }
 
 /* Lee una fila de 4.5 en `c`; devuelve el puntero a la siguiente. `ver`, la de la subtabla: en la 2 (V8 H7.3, #756)
@@ -462,7 +471,7 @@ static bpvm_status_t lt_registrar(lt_ctx_t* x) {
     x->n = 0;
     if (total == 0) return BPVM_OK;
     x->reg = (lt_clase_t*) bpvm_calloc((size_t) total, sizeof(lt_clase_t));
-    if (!x->reg) return BPVM_ERR_OOM;
+    if (!x->reg) return lt_sin_sistema(x);
     int con_ifz = 0;   /* V8 H7.3: ¿algún módulo trae interfaces? */
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
@@ -487,7 +496,7 @@ static bpvm_status_t lt_registrar(lt_ctx_t* x) {
     /* V8 H7.3 (#756) — la tabla de las interfaces, aparte y sólo si hace falta (lt_ifx_t) */
     if (con_ifz) {
         x->ifx = (lt_ifx_t*) bpvm_calloc((size_t) total, sizeof(lt_ifx_t));
-        if (!x->ifx) return BPVM_ERR_OOM;
+        if (!x->ifx) return lt_sin_sistema(x);
     }
     return BPVM_OK;
 }
@@ -803,7 +812,7 @@ static bpvm_status_t lt_asegurar_interfaz(lt_ctx_t* x, int ci) {
         cap += x->ifx[p].n_apl;
     }
     cx->apl = (const uint8_t**) bpvm_calloc(cap ? cap : 1u, sizeof(const uint8_t*));
-    if (!cx->apl) return BPVM_ERR_OOM;
+    if (!cx->apl) return lt_sin_sistema(x);
     uint16_t n = 0;
     for (uint16_t i = 0; i < n_ifz; i++) {
         int p = lt_interfaz_de(x, ci, i, "hereda de");
@@ -868,7 +877,7 @@ static bpvm_status_t lt_lista_de(lt_ctx_t* x, int ci) {
     if (cap) {
         cx->ifaces = (int16_t*) bpvm_calloc(cap, sizeof(int16_t));
         cx->tablas = (uint32_t*) bpvm_calloc(cap, sizeof(uint32_t));
-        if (!cx->ifaces || !cx->tablas) return BPVM_ERR_OOM;
+        if (!cx->ifaces || !cx->tablas) return lt_sin_sistema(x);
     }
     uint16_t n = 0, heredadas = 0;
     if (PX) for (uint16_t j = 0; j < PX->n_ifaces; j++) { cx->ifaces[n] = PX->ifaces[j]; cx->tablas[n] = PX->tablas[j]; n++; }
@@ -1218,7 +1227,13 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm, int desde) {
     }
     if (x.reg) bpvm_free(x.reg);
     if (st != BPVM_OK) { vm->ifaz_tabla = 0; vm->ifaz_n = 0; }
-    if (st != BPVM_OK && !x.fallo) snprintf(vm->link_error, sizeof(vm->link_error), "enlace tardio: sin memoria para construir las clases");
+    /* Sin texto propio, es memoria (todo lo demás lo dice con lt_error). V8 #828: de cuál, y en la del sistema, qué hacer
+     * —sin PSRAM, el bloque de la VM y el sistema se reparten la misma RAM: lo que el bloque no coge es del sistema—. */
+    if (st != BPVM_OK && !x.fallo)
+        snprintf(vm->link_error, sizeof(vm->link_error), "%s", x.sin_sistema
+                 ? "enlace tardio: no hay memoria del sistema (malloc) para las tablas de las clases (en una placa sin "
+                   "PSRAM, un vmheap= menor en el ENV le deja mas)"
+                 : "enlace tardio: no hay sitio en el bloque de la VM para construir las clases");
     return st;
 }
 

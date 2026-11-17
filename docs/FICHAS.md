@@ -7596,6 +7596,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### 🔵 `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **V8 o V9: por decidir**)
+
+- **Cómo salió:** `make test-sinmemoria` (`#828`), en el caso 4 (`Json.mod` no cabe en el bloque de la VM): el
+  guardián de fin de RUN dice «FUGA — 8 bloque(s) del programa sin liberar, 5010 B; el mayor (2549 B) se pidio en
+  src/loader.c linea 187». Son las tablas de `Json`: sus nombres, lo que importa, sus cinco de dependencias y sus
+  referencias.
+- **La causa:** `load_buffer_impl` (`loader.c`) pide esas tablas a `malloc` al leer la cabecera y las secciones, y el
+  módulo sólo cuenta (`module_count++`) al final. Si algo falla en medio —no cabe en el bloque, no hay memoria del
+  sistema para la tabla siguiente, la tabla de símbolos (`#639`), un nombre exportado demasiado largo (`#685`), un
+  fichero que no cuadra con su cabecera—, vuelve con el error y nadie las suelta: `modulo_suelta` (`bpvm.c`) sólo
+  recorre los módulos que cuentan, y la carga siguiente pisa el hueco con un `memset`. El guardián las ve y lo dice, pero
+  no las suelta.
+- **Dónde se nota:** en una placa, cada RUN que falla así se lleva esos KB de la memoria del sistema hasta reiniciar: un
+  programa que no cabe y se reintenta desde el IDE va dejando cada vez menos. En la Pico 2 de `#828` no pasaba: fallaba
+  el enlace tardío, que sí suelta lo suyo. En el PC, hasta salir.
+- **El arreglo propuesto** (la VM-C): si la carga falla, soltar las tablas del hueco que estaba llenando, con lo mismo
+  que `modulo_suelta`; y que `test-sinmemoria` mire que no queda fuga en sus cuatro casos.
+
 #### ✅ `#834` — en la VM-Java, un `sleep(100)` puede durar 84–100 ms medido con `Machine.uptimeMs()`: el `sleep` decide cuándo despertar con el reloj de pared (`System.currentTimeMillis()`, a saltos de ~15,6 ms en Windows), y desde `#827` el uptime mide con el monótono (`System.nanoTime()`) (abierta el 17-nov, en el `check-jc` de `#832`: `UptimeArranque` en ROJO; **CERRADA el mismo día**, el commit de `#834`: la VM-Java despierta con el reloj de `uptimeMs()`; Eduardo: *«OK, lo arreglamos en V8»*)
 
 - **Lo que pasó:** en el `check-jc` de `#832`, `UptimeArranque` (el sample de `#827`, en la red desde el 15-nov) dio «FALLO
@@ -7892,7 +7910,7 @@ ve sin analizar:
 - **La VM-Java no cambia:** su tabla crece con `Arrays.copyOf`, sin tope, y su `heapAlloc` colecta ella.
 - **En las placas**, con la imagen que se grabe al acabar la prueba de resistencia: es código común, de las nueve.
 
-#### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; el 17-nov, comprobado: `vmheap` lo resuelve; **el mensaje y la documentación, para decidir**)
+#### ✅ `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; el 17-nov, comprobado: `vmheap` lo resuelve; **CERRADA el mismo día**, el commit de `#828`: el mensaje dice cuál de las dos memorias falta y qué hacer; Eduardo: *«ok»*)
 
 - **Lo que pasó:** la primera versión de `Resistencia` importaba `Gui` (probaba la pantalla y, si no había, seguía sin
   ella). En la S3, la C3 y la Metro, sin pantalla, arranca: `Gui.Screen()` da un error que se atrapa. En la Pico 2,
@@ -7935,6 +7953,23 @@ ve sin analizar:
   memoria (`nombres`, `imports`, `refs`, los `class_fixups`) acaban en el genérico del estado, «memoria del buffer
   insuficiente» (por lo que dice el código; sólo la tabla de símbolos, `#639`, dice lo suyo). Y en la referencia, la
   fila de `vmheap` no dice que lo que no coge el bloque es para el sistema, ni cuándo hace falta.
+- **Hecho** (Eduardo: *«ok»*), en la VM-C (la VM-Java no tiene estos caminos: no se queda sin `malloc`):
+  - **el enlace tardío** (`link.c`) apunta si lo que faltó es del sistema (`lt_sin_sistema`, en sus cuatro reservas), y
+    el mensaje lo dice: «enlace tardio: no hay memoria del sistema (malloc) para las tablas de las clases (en una placa
+    sin PSRAM, un vmheap= menor en el ENV le deja mas)», o «enlace tardio: no hay sitio en el bloque de la VM para
+    construir las clases». Todo lo demás del enlace ya decía lo suyo;
+  - **el cargador** (`loader.c`), lo mismo, con el módulo: «'Json': no hay memoria del sistema (malloc) para sus tablas
+    (…vmheap…)» (`sin_sistema`, en sus seis reservas) o «'Json' no cabe en el bloque de la VM» (`sin_bloque`, en sus tres
+    comprobaciones del techo); antes, el genérico del estado. El tope de módulos (`BPVM_MAX_MODULES`), como estaba;
+  - **la prueba**, `make test-sinmemoria` (nueva, en la red): `Json.mod` con cada caso forzado —la siguiente reserva de
+    `link.c` o de `loader.c` falla (`bpvm_alloc_prueba_fallar`), o el techo del heap, bajado a mano—, y la línea base.
+    Con el `link.c` y el `loader.c` de antes, falla en los cuatro: el 1 y el 2 decían lo mismo, y el 3 y el 4, nada;
+  - **los documentos:** la fila de `vmheap` de la referencia, en los dos idiomas (lo que no coge el bloque es del
+    sistema, y el caso de la Pico 2 con sus números), y `MEMORIA.md` §1 (el mensaje de ahora).
+- **De paso, una fuga** (la prueba, en el caso 4): una carga que falla a medias no suelta las tablas que ya pidió. Es
+  `#835`.
+- **Comprobado:** la red, VERDE (paridad, 217; MOD8, 209 y los 8 SKIP; dos workers, 217; la cápsula, 59; las 116 pruebas
+  de C, con la nueva; el micro simulado, la sombra y el estrés). En las placas, al grabarlas (con `#833` y lo demás).
 
 #### ✅ `#827` — en la VM-Java, `Machine.uptimeMs()` era la hora del reloj del PC cortada a 32 bits: salía negativa y no contaba desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta y **CERRADA el 15-nov**, el commit de `#827`; al probar en el PC la prueba de resistencia; preexistente; Eduardo: *«Si se arregla, parece poco.»*)
 

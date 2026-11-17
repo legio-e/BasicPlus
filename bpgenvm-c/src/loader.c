@@ -204,6 +204,21 @@ static bpvm_status_t export_largo(bpvm_t* vm, const bpvm_module_t* mod, unsigned
     return BPVM_ERR_BAD_HEADER;
 }
 
+/* V8 #828 — sin memoria al cargar: de cuál. Las tablas del módulo (sus nombres, lo que importa, sus dependencias y sus
+ * referencias, los arreglos de sus clases) las pide al sistema (malloc); su bloque —la tabla externa, los datos y, si
+ * no corre en sitio, el código—, al de la VM. Con el genérico del estado («memoria del buffer insuficiente») no se
+ * sabía cuál, y en una placa sin PSRAM las dos se reparten la misma RAM: lo que el bloque no coge es del sistema. */
+static bpvm_status_t sin_sistema(bpvm_t* vm, const bpvm_module_t* mod) {
+    snprintf(vm->load_error, sizeof vm->load_error, "'%s': no hay memoria del sistema (malloc) para sus tablas (en una "
+             "placa sin PSRAM, un vmheap= menor en el ENV le deja mas)", mod->name);
+    return BPVM_ERR_OOM;
+}
+
+static bpvm_status_t sin_bloque(bpvm_t* vm, const bpvm_module_t* mod) {
+    snprintf(vm->load_error, sizeof vm->load_error, "'%s' no cabe en el bloque de la VM", mod->name);
+    return BPVM_ERR_OOM;
+}
+
 static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                                       bpvm_read_at_fn rd, void* rd_user,
                                       size_t size, const char* name_hint, int xip) {
@@ -269,7 +284,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     size_t nombres_usado = 0;
     if (imports_size > 0) {
         mod->nombres = (char*) bpvm_malloc((size_t) imports_size + 1u);
-        if (!mod->nombres) return BPVM_ERR_OOM;
+        if (!mod->nombres) return sin_sistema(vm, mod);
     }
     uint32_t ext_count;
     if (bc_read_be32(&c, &ext_count) != 0)             return BPVM_ERR_IO;
@@ -277,7 +292,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     mod->import_count = (int) ext_count;
     if (ext_count > 0) {
         mod->imports = (char**) bpvm_calloc(ext_count, sizeof(char*));
-        if (!mod->imports) return BPVM_ERR_OOM;
+        if (!mod->imports) return sin_sistema(vm, mod);
         char tmp_from[256];
         for (uint32_t i = 0; i < ext_count; i++) {
             char tmp_name[256];
@@ -305,7 +320,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             mod->dep_flags   = (uint32_t*) bpvm_calloc(nd, sizeof(uint32_t));
             mod->dep_avisado = (uint8_t*)  bpvm_calloc(nd, sizeof(uint8_t));
             if (!mod->dep_names || !mod->dep_gen || !mod->dep_crc || !mod->dep_flags || !mod->dep_avisado)
-                return BPVM_ERR_OOM;
+                return sin_sistema(vm, mod);
             for (uint32_t i = 0; i < nd; i++) {
                 char tmp_mod[160], tmp_from[256];
                 if (bc_read_writeutf(&c, tmp_mod, sizeof(tmp_mod)) != 0)   return BPVM_ERR_IO;
@@ -327,7 +342,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
         uint32_t nr = ((uint32_t) b2[0] << 8) | b2[1];
         if (nr > 0) {
             mod->refs = (bpvm_ref_t*) bpvm_calloc(nr, sizeof(bpvm_ref_t));
-            if (!mod->refs) return BPVM_ERR_OOM;
+            if (!mod->refs) return sin_sistema(vm, mod);
             for (uint32_t i = 0; i < nr; i++) {
                 uint8_t k[3]; char tmp_c[160], tmp_k[256];
                 if (bc_read(&c, k, 3) != 0)                              return BPVM_ERR_IO;
@@ -362,7 +377,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     uint32_t end_addr    = xip ? code_start : code_start + code_size;
 
     if (end_addr > vm->heap_top) {
-        return BPVM_ERR_OOM;
+        return sin_bloque(vm, mod);
     }
 
     if (ext_table_size > 0) {
@@ -390,7 +405,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
              * encima del módulo — memoria que nadie ha reclamado todavía
              * (next_free_address no llega ahí hasta el final) y que se olvida
              * sola al volver. Cero buffers estáticos. */
-            if (end_addr + exports_size > vm->heap_top) return BPVM_ERR_OOM;
+            if (end_addr + exports_size > vm->heap_top) return sin_bloque(vm, mod);
             if (bc_read(&c, vm->memory + end_addr, exports_size) != 0) return BPVM_ERR_IO;
             exp_buf = vm->memory + end_addr;
         }
@@ -523,7 +538,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                         mod->clases = exp_buf + exp_off;
                     } else {
                         uint32_t dst = (end_addr + 3u) & ~3u;
-                        if (dst + len > vm->heap_top) return BPVM_ERR_OOM;
+                        if (dst + len > vm->heap_top) return sin_bloque(vm, mod);
                         memmove(vm->memory + dst, exp_buf + exp_off, len);
                         mod->clases = vm->memory + dst;
                         end_addr = dst + len;
@@ -540,7 +555,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 if (fxcount > 0) {
                     mod->class_fixups = (bpvm_class_fixup_t*) bpvm_calloc(fxcount,
                                           sizeof(bpvm_class_fixup_t));
-                    if (!mod->class_fixups) return BPVM_ERR_OOM;
+                    if (!mod->class_fixups) return sin_sistema(vm, mod);
                     for (uint32_t i = 0; i < fxcount; i++) {
                         if (exp_off + 2 > exports_size) break;
                         uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
@@ -573,7 +588,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 if (ehcount > 0) {
                     mod->eh_class_fixups = (bpvm_eh_class_fixup_t*) bpvm_calloc(ehcount,
                                           sizeof(bpvm_eh_class_fixup_t));
-                    if (!mod->eh_class_fixups) return BPVM_ERR_OOM;
+                    if (!mod->eh_class_fixups) return sin_sistema(vm, mod);
                     for (uint32_t i = 0; i < ehcount; i++) {
                         if (exp_off + 4 > exports_size) break;
                         int32_t code_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
