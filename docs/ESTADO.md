@@ -27,6 +27,11 @@
 
 ## Última sesión
 
+> **17-nov** — **La prueba de resistencia, a las 38 horas, y `#833`** (Eduardo: *«como va la prueba de resistencia?»*).
+> - **A las 6:20** (38 h 45 min): las cuatro sin un error ni un reinicio. Los 4 B de menos al pasar la vuelta 10 000, explicados: la línea de estado se mide a mitad de escribirse, con el número ya en texto (medido en la VM-C del PC). Y dos bloques retenidos: en la Pico 2, 1 928 B; en la C6, 968 B, la tercera vez.
+> - **`#833`, abierta** (*«Podría ser un valor que se confundiera con una referencia?»*; *«Abre ficha si. A la tarde decidimos si va en V8 o en V9.»*): el GC mira las globales de forma conservadora, y en la C6 el número es `minLibre` (los tres bloques, a las mismas distancias que sus valores, y soltados cuando cambia); en la Pico 2, por saber (¿`TOPE_LOG`?). `#799` lo quitó de las pilas; el arreglo sería lo mismo en las globales.
+> - **Lo siguiente:** a las 15:34, las 48 horas: `acabar` en las cuatro, el balance (con la tabla de la robustez) y los pendientes; y decidir si `#833` va en V8 o en V9.
+>
 > **16-nov** — **La prueba de resistencia, a las 15 horas** (Eduardo: *«como va la prueba de resistencia?»*).
 > - **A las 6:22** (14 h 45 min): las cuatro sin un error ni un reinicio, de 4339 a 4929 vueltas cada una; lo libre tras el GC, el de siempre, y los tiempos de cada fase y la temperatura, los del principio. En la C6, 1080 B retenidos nueve horas y media y soltados después: no es una fuga; qué los retenía, al balance. Lo bajado y `analiza.py`, en `C:\tmp\resistencia_v8_2\mirada_16nov\`.
 > - **Lo siguiente** (*«Seguiremos así, mirando los logs cada cierto tiempo hasta que termine la prueba. Y cuando termine hacemos balance y revisamos los pendientes que queden.»*): mirarla de vez en cuando; al acabar (el 17-nov hacia las 15:30), `acabar` en las cuatro, el balance y el repaso de los pendientes.

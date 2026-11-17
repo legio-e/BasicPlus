@@ -7278,6 +7278,14 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > bajado y el resumen (`analiza.py`), en `C:\tmp\resistencia_v8_2\mirada_16nov\`. Hasta que acabe, se mira cada cierto
 > tiempo; al acabar, el balance y los pendientes (Eduardo: *«Seguiremos así, mirando los logs cada cierto tiempo hasta
 > que termine la prueba. Y cuando termine hacemos balance y revisamos los pendientes que queden.»*).
+> **El 17-nov a las 6:20** (Eduardo: *«Mañana lo revisamos pronto ( hacia las 6:30 ) y luego ya a las 48 horas.»*): 38 h
+> 45 min, las cuatro sin un error ni un reinicio (la Pico 2, 12 475 vueltas; la Metro, 12 762; la P4, 12 937; la C6,
+> 11 372); los tiempos de cada fase y la temperatura, como siempre (la tarde del 16-nov, unos 3 °C más en las cuatro a
+> la vez: la calefacción, Eduardo). En las cuatro, lo libre tras el GC bajó 4 B al pasar la vuelta 10 000 y se quedó así:
+> la línea de estado mide a mitad de escribirse, con el número de vueltas ya en texto en el heap, y con cinco cifras ocupa
+> 4 B más (medido en la VM-C del PC: 4 B menos con 10 000 que con 9 999, y vuelve con 9 999). Y dos bloques retenidos:
+> en la Pico 2, 1 928 B desde las 0:55; en la C6, 968 B desde las 1:57, la tercera vez. Es un número que el GC confunde
+> con una referencia: **`#833`**. Lo bajado, en `C:\tmp\resistencia_v8_2\mirada_17nov\`.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7565,6 +7573,44 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
+
+#### 🔵 `#833` — un número en una global retiene el objeto que empieza justo en esa dirección: el GC mira las globales de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas (abierta el 17-nov, en la prueba de resistencia; **V8 o V9: se decide por la tarde**)
+
+- **Lo que pasa** (la prueba de resistencia, `compat/resistencia/`): tras el `gc()` de la línea de estado, un bloque que el
+  programa ya no usa sigue vivo y parte lo libre en dos. En la C6, tres veces: 876 B en una sola medida (a la 1 h 21 min
+  de prueba), 1 080 B nueve horas y media (de las 3 h 43 min a las 13 h 12 min) y 968 B desde la 1d 10 h 23 min (el
+  17-nov, a las 1:57), que sigue; el mayor hueco, de 80 100 a ~49 600–49 912 B. En la Pico 2, 1 928 B desde la 1d 9 h
+  21 min (el 17-nov, a las 0:55), que sigue; el mayor hueco, de 279 240 a 222 356. Sin un error. En la Metro y la P4, con
+  mucho heap (el GC pasa una vez cada dos vueltas, o menos), nada así: sólo medidas sueltas de 12 a 28 B, como en las
+  otras dos.
+- **La causa** (Eduardo: *«Podría ser un valor que se confundiera con una referencia?»*): sí. El GC de las dos VMs recorre
+  los bloques de datos de los módulos —las globales y las constantes— palabra a palabra y de forma conservadora
+  (`gc_mark_phase`, paso 3, en `heap.c`; `getDataRegions` y `scanRegion` en miVM): una palabra que vale justo la dirección
+  de un objeto (su cabecera + 4, `is_heap_ref`) lo marca, sea una referencia o un número. Con `Core` en un pack el heap
+  empieza abajo ([[heap-abajo-con-core-en-pack]]; en la C6, hacia los 20 KB), donde caen números corrientes, y este GC no
+  compacta: el objeto retenido se queda en su sitio. `#799` (13-nov) lo quitó de las pilas de los hilos BP (allí sólo
+  cuentan las palabras con `TAG`) y dejó como estaban, a propósito, las globales y las pilas de C de las natives.
+- **En la C6, el número es `minLibre`**, la global de `Resistencia` con lo libre mínimo entre fases (un múltiplo de 4, como
+  las direcciones). Con lo libre y el mayor hueco de cada línea de estado (el mayor es el de encima del bloque) sale dónde
+  empieza cada bloque: los tres están a 1 068 y 200 B unos de otros, justo lo que se diferencian los valores de
+  `minLibre` en cada momento (59 960, 58 892 y 58 692). Los dos que se soltaron lo hicieron en la misma medida en que
+  `minLibre` cambió (a la 1 h 31 min y a las 13 h 12 min), y el de ahora sigue porque vale 58 692 desde entonces.
+- **En la Pico 2, por saber:** no es `minLibre` (cambió tres veces y el bloque siguió), sino otro número que no cambia
+  desde las 0:55. Encaja `TOPE_LOG` (65 536, una constante) si su heap empieza hacia los 9,7 KB: sin comprobar (al acabar
+  la prueba, o en el micro simulado con el pack). Si es una constante, ese bloque no se suelta hasta el final del RUN.
+  Las medidas sueltas de 12 a 28 B, en las cuatro, pueden ser lo mismo con números que cambian enseguida (la semilla de
+  los aleatorios vale menos de 65 537): sin comprobar.
+- **Lo que supone:** no es una fuga ni corrompe nada (cada número retiene como mucho un objeto, el que empieza justo en su
+  dirección, y sólo mientras vale eso), pero el objeto puede ser grande y, sobre todo, parte el heap: en la C6, el mayor
+  bloque que se puede pedir baja de 80 a 50 KB, y un programa que necesite uno grande se podría quedar sin memoria con
+  memoria de sobra. En un dispositivo que corre días, la coincidencia acaba llegando: en la C6, tres veces en 38 horas.
+- **El arreglo, propuesto:** lo de `#799` en los bloques de datos: sólo cuentan las palabras con `TAG`, en las dos VMs.
+  Antes, comprobar que ninguna global guarda la dirección cruda de un objeto del heap (sin handle): lo que escriben ahí
+  la VM y las natives. La prueba, como `raices_smoke` (`#799`): una global entera que vale la dirección de un objeto que
+  muere; con el sabotaje, retenido.
+- **V8 o V9:** por decidir (Eduardo, 17-nov: *«Abre ficha si. A la tarde decidimos si va en V8 o en V9.»*). Es un cambio
+  en las VMs (Eduardo, 14-nov: *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo
+  podemos analizar.»*).
 
 #### 🔵 `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **V8: por analizar**)
 
