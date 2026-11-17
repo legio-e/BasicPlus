@@ -7596,7 +7596,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#834` — en la VM-Java, un `sleep(100)` puede durar 84–100 ms medido con `Machine.uptimeMs()`: el `sleep` decide cuándo despertar con el reloj de pared (`System.currentTimeMillis()`, a saltos de ~15,6 ms en Windows), y desde `#827` el uptime mide con el monótono (`System.nanoTime()`) (abierta el 17-nov, en el `check-jc` de `#832`: `UptimeArranque` en ROJO; **V8 o V9: por decidir**)
+#### ✅ `#834` — en la VM-Java, un `sleep(100)` puede durar 84–100 ms medido con `Machine.uptimeMs()`: el `sleep` decide cuándo despertar con el reloj de pared (`System.currentTimeMillis()`, a saltos de ~15,6 ms en Windows), y desde `#827` el uptime mide con el monótono (`System.nanoTime()`) (abierta el 17-nov, en el `check-jc` de `#832`: `UptimeArranque` en ROJO; **CERRADA el mismo día**, el commit de `#834`: la VM-Java despierta con el reloj de `uptimeMs()`; Eduardo: *«OK, lo arreglamos en V8»*)
 
 - **Lo que pasó:** en el `check-jc` de `#832`, `UptimeArranque` (el sample de `#827`, en la red desde el 15-nov) dio «FALLO
   en 100 ms conto 86» en la versión JC, en una de las VMs. Su `.mod` es el mismo con el compilador de antes y el nuevo:
@@ -7616,6 +7616,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **El arreglo propuesto** (sólo la VM-Java, tres líneas): la hora de despertar con el reloj monótono, el de
   `uptimeMs()` (`System.nanoTime()`, en ms), al dormir y en los dos sitios que la comparan. `now()` y el RTC siguen con
   el reloj de pared, que es lo suyo.
+- **Medido antes de tocar** (un programa que mide cada espera con `uptimeMs()`): en la VM-Java, lo corto sale al azar —un
+  `sleep(20)` de 19 ms, varios `sleep(1)` de 0 ms, y la primera espera de 100, a veces de 94 o de 98—; en la VM-C,
+  ninguna espera por debajo de lo pedido.
+- **Hecho** (Eduardo: *«OK, lo arreglamos en V8»*): la hora de despertar, `wakeAtNs`, en nanosegundos de
+  `System.nanoTime()`, el reloj de `uptimeMs()`: al dormir (`blockTcSleep`), al elegir hilo (`pickNextRunnableTc`) y en la
+  espera de los workers (`earliestSleepWakeNs`, que espera en ms redondeando hacia arriba: con menos de 1 ms, `wait(0)`
+  esperaría sin fin). En ns y no en ms, porque así queda garantizado: entre las dos lecturas de `uptimeMs()` pasan al
+  menos `n` ms en ns, y entonces su resta también da al menos `n` (el suelo de una suma es al menos la suma de los
+  suelos). La VM-C ya lo cumplía: duerme y mide con el mismo reloj en ms.
+- **La prueba**, `UptimeArranque` (en la red): la espera de 100, ya con 100 de umbral (eran 90), y una función que mide
+  30 esperas de 20 ms y 60 de 1 ms, las que más lo destapaban. Con la VM-Java de antes, 4 de 10 ejecuciones con algún
+  FALLO; con la nueva, 0 de 25; la VM-C, 0 de 10 y 0 de 25. No es determinista: lo de antes se quedaba corto al azar.
+  Pero la red lo corre en varias pasadas, y una vuelta atrás se vería pronto.
+- **Comprobado:** las suites de Maven (miVM, 66; el compilador, 396); el compilador y el IDE, rehechos, con la VM-Java
+  nueva dentro (`wakeAtNs` en las clases de los tres jars); la red, VERDE (paridad, 217; MOD8, 209 y los 8 SKIP; dos
+  workers, 217; la cápsula, 59; las 115 pruebas de C; el micro simulado, la sombra y el estrés); `check-jc`, 215 y los 2
+  SKIP de siempre, ya sin el FAIL.
 
 #### ✅ `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **CERRADA el mismo día**, el commit de `#833`: el GC verifica el contador de cada referencia, la regla de Eduardo; en las placas, al grabarlas)
 

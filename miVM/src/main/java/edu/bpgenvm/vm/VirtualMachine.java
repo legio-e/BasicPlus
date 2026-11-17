@@ -82,7 +82,7 @@ public class VirtualMachine {
     enum ThreadStatus {
         RUNNABLE,       // listo para correr, en la cola
         RUNNING,        // ejecutándose en este worker
-        BLOCKED_SLEEP,  // dormido hasta wakeAtMs
+        BLOCKED_SLEEP,  // dormido hasta wakeAtNs
         BLOCKED_JOIN,   // esperando que un thread target termine
         BLOCKED_MUTEX,  // esperando que un mutex se libere
         BLOCKED_PROMPT, // esperando promptResponse del cliente IDE (N20)
@@ -175,7 +175,9 @@ public class VirtualMachine {
          */
         volatile boolean yieldRequested = false;
         // Bloqueos:
-        long wakeAtMs;           // para BLOCKED_SLEEP (System.currentTimeMillis() ≥ esto → despertar)
+        long wakeAtNs;           // para BLOCKED_SLEEP (System.nanoTime() ≥ esto → despertar). V8 #834: el reloj
+                                 // monótono, el de uptimeMs(); con currentTimeMillis (a saltos de ~15,6 ms en
+                                 // Windows), un sleep(100) medido con uptimeMs() daba 84–100 ms
         int joiningTid;          // para BLOCKED_JOIN (id del thread esperado)
         int blockedOnMutexId = -1; // para BLOCKED_MUTEX (id del mutex en VM.mutexes)
         /** Última línea origen reportada al DebugHook (para detectar cambios de línea). */
@@ -277,7 +279,7 @@ public class VirtualMachine {
     //
     // vmLock cubre todo el estado compartido entre los workers Java:
     //   - runQueue, threads list (las pilas de los hilos, V8 #740, son del HEAP: abajo)
-    //   - ThreadContext.{status, waiters, wakeAtMs, joiningTid, yieldRequested}
+    //   - ThreadContext.{status, waiters, wakeAtNs, joiningTid, yieldRequested}
     //   - currentThread / currentThreadId (sólo durante setup)
     //   - HEAP: heapNext, freeListHead, scan/sweep en gc()
     //
@@ -582,9 +584,9 @@ public class VirtualMachine {
      * cuyo wakeAt ya pasó. Debe llamarse bajo vmLock.
      */
     private ThreadContext pickNextRunnableTc() {
-        long now = System.currentTimeMillis();
+        long now = System.nanoTime();   // V8 #834: el reloj de wakeAtNs
         for (ThreadContext t : threads) {
-            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && now >= t.wakeAtMs) {
+            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && now >= t.wakeAtNs) {
                 t.setStatus(ThreadStatus.RUNNABLE, -1, "L507");
                 runQueue.addLast(t.id);
             }
@@ -605,12 +607,12 @@ public class VirtualMachine {
         return null;
     }
 
-    /** Más próximo wakeAt entre sleepers; Long.MAX_VALUE si no hay. Bajo vmLock. */
-    private long earliestSleepWakeMs() {
+    /** Más próximo wakeAt entre sleepers, en el reloj de System.nanoTime(); Long.MAX_VALUE si no hay. Bajo vmLock. */
+    private long earliestSleepWakeNs() {
         long e = Long.MAX_VALUE;
         for (ThreadContext t : threads) {
-            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && t.wakeAtMs < e) {
-                e = t.wakeAtMs;
+            if (t.getStatus() == ThreadStatus.BLOCKED_SLEEP && t.wakeAtNs < e) {
+                e = t.wakeAtNs;
             }
         }
         return e;
@@ -712,7 +714,9 @@ public class VirtualMachine {
                 runQueue.addLast(tc.id);
             } else {
                 tc.setStatus(ThreadStatus.BLOCKED_SLEEP, -1, "L627");
-                tc.wakeAtMs = System.currentTimeMillis() + ms;
+                // V8 #834 — en el reloj de uptimeMs() (System.nanoTime()), y en ns: medido con él, un sleep(ms)
+                // dura ms o más, nunca menos, como en la VM-C (que duerme y mide con el mismo reloj)
+                tc.wakeAtNs = System.nanoTime() + ms * 1_000_000L;
             }
             vmLock.notifyAll();
         }
@@ -3559,14 +3563,15 @@ public class VirtualMachine {
                                 vmLock.notifyAll();
                                 return;
                             }
-                            long earliest = earliestSleepWakeMs();
-                            long now = System.currentTimeMillis();
+                            long earliest = earliestSleepWakeNs();
+                            long now = System.nanoTime();
                             try {
                                 if (earliest == Long.MAX_VALUE) {
                                     vmLock.wait();          // sólo joins pendientes
                                 } else {
-                                    long delta = earliest - now;
-                                    if (delta > 0) vmLock.wait(delta);
+                                    long delta = earliest - now;   // ns
+                                    // en ms, redondeando hacia arriba: con menos de 1 ms, wait(0) esperaría sin fin
+                                    if (delta > 0) vmLock.wait((delta + 999_999L) / 1_000_000L);
                                 }
                             } catch (InterruptedException ie) {
                                 Thread.currentThread().interrupt();
