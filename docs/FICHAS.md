@@ -7306,7 +7306,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > con el log de la placa, `#833` aclarada en las dos: en la Pico 2 el número es `TOPE_LOG`, una constante (el bloque,
 > vivo hasta el final), y en la C6, los tres bloques, al byte. Lo bajado, en `C:\tmp\resistencia_v8_2\<placa>\`; las dos
 > partes del log juntas, con `analiza.py`, `serie.py` y `retenidos.py` (las tandas con un bloque retenido), en
-> `C:\tmp\resistencia_v8_2\final\`. Quedan, del balance, la tabla de la robustez (arriba) y decidir `#833`.
+> `C:\tmp\resistencia_v8_2\final\`. Quedan, del balance, la tabla de la robustez (arriba) y `#833` (decidido esa
+> tarde: en V8, con el GC verificando el contador de cada referencia).
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7595,7 +7596,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **V8 o V9: se decide por la tarde**)
+#### 🔵 `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **V8**, decidido el mismo día: el GC verificará el contador de cada referencia)
 
 - **Lo que pasa** (la prueba de resistencia, `compat/resistencia/`): tras el `gc()` de la línea de estado, un bloque que el
   programa ya no usa sigue vivo y parte lo libre en dos. En la C6, tres veces: 876 B en una sola medida (a la 1 h 21 min
@@ -7635,13 +7636,39 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   todo, parte el heap: el mayor bloque que se puede pedir baja, en la C6, de 80 a 50 KB, y en la Pico 2, de 279 a 222 KB;
   un programa que necesite uno grande se podría quedar sin memoria con memoria de sobra. En un dispositivo que corre
   días, la coincidencia acaba llegando: en 48 horas, tres veces en la C6 y una en la Pico 2 (ésa, para siempre).
-- **El arreglo, propuesto:** lo de `#799` en los bloques de datos: sólo cuentan las palabras con `TAG`, en las dos VMs.
-  Antes, comprobar que ninguna global guarda la dirección cruda de un objeto del heap (sin handle): lo que escriben ahí
-  la VM y las natives. La prueba, como `raices_smoke` (`#799`): una global entera que vale la dirección de un objeto que
-  muere; con el sabotaje, retenido.
-- **V8 o V9:** por decidir (Eduardo, 17-nov: *«Abre ficha si. A la tarde decidimos si va en V8 o en V9.»*). Es un cambio
-  en las VMs (Eduardo, 14-nov: *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo
-  podemos analizar.»*).
+- **Cómo es una referencia, y qué hace hoy el GC con ella.** Una referencia de BP es un handle de 8 bytes: su contador
+  (la generación, la palabra alta, delante) y su número con el bit 30 encendido (`BPVM_HANDLE_TAG`, la palabra baja);
+  la dirección del objeto sólo la tiene la tabla de handles. El GC de los bloques de datos coge cada palabra suelta: si
+  lleva la marca, busca su número en la tabla (y el contador se pierde); si no, la toma por una dirección directa
+  (`bpref_deref`: sin `TAG`, la identidad), que es lo que hace `#833`. Es de antes de los handles (V4), cuando una
+  referencia era la dirección; quedó por las natives, que mientras trabajan guardan direcciones en sus variables de C.
+- **Las direcciones directas no llegan a las globales** (Eduardo, 17-nov: *«BP no trabaja con direcciones de memoria,
+  solo el código nativo y alguna operación, siempre es temporal. No estoy seguro pero diría que cuando el GC libera no
+  hay instrucciones a medias osea que el uso de direcciones directas no debería darse.»*): así es, con un matiz. El GC
+  sí puede pasar a mitad de una instrucción (la que pide memoria lanza la colecta ahí mismo) o de una native (la del
+  otro run, aparcada dentro de sí misma), pero entonces las direcciones directas están en variables de C, no en la
+  memoria de BP: la instrucción deja su pila BP a la vista y relee las direcciones tras la reserva, y las pilas de C de
+  las natives las recorre el GC aparte (los pasos 2d–2f, de forma conservadora).
+- **El arreglo, con la regla de Eduardo** (17-nov: *«En cuanto a la búsqueda de referencias que hace el GC, no hay nada
+  incorrecto en que busque números de 4 bytes, pero antes de dar por bueno que es una referencia ha de verificar que el
+  contador coincide.»*): en los bloques de datos (las globales y las constantes) y en las pilas de los hilos BP, una
+  palabra sólo cuenta como referencia si lleva la marca, su número está dentro de la tabla con el slot en uso, y los 4
+  bytes de delante (su contador) son el contador del slot. Es la comprobación de `bpvm_ref_dead`, la que hace que usar
+  un objeto liberado dé error, que el GC no usaba (en las pilas, desde `#799`, sólo mira la marca; en los bloques de
+  datos, ni eso). Además de `#833`: la mitad «contador» de cada referencia deja de leerse como una dirección, y una
+  referencia caducada (a un objeto que su dueño soltó, con el slot reutilizado) deja de retener al nuevo ocupante. Las
+  pilas de C de las natives, como están: allí las direcciones directas son legítimas y no llevan contador al lado. En
+  las dos VMs (miVM tiene la misma tabla, `handleGen`).
+- **Antes de tocar, el censo:** que toda referencia guardada en los bloques de datos y en las pilas de los hilos BP es
+  el handle entero, con su contador (`bpref_store`, el carril de 8 bytes), y ninguna se queda en sus 4 bytes de abajo
+  con el contador a 0: con la regla, ésa dejaría de mantener vivo su objeto, y el GC lo soltaría en uso. Y que nada
+  escribe en un bloque de datos la dirección directa de un objeto del heap. La prueba, como `raices_smoke` (`#799`):
+  una global entera que vale la dirección de un objeto que muere, y una referencia caducada en una global; con el
+  sabotaje, retenidos.
+- **V8** (Eduardo, 17-nov: *«OK. Yo lo arreglaría en V8. Como también tenemos que arreglar otros pendientes, los podemos
+  arreglar todos. Luego habrá que volver a grabar placas y hacer pruebas pero bueno, es asumible.»*). Antes, el 14-nov:
+  *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo podemos analizar.»*; la regla
+  usa una comprobación que la VM ya tiene, y no reorganiza nada.
 
 #### 🔵 `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **V8: por analizar**)
 
