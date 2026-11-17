@@ -7306,8 +7306,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > con el log de la placa, `#833` aclarada en las dos: en la Pico 2 el número es `TOPE_LOG`, una constante (el bloque,
 > vivo hasta el final), y en la C6, los tres bloques, al byte. Lo bajado, en `C:\tmp\resistencia_v8_2\<placa>\`; las dos
 > partes del log juntas, con `analiza.py`, `serie.py` y `retenidos.py` (las tandas con un bloque retenido), en
-> `C:\tmp\resistencia_v8_2\final\`. Quedan, del balance, la tabla de la robustez (arriba) y `#833` (decidido esa
-> tarde: en V8, con el GC verificando el contador de cada referencia).
+> `C:\tmp\resistencia_v8_2\final\`. Queda, del balance, la tabla de la robustez (arriba); `#833`, decidido y hecho
+> esa tarde (en V8: el GC verifica el contador de cada referencia), falta verlo en las placas.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7596,7 +7596,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **V8**, decidido el mismo día: el GC verificará el contador de cada referencia)
+#### ✅ `#833` — un número en una global o una constante retiene el objeto que empieza justo en esa dirección: el GC mira los bloques de datos de los módulos de forma conservadora, y en las placas con poco heap un bloque de 1–2 KB se queda vivo horas, o hasta el final del RUN (abierta el 17-nov, en la prueba de resistencia; **CERRADA el mismo día**, el commit de `#833`: el GC verifica el contador de cada referencia, la regla de Eduardo; en las placas, al grabarlas)
 
 - **Lo que pasa** (la prueba de resistencia, `compat/resistencia/`): tras el `gc()` de la línea de estado, un bloque que el
   programa ya no usa sigue vivo y parte lo libre en dos. En la C6, tres veces: 876 B en una sola medida (a la 1 h 21 min
@@ -7683,6 +7683,29 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   arreglar todos. Luego habrá que volver a grabar placas y hacer pruebas pero bueno, es asumible.»*). Antes, el 14-nov:
   *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo podemos analizar.»*; la regla
   usa una comprobación que la VM ya tiene, y no reorganiza nada.
+- **Hecho, en las dos VMs** (Eduardo: *«OK»*, 17-nov). VM-C, `heap.c`: `gc_es_referencia` (la marca, el número en la
+  tabla y el contador del slot en los 4 bytes de delante), en el paso 1 de `gc_mark_phase` (las pilas de los hilos BP:
+  antes, sólo la marca, `#799`) y en el paso 3 (los bloques de datos: antes, todo). miVM: `scanRegion`, con
+  `esReferencia`, en sus dos usos (las pilas y los bloques de datos; lo de `#786` queda dentro). Las pilas de C de las
+  natives, como estaban, y la defensa de `#786` al descargar, para ellas. El sabotaje, uno para las dos cosas: el
+  recorrido de antes de `#799` (`--sabotaje-raices` en el micro simulado y `bpvm_sabotaje_raices` en la VM-C;
+  `sabotajeRaices` en miVM).
+- **Las pruebas:** `make test-raices` (nueva, en la red: en una global, un número con la dirección de un objeto no lo
+  retiene, la referencia entera sí, y una caducada no retiene al nuevo ocupante de su slot; con el sabotaje, los dos
+  primeros casos sí retienen, así que la prueba caza el fallo), `RaicesTest` en miVM (el espejo, de caja blanca) y
+  `raices_smoke` ampliado (en el micro simulado, con `Core` en el pack: con el sabotaje, la global `g=3008` retiene un
+  `File` muerto; sin él, no; y lo de la pila de `#799`, igual). La referencia caducada no se puede preparar desde BP
+  (qué objeto ocupa el slot depende de lo que se reserve entretanto): sólo en las dos de caja blanca. La red, VERDE (la
+  paridad, 217; MOD8, 209 y los 8 SKIP; dos workers, 217; la cápsula, 59; las pruebas de C, 115/115; el micro
+  simulado, 15/15; la sombra, 15/15; el estrés; packs-abi y la stdlib de las imágenes), `check-jc` (215 y los 2 SKIP
+  de siempre) y las suites de Maven (miVM, 66; el compilador, 395), sin un fallo. La primera vuelta de la red salió ROJA en una sola comprobación, la 16.9 de
+  `overlay_smoke`: el sabotaje 9 de `#786` (quitar su defensa al descargar) ya no hacía retener al entero de `Core`,
+  porque está en su bloque de datos y `#833` lo cubre siempre; ahora la 16.9 quita las dos defensas (y retiene) y la
+  16.9b, sólo la de `#786` (y no retiene).
+- **Los documentos:** `HEAP_LAYOUT` §1 y §7 (la regla), `MOD_FORMAT` §5 y el manual §14.4, en los dos idiomas (y la
+  copia del manual en el IDE).
+- **En las placas**, con la imagen que se grabe con los demás pendientes; y en una prueba de resistencia, si se repite:
+  lo libre tras el GC, sin bloques retenidos.
 
 #### 🔵 `#832` — seis ejemplos de la documentación no compilan: cinco del manual (§4.6, §6.1, §9.2.1, §9.8 y §15.2) y uno de la guía rápida (abierta el 15-nov, al medir para la página de las pruebas; **V8: por analizar**)
 

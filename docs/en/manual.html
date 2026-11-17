@@ -2206,8 +2206,10 @@ shared object</code></pre>
 
 <h3 id="conc-gc">14.4 GC and concurrency</h3>
 <p>
-  The mark-and-sweep GC is conservative: it scans the stacks of all live
-  threads and the modules' data blocks to identify roots. The heap operations
+  The mark-and-sweep GC scans the stacks of all live threads and the modules'
+  data blocks to identify roots. Only a live reference counts, checked against its
+  counter: a number that happens to equal an object's address does not keep it
+  alive (V8, <code>#799</code> and <code>#833</code>). The heap operations
   (<code>heapAlloc</code>, <code>gc()</code>, <code>freeOwnedObject</code>) are
   serialized under <code>vmLock</code> &mdash; two workers cannot mutate the
   heap at the same time.

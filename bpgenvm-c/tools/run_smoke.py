@@ -188,9 +188,10 @@ def compila(dest, nombre, fuente):
     return mod if rc.returncode == 0 and os.path.exists(mod) else None
 
 
-def arranca(flash):
+def arranca(flash, extra=()):
+    """`extra`: opciones más para el sim (overlay_smoke, V8 #833: --sabotaje-raices)."""
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash, "--mem=1M", "--flash=4M",
-                             "--pack=" + STDLIB_PACK], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                             "--pack=" + STDLIB_PACK] + list(extra), stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     for _ in range(80):
         try:
             sock = socket.create_connection(("127.0.0.1", PORT), timeout=2.0)

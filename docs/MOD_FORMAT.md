@@ -490,8 +490,9 @@ Por eso el frontend **redondea el tamaño de CADA símbolo al siguiente múltipl
 su offset CS-relativo) y los bytes sobrantes quedan al alto, a cero. Como todos los
 slots son múltiplo de 4, **cada símbolo cae en un offset 4-alineado** y el bloque
 entero —y con él `codeStart = dataStart + dataSize` (= **CS**)— queda alineado sin
-padding extra al final. Importa porque el barrido conservador del GC —en **ambas**
-VMs— solo lee palabras **alineadas a 4**: un símbolo de referencia (un global) en
+padding extra al final. Importa porque el barrido del GC —en **ambas** VMs, palabra a
+palabra; desde V8 `#833`, sólo cuenta una referencia viva, con su contador delante:
+`HEAP_LAYOUT` §7— solo lee palabras **alineadas a 4**: un símbolo de referencia (un global) en
 dirección no alineada sería invisible al GC → recolección de un objeto vivo (el bug
 **GC-2** de v3.0.1). Como extra, evita accesos a `integer` no alineados, que
 **fallan** en ARM/RISC-V. (Los campos DENTRO de un objeto no sufren esto: van en

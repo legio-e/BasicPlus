@@ -1454,12 +1454,14 @@ void bpvm_destruir_olvida_clases(bpvm_t* vm);
 void bpvm_overlay_sale(bpvm_t* vm, const bpvm_thread_t* tc);
 /* SÓLO PRUEBAS: rompe una pieza, para ver que overlay_smoke lo caza. 1, un literal no va al heap; 2, los handles no siguen
  * a los objetos; 3, la tabla de interfaces no vuelve; 5, sus globales siguen siendo raíces; 6, los símbolos no se van;
- * 7, rehacer el enlace no acaba donde acabó; 8, los hilos que deja, sin contar; 9, al descargar, un entero retiene. */
+ * 7, rehacer el enlace no acaba donde acabó; 8, los hilos que deja, sin contar; 9, al descargar, un entero retiene (desde
+ * #833, en las pilas y los bloques de datos sólo si además está --sabotaje-raices: las dos defensas se solapan). */
 extern int bpvm_sabotaje_overlay;
 /* SÓLO PRUEBAS (test_heapdescarrilado): el mapa del GC, a la medida de lo usado, como antes de #787. */
 extern int bpvm_sabotaje_mapa;
-/* SÓLO PRUEBAS (raices_smoke, en el micro simulado: --sabotaje-raices): en la pila de un hilo BP, un entero que cae justo
- * en un objeto vuelve a retenerlo, como antes de #799 (heap.c, gc_mark_phase, paso 1). */
+/* SÓLO PRUEBAS (raices_smoke, en el micro simulado: --sabotaje-raices; y test-raices): en la pila de un hilo BP y en los
+ * bloques de datos de los módulos, una palabra que cae justo en un objeto vuelve a retenerlo, sea un número o una
+ * referencia caducada, como antes de #799 y #833 (heap.c, gc_es_referencia: los pasos 1 y 3 de gc_mark_phase). */
 extern int bpvm_sabotaje_raices;
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */

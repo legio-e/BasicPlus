@@ -143,7 +143,8 @@ static size_t mapa_bytes(uint32_t span) {
 }
 
 int bpvm_sabotaje_mapa = 0;   /* SÓLO PRUEBAS (test_heapdescarrilado): el mapa, a la medida de lo usado, como antes de #787 */
-int bpvm_sabotaje_raices = 0; /* SÓLO PRUEBAS (raices_smoke): en la pila, un entero vuelve a retener, como antes de #799 */
+int bpvm_sabotaje_raices = 0; /* SÓLO PRUEBAS (raices_smoke, test-raices): en las pilas y en los bloques de datos, cualquier
+                               * palabra vuelve a retener, como antes de #799 y #833 (gc_es_referencia) */
 
 static void build_gc_valid_map(bpvm_t* vm) {
     /* V8 #787 (4-nov) — EL MAPA SE PIDE UNA VEZ, PARA TODO EL HEAP, en la primera colecta. Desde el 7-jul se medía por el
@@ -328,7 +329,9 @@ static void gc_marca_uno(bpvm_t* vm, uint32_t ref_word) {
     /* V8 H9 (#786) — AL DESCARGAR UN OVERLAY SÓLO VALEN LOS HANDLES. El recorrido es conservador: un entero que cae justo
      * en un objeto (un desplazamiento de una vtable de Core, la vuelta de un marco) lo retiene de más, y normalmente da
      * igual. Pero unload pregunta qué sigue vivo de verdad, y ahí eso sería un «sigue vivo» falso. Una palabra sin TAG
-     * nunca es una referencia a un objeto del heap (bpref_deref): el resto del tiempo se deja como está, por las natives. */
+     * nunca es una referencia a un objeto del heap (bpref_deref): el resto del tiempo se deja como está, por las natives.
+     * V8 #833: las pilas BP y los bloques de datos ya no llegan aquí con un número (gc_es_referencia, siempre); esto
+     * queda para lo demás, sobre todo las pilas de C de las natives. */
     if ((ref_word & BPVM_HANDLE_TAG) == 0u && vm->overlay != NULL && vm->overlay->cerrado && bpvm_sabotaje_overlay != 9) return;
     uint32_t header_addr = user_ref - 4;
     uint32_t tag = bpvm_read_u32_be(vm->memory + header_addr);
@@ -420,6 +423,26 @@ static void gui_mark_visit(void* ctx, uint32_t objptr) {
 }
 #endif
 
+/* V8 #833 (17-nov) — ¿ES `v`, LEÍDA EN `addr`, LA MITAD BAJA DE UNA REFERENCIA VIVA? La regla de Eduardo: «no hay nada
+ * incorrecto en que busque números de 4 bytes, pero antes de dar por bueno que es una referencia ha de verificar que el
+ * contador coincide». En la memoria de BP —las pilas de los hilos y los bloques de datos de los módulos— una referencia
+ * es un handle de 8 bytes: su contador (la generación) delante y su número con la marca (BPVM_HANDLE_TAG) detrás.
+ * Cuenta si lleva la marca, su número está en la tabla y los 4 bytes de delante —dentro de la región, desde `lo`— son
+ * el contador del slot: lo que mira bpvm_ref_dead cuando BP usa una referencia. No cuentan un número (lo que hacía #833:
+ * un `minLibre` o un `TOPE_LOG` que valía justo la dirección de un objeto lo retenía), la mitad «contador» de una
+ * referencia ni una referencia caducada (la de un objeto que su dueño soltó: su slot, reciclado, ya es de otro). Nada
+ * de lo que BP pueda usar se queda fuera: lo que se escribe ahí lleva siempre su contador vivo (el censo de #833). Las
+ * pilas de C de las natives no pasan por aquí (2d–2f): allí las direcciones directas son legítimas. Con el sabotaje
+ * (SÓLO PRUEBAS: raices_smoke y test-raices), el recorrido de antes de #799: cualquier palabra cuenta. */
+static int gc_es_referencia(const bpvm_t* vm, uint32_t lo, uint32_t addr, uint32_t v) {
+    if (bpvm_sabotaje_raices) return 1;
+    if ((v & BPVM_HANDLE_TAG) == 0u) return 0;
+    if (addr < lo + 4u) return 0;                 /* su contador quedaría fuera de la región */
+    uint32_t idx = v & ~BPVM_HANDLE_TAG;
+    if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) return 0;
+    return bpvm_read_u32_be(vm->memory + addr - 4u) == vm->handles.gen[idx];
+}
+
 /* V8 #740 — la marca de la pila de un hilo vivo (gc_mark_phase), por su cabecera: 8 B antes de su base. Si ahí no hay
  * un bloque vivo, la pila de un hilo que aún corre se ha soltado o nunca fue del heap: no pasa, y si pasa, que se oiga.
  * Espejo de gcLocked (miVM). */
@@ -470,8 +493,8 @@ static void gc_mark_phase(bpvm_t* vm) {
              * en las pilas de C de las natives (los pasos 2d-2f, que siguen conservadores). Un entero que caía justo en
              * un objeto lo retenía: con Core en un pack el heap empieza donde viven los enteros pequeños (medido en el
              * micro simulado: un File en la 2944, y un entero 2944 en la pila). Lo de #786 al descargar, siempre.
-             * miVM, lo mismo (scanRegion de las pilas). */
-            if ((v & BPVM_HANDLE_TAG) == 0u && !bpvm_sabotaje_raices) continue;
+             * miVM, lo mismo (scanRegion de las pilas). V8 #833: y con el contador de la referencia, que coincida. */
+            if (!gc_es_referencia(vm, lo, addr, v)) continue;
             {   /* ¿esta palabra apunta a un bloque real del heap? */
                 bpref_t rr; rr.v = v;
                 uint32_t ur = bpref_deref(vm, rr);
@@ -619,7 +642,11 @@ static void gc_mark_phase(bpvm_t* vm) {
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
      *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
      *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).
-     *    Conservador, como las pilas. Espejo del getDataRegions de la VM-Java. */
+     *    Espejo del getDataRegions de la VM-Java.
+     *    V8 #833 (17-nov) — SÓLO LAS REFERENCIAS VIVAS, como en las pilas (gc_es_referencia). Era conservador: un
+     *    número que valía justo la dirección de un objeto lo retenía, y con Core en un pack el heap empieza donde viven
+     *    los números corrientes. La prueba de resistencia: en la C6, `minLibre` retuvo tres bloques de 0,9 a 1,1 KB; en
+     *    la Pico 2, la constante TOPE_LOG (65536), uno de 1928 B hasta el final; y los dos partían el heap. */
     /* V8 H9 (#786) — un overlay que se está descargando ya no es raíz: lo que sólo alcanzan sus globales, se va. */
     int con_datos = (vm->overlay != NULL && vm->overlay->cerrado) ? vm->overlay->modulos : vm->module_count;
     for (int i = 0; i < con_datos; i++) {
@@ -628,6 +655,7 @@ static void gc_mark_phase(bpvm_t* vm) {
         uint32_t hi = m->data_start + m->data_size;
         for (uint32_t addr = lo; addr + 4 <= hi; addr += 4) {
             uint32_t v = bpvm_read_u32_be(vm->memory + addr);
+            if (!gc_es_referencia(vm, lo, addr, v)) continue;
             mark_recursive(vm, v);
         }
     }

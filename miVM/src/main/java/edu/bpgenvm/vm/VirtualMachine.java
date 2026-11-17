@@ -2432,27 +2432,46 @@ public class VirtualMachine {
      *  un módulo empiezan alineados (la base del módulo más la tabla ext), así que ahí no cambia nada.
      *  V8 H9 (#786) — al descargar un overlay sólo valen los handles: un entero que cae justo en un objeto (un
      *  desplazamiento de una vtable de Core, la vuelta de un marco) lo retiene de más, y ahí sería un «sigue vivo» falso.
-     *  Como gc_marca_uno. */
+     *  Como gc_marca_uno.
+     *  V8 #799 (13-nov) — en la pila de un hilo BP, una palabra sin TAG nunca es una referencia a un objeto del heap (las
+     *  referencias van como handles; una dirección cruda sólo vive en las pilas de C de las natives, y miVM no tiene):
+     *  un entero que caía justo en un objeto lo retenía (con Core en un pack, el heap empieza donde viven los enteros
+     *  pequeños; medido en el micro simulado, un File en la 2944 y un entero 2944 en la pila).
+     *  V8 #833 (17-nov) — y en los bloques de datos, igual, y con el contador: sólo cuenta una referencia viva
+     *  ({@link #esReferencia}). Recorre las pilas de los hilos y los bloques de datos, y nada más: lo de #786 queda
+     *  dentro (sólo los handles, siempre). La VM-C, lo mismo (gc_es_referencia, los pasos 1 y 3 de gc_mark_phase). */
     private void scanRegion(int start, int endExclusive, Set<Integer> valid) {
-        scanRegion(start, endExclusive, valid, false);
-    }
-
-    /** V8 #799 (13-nov; Eduardo: «OK») — {@code pila}: es la pila de un hilo BP, y ahí una palabra sin TAG nunca es una
-     *  referencia a un objeto del heap (las referencias van como handles; una dirección cruda sólo vive en las pilas de C
-     *  de las natives, y miVM no tiene). Se ignoran: un entero que caía justo en un objeto lo retenía (con Core en un
-     *  pack, el heap empieza donde viven los enteros pequeños; medido en el micro simulado, un File en la 2944 y un
-     *  entero 2944 en la pila). La VM-C, lo mismo (gc_mark_phase, paso 1). Al descargar un overlay, en todas (#786). */
-    private void scanRegion(int start, int endExclusive, Set<Integer> valid, boolean pila) {
-        boolean soloHandles = pila || (moduleManager != null && moduleManager.overlayCerrado());
         for (int p = start; p + 4 <= endExclusive; p += 4) {
             int candidate = readInt32(p);
-            if (soloHandles && (candidate & HANDLE_TAG) == 0) continue;
-            int headerAddr = refDeref(candidate) - 4;   // V4: deref handle→addr (conservador)
+            if (!esReferencia(start, p, candidate)) continue;
+            int headerAddr = refDeref(candidate) - 4;   // V4: deref handle→addr
             if (valid.contains(headerAddr)) {
                 markObject(headerAddr, valid);
             }
         }
     }
+
+    /** V8 #833 (17-nov) — ¿es {@code candidate}, leída en {@code p}, la mitad baja de una referencia viva? La regla de
+     *  Eduardo: «no hay nada incorrecto en que busque números de 4 bytes, pero antes de dar por bueno que es una
+     *  referencia ha de verificar que el contador coincide». Una referencia es un handle de 8 bytes: su contador (la
+     *  generación) delante y su número con la marca (HANDLE_TAG) detrás. Cuenta si lleva la marca, su número está en la
+     *  tabla y los 4 bytes de delante —dentro de la región, desde {@code start}— son el contador del slot: lo que mira
+     *  requireAlive cuando BP la usa. No cuentan un número (un {@code minLibre} o un {@code TOPE_LOG} que valía justo la
+     *  dirección de un objeto lo retenía, en la prueba de resistencia), la mitad «contador» de una referencia ni una
+     *  referencia caducada (su slot, reciclado, ya es de otro). Con el sabotaje (SÓLO PRUEBAS), cualquier palabra cuenta,
+     *  como antes de #799. Espejo de gc_es_referencia (VM-C). */
+    private boolean esReferencia(int start, int p, int candidate) {
+        if (sabotajeRaices) return true;
+        if ((candidate & HANDLE_TAG) == 0) return false;
+        if (p < start + 4) return false;              // su contador quedaría fuera de la región
+        int idx = candidate & ~HANDLE_TAG;
+        if (idx <= 0 || idx >= handleNext) return false;
+        return readInt32(p - 4) == handleGen[idx];
+    }
+
+    /** SÓLO PRUEBAS (RaicesTest): en las pilas y en los bloques de datos, cualquier palabra vuelve a retener, como antes
+     *  de #799 y #833. El espejo de bpvm_sabotaje_raices (VM-C). */
+    static boolean sabotajeRaices = false;
 
     /** Versión pública: adquiere vmLock y delega en gcLocked. */
     public void gc() {
@@ -2490,7 +2509,7 @@ public class VirtualMachine {
                 else System.err.println("[gc] !! la pila del hilo t" + t.id + " (" + t.stackBase
                         + ") no es un bloque vivo del heap (#740)");   // no pasa; si pasa, que se oiga (gc_marca_pila)
             }
-            scanRegion(t.stackBase, t.sp, valid, /*pila=*/true);   // V8 #799: en la pila, sólo los handles
+            scanRegion(t.stackBase, t.sp, valid);   // V8 #799 y #833: en la pila, sólo las referencias vivas
             // Ancla de heapAlloc: el objeto recién alocado pero todavía no
             // publicado al stack queda referenciado por t.allocAnchor.
             // Lo tratamos como un root extra para evitar que se libere en

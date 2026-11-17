@@ -2669,8 +2669,10 @@ objeto compartido</code></pre>
 
 <h3 id="conc-gc">14.4 GC y concurrencia</h3>
 <p>
-  El GC mark-and-sweep es conservativo: escanea los stacks de todos los
-  threads vivos y los data blocks de los módulos para identificar roots.
+  El GC mark-and-sweep recorre los stacks de todos los threads vivos y los
+  data blocks de los módulos para identificar roots. Sólo cuenta una referencia
+  viva, con su contador: un número que valga justo la dirección de un objeto no
+  lo retiene (V8, <code>#799</code> y <code>#833</code>).
   Las operaciones de heap (<code>heapAlloc</code>, <code>gc()</code>,
   <code>freeOwnedObject</code>) están serializadas bajo
   <code>vmLock</code> &mdash; dos workers no pueden mutar el heap a la vez.

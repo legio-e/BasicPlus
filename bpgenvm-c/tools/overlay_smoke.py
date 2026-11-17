@@ -1103,17 +1103,27 @@ def main():
 
         # El 9, en el sim: en el PC el código de Core está en la memoria de la VM, el heap empieza detrás y un desplazamiento
         # de una vtable no llega; con Core en un pack, como en las placas, el heap empieza abajo y cae en sus objetos.
-        sock.close()
-        proc.terminate()
-        proc.wait()
-        os.environ["BPVM_SABOTAJE_OVERLAY"] = "9"
-        proc, sock, c = run_smoke.arranca(os.path.join(tmp, "sim9.flash"))
-        del os.environ["BPVM_SABOTAJE_OVERLAY"]
-        for n in ("OvMuchas", "OvMuchasA"):
-            with open(mods[n], "rb") as f:
-                c.call_bulk("PUT", f.read(), path="/app/%s.mod" % n)
-        _, _, ex = c.run("/app/OvMuchasA.mod")
-        check(ex is not None and "sigue vivo" in (ex.get("errorMessage") or ""), "16.9. sabotaje: al descargar, un entero retiene")
+        # V8 #833 (17-nov): ese entero de Core está en su bloque de datos, y desde #833 el GC, en las pilas y en los bloques
+        # de datos, sólo cuenta una referencia viva (gc_es_referencia), siempre: dos defensas que se solapan al descargar.
+        # Para que el entero retenga hay que quitar las dos (--sabotaje-raices es el recorrido de antes de #799 y #833); sin
+        # la de #786 sola, no retiene. La de #786 sigue haciendo falta para las pilas de C de las natives.
+        for i, (extra, retiene, que) in enumerate((
+                (["--sabotaje-raices"], True, "16.9. sabotaje: sin las dos defensas, al descargar, un entero retiene"),
+                ([], False, "16.9b. sin la de #786 sola, el entero ya no retiene: lo cubre la de #833 (gc_es_referencia)"))):
+            sock.close()
+            proc.terminate()
+            proc.wait()
+            os.environ["BPVM_SABOTAJE_OVERLAY"] = "9"
+            proc, sock, c = run_smoke.arranca(os.path.join(tmp, "sim9_%d.flash" % i), extra)
+            del os.environ["BPVM_SABOTAJE_OVERLAY"]
+            for n in ("OvMuchas", "OvMuchasA"):
+                with open(mods[n], "rb") as f:
+                    c.call_bulk("PUT", f.read(), path="/app/%s.mod" % n)
+            _, _, ex = c.run("/app/OvMuchasA.mod")
+            if retiene:
+                check(ex is not None and "sigue vivo" in (ex.get("errorMessage") or ""), que)
+            else:
+                check(ex is not None and not ex.get("errorMessage"), "%s (%s)" % (que, ex and ex.get("errorMessage")))
     finally:
         c.close() if hasattr(c, "close") else None
         sock.close()

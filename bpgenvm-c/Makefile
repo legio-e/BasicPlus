@@ -1617,6 +1617,15 @@ test-malnacida: $(LIBOBJ)
 	@echo "--- #739: la cadena mal nacida, el aviso y el cursor (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_malnacida.exe
 
+# V8 #833 (17-nov) — en la memoria de BP solo retiene una referencia viva (heap.c, gc_es_referencia): un numero con la
+# direccion de un objeto en una global, la referencia entera y una caducada, con un modulo de mentira; y el sabotaje
+# (el recorrido de antes), que tiene que retener.
+test-raices: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_raices.c $(LIBOBJ) -o build/test_raices.exe $(LDFLAGS)
+	@echo "--- #833: las raices de la memoria de BP, solo las referencias vivas (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_raices.exe
+
 # V6/U6 — el planificador de memoria contra los numeros MEDIDOS de cada placa
 # (C3, S3, Metro con PSRAM, Pico sin ella). Host-only: solo <stddef.h>/<stdio.h>.
 test-mem:

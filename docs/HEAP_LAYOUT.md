@@ -108,9 +108,10 @@ memorySize└──────────────────────�
   ```
 
   Mientras se descarga, el GC sólo se fía de los handles: una palabra sin `TAG` no marca nada, ni en las pilas ni en los
-  bloques de datos. El recorrido normal es conservador y un entero que cae justo en un objeto lo retiene de más, sin más
-  daño; pero `unload` pregunta qué sigue vivo de verdad. Con `Core` en un pack, como en las placas, el heap empieza muy
-  abajo, en los mismos números que los desplazamientos de las vtables (`V8_IDEAS` §E13, «En las placas»).
+  bloques de datos, ni en las pilas de C de las natives. `unload` pregunta qué sigue vivo de verdad. Con `Core` en un
+  pack, como en las placas, el heap empieza muy abajo, en los mismos números que los desplazamientos de las vtables
+  (`V8_IDEAS` §E13, «En las placas»). Desde `#799` (las pilas) y `#833` (los bloques de datos), el recorrido normal de la
+  memoria de BP tampoco toma un número por una referencia (§7); sólo las pilas de C de las natives siguen conservadoras.
 
 ---
 
@@ -479,15 +480,28 @@ opcodes `NEWARRAY_I8`/`ALOAD_U8`/`ASTORE_I8`.
 `heapAlloc` o saliendo por safepoint). Marca desde:
 
 1. **Stack de cada thread**: escanea `[stackBase, sp)` palabra por
-   palabra. Conservadoramente: cualquier i32 que caiga dentro del rango
-   del heap se trata como ref potencial. Sólo los threads que no han
-   acabado del todo (V8 `#740`): la pila de uno que acabó ya es basura.
-   Y de cada uno de ésos se marca **la pila misma**, que es un bloque
-   del heap sin handle y nadie más alcanza (la del main es fija).
+   palabra, y sólo cuenta una **referencia viva** (abajo). Sólo los
+   threads que no han acabado del todo (V8 `#740`): la pila de uno que
+   acabó ya es basura. Y de cada uno de ésos se marca **la pila misma**,
+   que es un bloque del heap sin handle y nadie más alcanza (la del main
+   es fija).
 2. **`allocAnchor` de cada thread**: el ref recién alocado todavía no
    publicado al stack queda anclado aquí (cubierto en `B1 residual`).
 3. **Data block de cada módulo cargado**: tiene refs globales (e.g.
-   variables module-level de tipo string/class).
+   variables module-level de tipo string/class). Palabra por palabra,
+   como las pilas, y con la misma regla.
+
+**Una referencia viva** (V8 `#799` y `#833`; la regla de Eduardo: *«antes de dar por bueno que es una referencia ha
+de verificar que el contador coincide»*). En la memoria de BP una referencia es un handle de 8 bytes: su contador (la
+generación) delante y su número con la marca (`TAG`, el bit 30) detrás. Una palabra cuenta si lleva la marca, su número
+está en la tabla y los 4 bytes de delante son el contador del slot: lo que mira `bpvm_ref_dead` cuando BP usa una
+referencia (VM-C, `gc_es_referencia`; VM-Java, `esReferencia`). No cuentan un número (en la prueba de resistencia,
+`minLibre` y la constante `TOPE_LOG` valían justo la dirección de un objeto y lo retenían, partiendo el heap), la mitad
+«contador» de una referencia ni una referencia caducada (la de un objeto que su dueño soltó: su slot ya es de otro). Lo
+que se escribe en una pila BP o en un bloque de datos lleva siempre su contador vivo (el censo de `#833`), así que nada
+que BP pueda usar se queda fuera. Las **pilas de C de las natives** (VM-C) siguen conservadoras: allí las direcciones
+directas son legítimas y no llevan contador. Las pruebas: `make test-raices`, `RaicesTest` (miVM) y `raices_smoke`
+(en el micro simulado, con el sabotaje `--sabotaje-raices`).
 
 Tras marcar, `sweep()` recorre el heap, libera los no marcados
 (setea `TAG_FREE_BIT`) y los enlaza en `freeListHead`.
