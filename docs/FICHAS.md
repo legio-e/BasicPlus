@@ -7892,7 +7892,7 @@ ve sin analizar:
 - **La VM-Java no cambia:** su tabla crece con `Arrays.copyOf`, sin tope, y su `heapAlloc` colecta ella.
 - **En las placas**, con la imagen que se grabe al acabar la prueba de resistencia: es código común, de las nueve.
 
-#### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; **para decidir**)
+#### 🔵 `#828` — en la Pico 2, un programa que importa `Gui` no arranca: «enlace tardio: sin memoria para construir las clases»; las tablas del cargador y del enlazador no caben en los 64 KB que su imagen deja a `malloc` (abierta el 15-nov, al preparar la prueba de resistencia; el 17-nov, comprobado: `vmheap` lo resuelve; **el mensaje y la documentación, para decidir**)
 
 - **Lo que pasó:** la primera versión de `Resistencia` importaba `Gui` (probaba la pantalla y, si no había, seguía sin
   ella). En la S3, la C3 y la Metro, sin pantalla, arranca: `Gui.Screen()` da un error que se atrapa. En la Pico 2,
@@ -7916,6 +7916,25 @@ ve sin analizar:
 - **15-nov, el `stack=90`, quitado** (con la prueba de resistencia parada; Eduardo: *«Puedes aprovechar y cambiar el stack
   del Env»*): `ENV_DEL stack` y un reinicio; el `INFO`, `vmStackBytes` 16384 y `vmHeapBytes` 295312 (eran 92160 y
   219536). Queda lo de `vmheap`.
+- **17-nov, comprobado en la Pico 2** (la prueba de resistencia, acabada; Eduardo: *«si»*): `ResistenciaGui` con
+  `fallos` (`resistencia.py COM22 fallos gui`: tres vueltas cortas y un error de cada clase), nueve módulos (el programa,
+  `Resistencia`, `IO`, `Core`, `Machine`, `Collections`, `Str`, `Gui` y `Json`):
+  - **sin `vmheap`:** `LINK_ERROR`, «enlace tardio: sin memoria para construir las clases»; en el log, `malloc` con
+    57 756 B en uso y 61 828 de máximo, de 65 540. El reparto del arranque: el techo del bloque, 320 KB; de él, 16 KB para
+    la pila del segundo run (`vm.runs=2`), y el resto, 288 KB de heap y 16 de pilas;
+  - **con `vmheap=272`:** el bloque, 272 KB (heap 240, pilas 16), y 112 KB para `malloc`. Arranca, hace las tres
+    vueltas, atrapa los cinco errores provocados y acaba con `EXITED OK`; `malloc`, 82 308 B de máximo;
+  - **con `vmheap=288`:** el bloque, 288 KB (heap 256), y 96 KB para `malloc` (98 692 B): igual, con el mismo máximo,
+    82 308 B (16 KB de margen);
+  - **el ENV, como estaba** (sin `vmheap`; el `INFO`, 295 296 B de heap). La Pico 2 no necesita `Gui`.
+  Este programa pide unos 80 KB de `malloc` para cargarse y enlazarse, y la Pico 2 deja 64. `vmheap` lo resuelve.
+- **Lo que falta, el mensaje:** «sin memoria» no dice de cuál. El enlace tardío tiene dos: las tablas que pide a
+  `malloc`, la memoria del sistema (lo de la Pico 2: `x->reg`, `x->ifx` y las listas de las interfaces), y su arena, en
+  el bloque de la VM; las dos acaban en el mismo «sin memoria para construir las clases» (`link.c`). Quien lo lea pensará
+  en darle más memoria a la VM, que es justo lo contrario de lo que hace falta. El cargador, igual: sus `malloc` sin
+  memoria (`nombres`, `imports`, `refs`, los `class_fixups`) acaban en el genérico del estado, «memoria del buffer
+  insuficiente» (por lo que dice el código; sólo la tabla de símbolos, `#639`, dice lo suyo). Y en la referencia, la
+  fila de `vmheap` no dice que lo que no coge el bloque es para el sistema, ni cuándo hace falta.
 
 #### ✅ `#827` — en la VM-Java, `Machine.uptimeMs()` era la hora del reloj del PC cortada a 32 bits: salía negativa y no contaba desde el arranque; la VM-C del PC cuenta desde la primera vez que se pide (abierta y **CERRADA el 15-nov**, el commit de `#827`; al probar en el PC la prueba de resistencia; preexistente; Eduardo: *«Si se arregla, parece poco.»*)
 
