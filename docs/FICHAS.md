@@ -7665,6 +7665,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   escribe en un bloque de datos la dirección directa de un objeto del heap. La prueba, como `raices_smoke` (`#799`):
   una global entera que vale la dirección de un objeto que muere, y una referencia caducada en una global; con el
   sabotaje, retenidos.
+- **El censo, hecho el 17-nov: limpio en las dos VMs.** Lo que se escribe en una pila de un hilo BP o en un bloque de
+  datos es el handle entero con el contador vivo, o una palabra sin marca que no es del heap (null, y lo de
+  `LEA_GLOBAL`/`LEA_STR`: un literal o un array fijo del propio bloque de datos). El intérprete mueve las referencias
+  de 8 en 8 bytes, tal cual (`SET_GLOBAL_L`, las locales, los campos, los arrays de referencias). Las que nacen salen
+  de la tabla con su contador (`bpvm_heap_nuevo`, `bpvm_handle_register`; en miVM, `heapNuevo`, `allocVmString`,
+  `nacerDeFuera`). Las que llegan sólo con sus 4 bytes de abajo recuperan el contador vivo antes de escribirse:
+  `push_ref` (`bpref_regen`; por ahí pasan los strings de los builtins y el `LEA_STR` de un overlay,
+  `bpvm_literal_al_heap`), los argumentos de una llamada de una native o de la GUI a BP (`bridge_run_bp_frame`), y en
+  el AOT `write_ref` y `array_store_ref`; en miVM, `regenRef` en las llamadas de la GUI. Los eventos, las excepciones,
+  los destructores pendientes, el ratón, el teclado y la pantalla de `onKey` guardan el handle de 64 bits. Una native
+  compilada no puede tocar una global de referencia (`AotCEmitter.precomputeModuleVarOffsets`: sólo las primitivas), y
+  el depurador no escribe en la memoria del programa. El único caso que hubo, la referencia del hilo en su pila escrita
+  en 4 bytes (`threading.c`), ya daba error al usarla: un contador que no casa es «referencia a objeto eliminado»
+  (`bpvm_ref_dead`). O sea, con la regla el GC no da por viva ninguna referencia que BP no pudiera usar.
 - **V8** (Eduardo, 17-nov: *«OK. Yo lo arreglaría en V8. Como también tenemos que arreglar otros pendientes, los podemos
   arreglar todos. Luego habrá que volver a grabar placas y hacer pruebas pero bueno, es asumible.»*). Antes, el 14-nov:
   *«a estas alturas de V8 no vamos a cambiar las VMs, demasiado arriesgado. Pero si lo podemos analizar.»*; la regla
