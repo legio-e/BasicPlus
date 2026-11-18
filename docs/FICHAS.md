@@ -7332,7 +7332,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > tanda, hecha** (*«S3, C5, C6 y Núcleo conectadas»*): las cuatro grabadas (los packs sellados de la C5 —la GUI y
 > `DriverSpi`— y de la C6 —`GuiMini` y `DriverSpi`—, en su sitio y con rc=0, como predijo el `nm`); la tanda, como en las
 > otras (las dos de `lastModified`; la GUI, saltada en la S3 y la Nucleo); `#836` en la S3, `#839` en la Nucleo y `#840`
-> en la S3 y la C6. Queda la C3, sola (con la C6, Windows les da el mismo COM3).
+> en la S3 y la C6. **La tercera, la C3, sola** (*«C3 conectada»*; con la C6, Windows les da el mismo COM3): grabada,
+> sólo con la stdlib; la tanda, como en las otras ocho (24 pruebas en 24 s: las dos de `lastModified`; la GUI, saltada);
+> y `#836`, `#837` (con `log=0`, el informe de `ThrowSinAtrapar` y tres avisos de UAF), `#838` y `#840`, vistos.
+> **El lote, completo: las nueve placas con la imagen final.** Queda `#841` (la Pico 2), por decidir.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7664,7 +7667,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   dos KILL seguidos, un `EXITED KILLED` y dos `KILL_REPLY`; un RESET durante un RUN, en la P4, el `EXITED` y el
   `RESET_REPLY` a los 0,51 s y la placa vuelve con «software»; en la Pico 2 se reinicia («reinicio pedido»), pero la
   respuesta no llega: también en reposo, así que no es de aquí (`#841`). Y en la S3 y la C6 (la segunda tanda), lo mismo
-  que en la P4: dos `KILL_REPLY`, y el `RESET_REPLY` a los 0,41 y 0,42 s, con «software» al volver.
+  que en la P4: dos `KILL_REPLY`, y el `RESET_REPLY` a los 0,41 y 0,42 s, con «software» al volver. Y en la C3 (la
+  tercera tanda), igual: dos `KILL_REPLY`; el `EXITED KILLED` y el `RESET_REPLY` a los 0,41 s, y «software» al volver.
 
 #### ✅ `#839` — las STM32, tras un fallo fatal (un HardFault, el assert, la pila o el heap del RTOS), daban su informe y se quedaban paradas: en el campo, hasta que alguien las desenchufara (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#839`; preexistente; probada en la DK2, que Eduardo conectó para eso; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7703,6 +7707,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   tras un RESET), y en la Metro, la Pico 2 y la DK2 (`#839`); y en la P4, con `prueba.fallo=1` (`#681`), el pánico la
   reinicia («panic/exception») y, con `log=0` y un autorun, el arranque siguiente lo dice: «autorun: /app/Bucle825.mod NO
   arranca: el arranque anterior acabo en un fallo fatal (panic/exception; ver el log)».
+- **18-nov, y en la C3** (la tercera tanda del lote): tras el RESET de `#840`, «boot: causa del reset = software».
 
 #### ✅ `#837` — con el log apagado (`log=0`, lo de serie), ni los avisos urgentes de la VM llegaban al log: en el campo, de un programa que muere no quedaba nada (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#837`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7729,8 +7734,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   vuelca el log a la flash. `bpvm_uaf_report` (`bpvm_util.c`), ahora, las tres primeras, como sus vecinas
   (`bpvm_ref_rota_report`, `bpvm_str_mal_nacida`: lo que se busca es el porqué, no la cuenta); urgentes las tres. En el
   PC, `RefCaducadaBuiltin`, 3 avisos (eran decenas) y la salida, la misma.
+- **18-nov, y en la C3** (`log=0`; el log vaciado antes de la tanda, la tercera del lote): lo mismo que en la Metro, el
+  informe de `ThrowSinAtrapar` entero y tres avisos de UAF, y nada más.
 
-#### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12; **hecho el mismo día**, por ver en la P4 al grabar las placas)
+#### ✅ `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12; **hecho el mismo día**, el commit de `#836`, y **CERRADA** al verlo en placa, en el lote: la P4, la S3 y la C3)
 
 - **Lo medido** (18-nov, la P4 con la imagen de la resistencia, `runs: 2`): un perro de 2 s alimentado cada 300 ms, tras
   un `sleep(300)`, 20 vueltas (`WdtDosRuns`, con su guion, en `C:\tmp\v8_robustez_18nov\`): la placa se reinició entre
@@ -7755,6 +7762,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **18-nov, visto en la P4** (el lote, la imagen final): `WdtDosRuns`, las 20 vueltas y los 3 s tras el `disable` sin
   reiniciarse (el uptime siguió); y `WdtDemo`, el control, la reinicia al dejar de alimentarlo (`task-watchdog`). Y en la
   S3, la otra con dos runs (la segunda tanda del lote), igual.
+- **18-nov, y en la C3** (un run, RISC-V; la tercera tanda del lote): `WdtDosRuns`, sin reiniciarse; `WdtDemo`, con
+  `task-watchdog`. Tras ese reinicio, por el USB llegaron, como texto, unas líneas del arranque del IDF (`heap_init`,
+  `spi_flash`, `sleep_gpio`), que el cliente del wire aparta: no estorban (el `INFO` de después, bien).
 
 #### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 
