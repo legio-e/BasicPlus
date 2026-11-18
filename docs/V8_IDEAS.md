@@ -8002,6 +8002,13 @@ tabla con cada situación, qué hace hoy la placa, cómo queda registrada y qué
 de las tres piezas que quedaron del 5-oct (contener el fallo en el run, el MPU y el contador de reinicios; `FICHAS`, el
 bloque de V8). Leído en el código el 18-nov, con lo que enseñaron la resistencia de 48 h, `#825` y `#836`.
 
+**La tabla va por lo que hace el error, no por su causa.** Y la causa se clasifica aparte (Eduardo, 18-nov): un error
+**intermitente** *«se produce de forma sistemática cuando se dan las condiciones adecuadas»* (el bloque retenido de
+`#833`): las pruebas buscan sus condiciones y se arregla; uno **esporádico**, *«por causas desconocidas»* (una
+interferencia, la alimentación), no se reproduce en condiciones normales (`#825`): una vez, se apunta; más de una, hay un
+problema real, quizá del hardware o del diseño. *«Las pruebas lo que hacen es identificar en que categoría cae, y nos
+indican por donde buscar.»* Un error esporádico cae en las filas 12 a 15, según lo que deje.
+
 **Antes de la tabla, cómo se registra hoy, porque decide casi todas las filas:**
 
 - **El `EXITED`** sólo lo ve quien esté conectado (el IDE, la tanda). Con el autorun, en el campo, no lo recibe nadie.
