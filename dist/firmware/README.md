@@ -26,9 +26,17 @@ momento manda esta copia.
 
 **Una imagen sirve a dos placas en dos casos**, y no es un atajo: la variante se decide
 en runtime. En RP2350 el micro se identifica solo (A/B: 30 o 48 GPIO, PSRAM); en el P4
-el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). En V7 son **ocho
-ficheros**: el empaquetador copia `*.uf2` y `*.bin` sin contar, así que se cuentan a
+el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). En V7 y en V8 son
+**ocho ficheros**: el empaquetador copia `*.uf2` y `*.bin` sin contar, así que se cuentan a
 mano (`ls *.uf2 *.bin | wc -l` → 8).
+
+**En V8 (18-nov) la ronda se grabó desde los directorios de compilación** (el lote final,
+`compat/informes/lote_v8_18nov.md`), y las imágenes de aquí se hicieron después, **de esos
+mismos ficheros**, sin recompilar nada entre medias: en cada `_merged` de las ESP32, la
+aplicación (en 0x10000) es byte a byte la del build, y su CRC32 es el `imageCrc` que dio
+cada placa en el lote (S3 `636863b9`, C3 `46b2479c`, C5 `d9559635`, C6 `9c7087d1`, P4
+`306828a5`); la de la Pico y las de las STM32 salen de los mismos `.uf2` y `.elf` que
+corrían sus placas, con la fecha que anotó la tanda.
 
 Desde V7 LVGL, el motor de la GUI, no va en ninguna imagen —la P4 y la DK2 llevan en la
 suya sólo el driver de su panel; la C5 y la C6, ni eso—: llega en los packs de la GUI, que

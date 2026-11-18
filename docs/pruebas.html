@@ -68,7 +68,7 @@
 
 <h2>En números</h2>
 <p>
-  Medido el 15 de noviembre de 2026, con V8 a punto de publicarse. Los números se rehacen al
+  Medido el 18 de noviembre de 2026, en la comprobación previa de V8. Los números se rehacen al
   publicar cada versión.
 </p>
 <table>
@@ -83,12 +83,12 @@
   <tr><td>La cápsula de V6</td>
       <td>59 programas compilados por el compilador publicado de V6</td><td class="num">59 de 59</td></tr>
   <tr><td>Las pruebas de C</td>
-      <td>la VM-C por dentro</td><td class="num">114 de 114</td></tr>
+      <td>la VM-C por dentro</td><td class="num">117 de 117</td></tr>
   <tr><td>El micro simulado · la sombra · la norma</td>
       <td>el simulador del IDE · el orden en que se buscan los módulos · las versiones de los módulos</td>
       <td class="num">15 · 15 · 9, todas</td></tr>
   <tr><td>El compilador y la VM-Java</td>
-      <td>sus pruebas propias</td><td class="num">395 y 65, todas</td></tr>
+      <td>sus pruebas propias</td><td class="num">396 y 66, todas</td></tr>
   <tr><td>Todos los samples</td>
       <td>415 programas de ejemplo, compilados</td><td class="num">415 de 415</td></tr>
   <tr><td>Los programas de error</td>
@@ -98,11 +98,11 @@
       <td>cada fragmento de código de los manuales, compilado</td>
       <td class="num">343 de 343</td></tr>
   <tr><td>La tanda en las placas</td>
-      <td>24 programas en nueve placas</td>
-      <td>como en el PC, salvo lo que difiere a propósito; y un cuelgue de la ESP32-P4, una vez,
-          que se está estudiando</td></tr>
+      <td>24 programas en nueve placas, con la imagen que se publica</td>
+      <td>como en el PC, salvo lo que difiere a propósito; y un cuelgue de la ESP32-P4, una vez (el
+          15 de noviembre), que no se ha vuelto a ver en 400 ejecuciones seguidas y 500 capturas</td></tr>
   <tr><td>La prueba de resistencia</td>
-      <td>días seguidos, en cuatro placas</td><td>en marcha</td></tr>
+      <td>48 horas seguidas, en cuatro placas</td><td>sin un error ni un reinicio</td></tr>
 </table>
 
 <h2>La regla de oro: dos máquinas, la misma salida</h2>
@@ -165,7 +165,7 @@
 
 <h3>La VM-C por dentro</h3>
 <p>
-  114 pruebas escritas en C ejercitan lo que un programa de ejemplo no alcanza: el núcleo del
+  117 pruebas escritas en C ejercitan lo que un programa de ejemplo no alcanza: el núcleo del
   depurador (las pausas, los pasos, un Stop en un breakpoint, varios hilos), las funciones nativas
   compiladas a C contra su versión interpretada (una sola de esas pruebas hace 494 comparaciones),
   los sistemas de ficheros y la tarjeta SD, la flash, el recolector de basura, los hilos y su
@@ -201,7 +201,7 @@
 
 <h2>El compilador</h2>
 <ul>
-  <li><strong>Sus pruebas propias:</strong> 395 del compilador y 65 de la VM-Java.</li>
+  <li><strong>Sus pruebas propias:</strong> 396 del compilador y 66 de la VM-Java.</li>
   <li><strong>Los programas de error.</strong> 39 programas que tienen que fallar, con 151
       comprobaciones. No basta con que fallen: cada error tiene que decir lo que tiene que decir.
       Si uno que debía fallar empieza a compilar, se ha perdido una regla del lenguaje; si el
@@ -224,11 +224,11 @@
   placa. La salida del PC es la referencia, y la de la placa tiene que coincidir con ella, salvo lo
   que difiere a propósito (un sistema de ficheros sin fecha de modificación, o una prueba de
   pantalla en una placa que no la tiene). Para V7, 50 programas en diez placas; para V8, en el lote
-  del 15 de noviembre, los 24 programas nuevos en nueve placas de tres arquitecturas: ARM, Xtensa
-  y RISC-V.
+  final del 18 de noviembre, los 24 programas nuevos en nueve placas de tres arquitecturas: ARM,
+  Xtensa y RISC-V.
 </p>
 <p>
-  Lo que caza la tanda no lo ve el PC. En ese mismo lote, la imagen nueva de la ESP32-C6 había
+  Lo que caza la tanda no lo ve el PC. En el lote del 15 de noviembre, la imagen nueva de la ESP32-C6 había
   movido 4 KB su bloque de memoria, y los motores de la interfaz gráfica no cargaban hasta volver
   a grabar sus packs.
 </p>
@@ -253,6 +253,14 @@
   cada mapa lleva un mutex, y la VM no soltaba nunca su entrada en la tabla de mutex. En el PC la
   tabla crecía sin que se notara; en la Pico 2 se acabó la memoria. Se arregló en las dos VMs, y
   con el arreglo la Pico 2 pasó de las mil vueltas sin un error en tres horas.
+</p>
+<p>
+  Después, las cuatro corrieron 48 horas seguidas, del 15 al 17 de noviembre: sin un error ni un
+  reinicio, 61 360 vueltas entre todas. Y en esas 48 horas la prueba cazó otro fallo, que no daba
+  ningún error: en las placas con poco heap, un bloque de memoria que el programa ya no usaba se
+  quedaba vivo horas. Un número guardado en una variable global valía justo la dirección de un
+  objeto, y el recolector lo tomaba por una referencia. Ahora comprueba que lo es antes de darlo
+  por bueno.
 </p>
 <p>
   La prueba está en el repositorio, en
@@ -328,7 +336,7 @@ python bpgenvm-c/tools/doc_frags.py        # los ejemplos de la documentación</
 </p>
 
 <footer>
-  Medido el 15 de noviembre de 2026, para V8. Los números se rehacen en la comprobación previa de
+  Medido el 18 de noviembre de 2026, para V8. Los números se rehacen en la comprobación previa de
   cada versión.
 </footer>
 

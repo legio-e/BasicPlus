@@ -198,6 +198,10 @@
     <li class="sub"><a href="#stdlib-net">14.15 Net</a></li>
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — separate volume</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 SD card</a></li>
+    <li class="sub"><a href="#stdlib-sound">14.18 Sound</a></li>
+    <li class="sub"><a href="#stdlib-air">14.19 Air</a></li>
+    <li class="sub"><a href="#stdlib-keyboards">14.20 Keyboards</a></li>
+    <li class="sub"><a href="#stdlib-mice">14.21 Mice</a></li>
     <li class="group"><a href="#seguir">Where to go next</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 What a pack is, and what it is not</a></li>
@@ -304,8 +308,9 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   <tr><td><code>add(o: Object)</code></td><td>appends an object</td></tr>
   <tr><td><code>add(i: integer)</code> · <code>add(l: long)</code> · <code>add(d: double)</code> · <code>add(f: float)</code> · <code>add(b: boolean)</code></td>
       <td>appends a primitive: <strong>wraps</strong> it for you in its class (§13.10)</td></tr>
-  <tr><td><code>get(idx): Object</code></td><td>the element, untyped</td></tr>
-  <tr><td><code>set(idx, o: Object)</code></td><td>replaces it</td></tr>
+  <tr><td><code>get(idx): Object</code></td><td>the element, untyped. Outside the list it throws a <code>RuntimeError</code>:
+      it looks at its size, not its capacity (#795)</td></tr>
+  <tr><td><code>set(idx, o: Object)</code></td><td>replaces it; it does not add: outside the list, the same as <code>get</code></td></tr>
   <tr><td><code>length(): integer</code></td><td>how many</td></tr>
   <tr><td><code>remove(idx)</code></td><td>drops it and shifts the rest</td></tr>
 </table>
@@ -508,6 +513,16 @@ sb.appendInt(<span class="num">42</span>)
   <code>print e</code> prints the message (<code>toString()</code> returns
   <code>msg</code>). Custom exceptions extend <code>Exception</code> (see
   <a href="manual.html#excepciones">§11</a>).
+</p>
+<p>
+  Since V8 the VM's errors carry their type, as children of <code>RuntimeError</code>:
+  <code>ArithmeticError</code> (an integer division by zero, a number that does not fit its type…),
+  <code>NullReferenceError</code> (using <code>null</code>, or an object already deleted),
+  <code>IndexError</code> (an index outside an array, a string or a <code>List</code>),
+  <code>CastError</code> (converting an object to a class it is not) and <code>IOError</code> (files; and
+  its child <code>EncodingError</code>, a string that is not valid UTF-8). <code>catch e: RuntimeError</code>
+  still catches them all; with a <code>catch</code> of their own class first, they are handled apart
+  (<a href="manual.html#excepciones">manual §11</a>).
 </p>
 
 <h3 id="stdlib-thread">13.8 <code>Thread</code></h3>
@@ -781,9 +796,12 @@ m.unlock()              <span class="comment">// releases and hands off to the f
   <tr><td><code>mkdir(p)</code></td>
       <td>Creates the directory (and any missing intermediates). Does not fail if it already exists.</td></tr>
   <tr><td><code>rmdir(p)</code></td>
-      <td>Removes a directory. Only if it is empty.</td></tr>
+      <td>Removes a directory. Only if it is empty; with a file, it fails (for that, <code>removeFile</code>).
+          <em>Changed in V8</em> (before, on the Java VM and on the boards' SD card, it also removed a file).</td></tr>
   <tr><td><code>removeFile(p)</code></td>
-      <td>Removes a file.</td></tr>
+      <td>Removes a file; with a directory, it fails (for that, <code>rmdir</code>). <em>Changed in V8</em>
+          (before, on the Java VM, on the boards' SD card and on a Linux PC, it also removed an empty
+          directory).</td></tr>
   <tr><td><code>rename(src, dst)</code></td>
       <td>Renames/moves. Overwrites the destination if it exists.</td></tr>
   <tr><td><code>copyFile(src, dst)</code></td>
@@ -1955,7 +1973,8 @@ port.write(tx, <span class="num">4</span>)
           (<code>tempMilliC</code>). <em>Changed in V8</em> (before, on the ESP32 it returned 0.0, and
           the <code>INFO</code> of the ESP32 and STM32 said 0).</td></tr>
   <tr><td><code>cpuFreqHz(): integer</code></td>
-      <td>Current clk_sys frequency in Hz.</td></tr>
+      <td>Current CPU frequency in Hz: the one it really runs at (on the ESP32s, since V8; before, it gave
+          a nominal one, and on the S3, the C3 and the C6 it said 240 while running at 160).</td></tr>
   <tr><td><code>uptimeMs(): integer</code></td>
       <td>Ms since the board booted; on the PC, since the first call. It is a 32-bit
           <code>integer</code>: after ~24.8 days it turns negative and after ~49.7 it wraps to 0, but
@@ -2000,7 +2019,13 @@ port.write(tx, <span class="num">4</span>)
           Call BEFORE configuring UART/SPI/I2C/PWM because
           their dividers are computed from clk_peri.
           The <code>sleep*</code> functions and <code>now()</code> are
-          immune (independent 1 MHz HW timer).</td></tr>
+          immune (independent 1 MHz HW timer).
+          <strong>On the ESP32s (V8):</strong> each chip's values —the S3 and the C5, 80, 160 and 240; the C3,
+          80 and 160; the C6, 80, 120 and 160; the P4, only 360—, with the IDF's power management. A value
+          within the range that the chip does not provide returns <code>false</code> and changes nothing. The
+          buses do not need to be configured again (they run on an 80 MHz clock that does not change), and
+          <code>sleep*</code> and <code>now()</code> stay exact. The boot frequency is set with
+          <code>cpu.mhz</code> in the ENV (<a href="#env">appendix A</a>).</td></tr>
 </table>
 <h4 id="stdlib-machine-caps">What this micro has — the capability table (V7)</h4>
 <p>
@@ -2040,9 +2065,9 @@ port.write(tx, <span class="num">4</span>)
   <code>I2C_BUSES()</code>, <code>SPI_BUSES()</code>, <code>GPIO_COUNT()</code> (= <code>len(pins())</code>),
   <code>ADC_CHANNELS()</code> (= <code>len(analogPins())</code>), <code>PWM_SLICES()</code> (simultaneous
   outputs, in the unit of <code>pwmUnit()</code>). And <code>MAX_CPU_MHZ()</code> /
-  <code>MIN_CPU_MHZ()</code> are now <strong>per micro</strong> (300/18 on RP2350; on an ESP32, which
-  does not change clock at run time, both say the running frequency) — they used to be the RP2350's
-  for all five families.
+  <code>MIN_CPU_MHZ()</code> are now <strong>per micro</strong> (300/18 on RP2350; on an ESP32, since
+  V8, the highest of its chip and 80 —on the P4, 360 both—) — they used to be the RP2350's for all five
+  families.
 </p>
 
 <!-- =========================================================== -->
@@ -2367,209 +2392,6 @@ strip.show()</code></pre>
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 
-<h3 id="stdlib-air">14.19 <code>Air</code> (WiFi and Bluetooth)</h3>
-<p>
-  Wireless (<code>import Air</code>), two classes: <code>Air.Wifi</code> and <code>Air.Bluetooth</code>. From a program
-  you only switch it on and off: the network goes in a file, the same on every board, and the rest is sockets
-  (<a href="#stdlib-net"><code>Net</code></a>).
-</p>
-<pre><code><span class="kw">import</span> Air
-<span class="kw">import</span> Net
-
-<span class="kw">var</span> wifi: Air.Wifi := Air.Wifi()
-<span class="kw">if</span> wifi.turnOn() <span class="kw">then</span>            // switches on and waits for an IP
-  <span class="kw">var</span> c: Net.Tcp := Net.Tcp()
-  <span class="kw">if</span> c.connect("192.168.1.50", 8080, 3000) <span class="kw">then</span>
-    c.sendStr("hello")
-    c.close()
-  <span class="kw">endif</span>
-<span class="kw">endif</span>
-wifi.turnOff()</code></pre>
-<p>
-  <code>turnOn()</code> uses <code>/sys/wifi.json</code> and waits up to 20&nbsp;s for an IP without stopping the other threads:
-  <code>true</code> with an IP, <code>false</code> if not, with the reason in the log; on a board without WiFi or without the file,
-  a <code>RuntimeError</code>. <code>turnOff()</code> switches it off completely. <code>isConnected()</code>: there is a link and an IP.
-  <code>isAvailable()</code>: does this board have WiFi. <code>/sys/wifi.json</code> holds <code>ssid</code>, and if needed
-  <code>password</code>, <code>country</code>, <code>autoStart</code> and <code>autoOff</code> (seconds without activity; 600 by default, 0 never);
-  <code>/sys/net.json</code>, if needed, <code>hostname</code> for DHCP, or <code>ip</code>, <code>mask</code>, <code>gateway</code> and
-  <code>dns</code>. When the program ends, if it touched the WiFi, it goes back to what the configuration says.
-</p>
-<p>
-  Boards: the P4 (with <code>radio=c6</code> in its ENV), the S3 and the C5; not the C3 or the C6, which have no PSRAM. On the
-  <strong>PC</strong>, <code>turnOn()</code> always gives <code>true</code>.
-</p>
-
-<h4 id="stdlib-air-bt">Bluetooth: <code>Air.Bluetooth</code> and <code>Air.BtDevice</code></h4>
-<p>
-  Turn on and off, scan, connect and disconnect (V8). A device is connected by its address: the first time it is paired
-  and remembered in <code>/sys/bluetooth.json</code>; after that it comes back on its own, without pairing again.
-</p>
-<pre><code><span class="kw">import</span> Air
-
-<span class="kw">var</span> bt: Air.Bluetooth := Air.Bluetooth()
-bt.turnOn()
-<span class="kw">var</span> seen: List := bt.scan(10000)           // 10 s: the ones in pairing mode
-<span class="kw">var</span> d: Air.BtDevice := Air.BtDevice(seen.get(0))
-<span class="kw">if</span> bt.connect(d) <span class="kw">then</span>                  // the first time it pairs and remembers it
-  print d.getName() + " connected"
-<span class="kw">endif</span>
-bt.disconnect(d)                             // that connection; Bluetooth stays on, with the others</code></pre>
-<table>
-  <tr><th><code>Air.Bluetooth</code> method</th><th>What it does</th></tr>
-  <tr><td><code>turnOn(): boolean</code></td><td>Turns on and waits until ready, up to 5&nbsp;s; remembered devices come back on their own (one that is not there is not an error: it just does not connect). On a board without Bluetooth, a <code>RuntimeError</code></td></tr>
-  <tr><td><code>turnOff()</code></td><td>Turns off: closes every connection</td></tr>
-  <tr><td><code>isOn(): boolean</code></td><td>Is it on and ready?</td></tr>
-  <tr><td><code>isAvailable(): boolean</code></td><td>Does this board have Bluetooth? Without turning anything on</td></tr>
-  <tr><td><code>scan(ms): List</code></td><td>Looks for <code>ms</code> for devices in pairing mode: a <code>List</code> of <code>BtDevice</code>, without the connected ones (up to 16)</td></tr>
-  <tr><td><code>connect(d): boolean</code></td><td>Connects. The first time it pairs and remembers it; after that, by its address. <code>false</code> if it is not found</td></tr>
-  <tr><td><code>disconnect(d)</code></td><td>Closes that connection; it stays remembered: it comes back with another <code>connect</code>, or on its own when Bluetooth is turned on again</td></tr>
-  <tr><td><code>forget(d)</code></td><td>Forgets it: the connection, its keys and its entry in the file</td></tr>
-  <tr><td><code>listDevices(): List</code></td><td>The remembered ones, in the order they were first connected</td></tr>
-  <tr><td><code>isConnected(): boolean</code></td><td>Is any remembered device connected?</td></tr>
-  <tr><td><code>isAutoStart(): boolean</code> / <code>setAutoStart(b)</code></td><td>Whether it turns on by itself at boot: the file says so (<code>"autoStart"</code>, as in <code>/sys/wifi.json</code>)</td></tr>
-</table>
-<p>
-  <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
-  <code>getAddressType()</code> (<code>"public"</code> or <code>"random"</code>), <code>getKind()</code>
-  (<code>"keyboard"</code>, <code>"mouse"</code> or <code>"unknown"</code>: a keyboard does not say so in the scan, it does
-  when connected), <code>getRssi()</code> (the scan's signal strength, in dBm; 0 for remembered ones) and
-  <code>isConnected()</code>.
-</p>
-<p>
-  <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>autoStart</code> and the
-  devices, by address; and if needed, by hand, <code>autoOff</code> (seconds without use before it turns itself off; 600
-  by default, 0 never; a key or the mouse count as use). The board reads it at boot: if it says <code>autoStart</code>,
-  it turns on and waits for the remembered ones. The ENV key <code>bt</code> overrides <code>autoStart</code>
-  (<a href="#env">appendix A</a>). The pairing keys are kept by the board separately, in
-  <code>/sys/bluetooth.keys</code>, and <code>forget</code> also deletes the device's keys.
-  <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
-</p>
-<pre><code>{ "autoStart": true,
-  "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
-<p>
-  <strong>Where.</strong> On the <strong>P4</strong> (with <code>radio=c6</code> in its ENV: it goes through the same C6
-  as the WiFi), the <strong>S3</strong> and the <strong>C5</strong>, with Bluetooth LE keyboards and mice: what they send
-  reaches <a href="#stdlib-keyboards"><code>Keyboards</code></a> and <a href="#stdlib-mice"><code>Mice</code></a>, and
-  in a program with a GUI, its controls. A device that is neither a keyboard nor a mouse does not stay:
-  <code>connect</code> returns <code>false</code>, and the log says why. The C3 and the C6 do not carry it (they are short
-  of RAM, with no PSRAM), nor do the Pico&nbsp;2 or the STM32s: there <code>isAvailable()</code> is <code>false</code> and
-  <code>turnOn()</code> throws a <code>RuntimeError</code>. On the <strong>PC</strong>, a simulated Bluetooth, the same in
-  both VMs and in the IDE's simulated micro, with two test devices: «Teclado simulado» (keyboard) and «Ratón simulado»
-  (mouse).
-</p>
-<p>
-  <strong>Two things about the devices, not the board.</strong> A mouse that is fully asleep (after many minutes unused,
-  or after a while with the board's Bluetooth off) may not wake up when moved: a click does, and within a few seconds it
-  comes back on its own; a keyboard wakes up with any key. And some devices change address every time they are paired
-  with something else (another board, the PC): the board no longer recognises them, and they have to be paired again
-  (<code>forget</code> the old one and <code>connect</code> the new one, from <code>scan</code>).
-</p>
-
-<h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (the keyboard)</h3>
-<p>
-  The keyboard (<code>import Keyboards</code>; V8). A key is a 32-bit number: the low part is the key code from the HID
-  standard (what a Bluetooth or USB keyboard sends), named in the <code>Keyboards.Key</code> enum; the high part is the
-  state: Ctrl, Shift, Alt, AltGr, Windows and the locks. Its character comes separately: <code>"a"</code>,
-  <code>"Ñ"</code>… or <code>""</code> for a special key (Enter, the arrows).
-</p>
-<pre><code><span class="kw">import</span> Keyboards
-
-<span class="kw">var</span> tk: Keyboards.Keyboard := Keyboards.Keyboard()
-tk.onKey := screen::key                  // one notice per press, on the thread that created the keyboard
-
-<span class="kw">function</span> <span class="kw">event</span> key(t: Keyboards.Keyboard, k: integer, c: string)
-  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.ENTER) <span class="kw">then</span>
-    <span class="kw">print</span> "Enter"
-  <span class="kw">elseif</span> Keyboards.isCtrl(k) <span class="kw">and</span> Keyboards.isKey(k, Keyboards.Key.C) <span class="kw">then</span>
-    <span class="kw">print</span> "Ctrl+C"
-  <span class="kw">elseif</span> c != "" <span class="kw">then</span>
-    <span class="kw">print</span> "key: " + c
-  <span class="kw">endif</span>
-<span class="kw">end</span> key</code></pre>
-<table>
-  <tr><th><code>Keyboards.Keyboard</code></th><th>What it does</th></tr>
-  <tr><td><code>Keyboard()</code></td><td>A program keyboard: from now on, every key reaches it through <code>onKey</code>, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: every key goes to all of them</td></tr>
-  <tr><td><code>onKey(t, k, c)</code></td><td>The event: the keyboard, the key (the 32-bit number) and its character. One notice per press: a key held down does not repeat, and the modifiers on their own (Shift, Ctrl…) are not keys</td></tr>
-  <tr><td><code>hasKey(): boolean</code></td><td>Is any key waiting? From any thread</td></tr>
-  <tr><td><code>readKey(): integer</code></td><td>The next key (0 if none). There is one buffer, the system's: whoever reads first takes it</td></tr>
-  <tr><td><code>getChar(): string</code></td><td>The character of the last key read by <code>readKey</code></td></tr>
-  <tr><td><code>isConnected(): boolean</code></td><td>Is a keyboard connected?</td></tr>
-  <tr><td><code>close()</code></td><td>Stops receiving events (<code>readKey</code> still works)</td></tr>
-</table>
-<p>
-  <strong>What a key carries</strong>, without looking at bits: <code>Keyboards.getCode(k)</code> (the code),
-  <code>isKey(k, Keyboards.Key.X)</code>, <code>isShift(k)</code>, <code>isCtrl(k)</code>, <code>isAlt(k)</code> (the
-  left one), <code>isAltGr(k)</code>, <code>isWin(k)</code>, <code>isCapsLock(k)</code>, <code>isNumLock(k)</code>,
-  <code>isScrollLock(k)</code> and <code>isFn(k)</code>. The bits, in case you need them: 16 left Ctrl, 17 left Shift,
-  18 Alt, 19 left Windows, 20 right Ctrl, 21 right Shift, 22 AltGr, 23 right Windows, 24 Caps Lock, 25 Num Lock, 26
-  Scroll Lock and 27 Fn. The enum keys: <code>A</code>…<code>Z</code>, <code>D0</code>…<code>D9</code>,
-  <code>ENTER</code>, <code>ESCAPE</code>, <code>BACKSPACE</code>, <code>TAB</code>, <code>SPACE</code>,
-  <code>F1</code>…<code>F24</code>, <code>UP</code>, <code>DOWN</code>, <code>LEFT</code>, <code>RIGHT</code>,
-  <code>HOME</code>, <code>END_KEY</code> (<code>end</code> is a reserved word), <code>PAGE_UP</code>,
-  <code>PAGE_DOWN</code>, <code>INSERT</code>, <code>DELETE</code>, the keypad ones (<code>KP_0</code>…) and the rest of
-  the standard.
-</p>
-<p>
-  <strong>Where.</strong> On the <strong>PC</strong>, the keys of the GUI window, only with a keyboard connected: the
-  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Without a GUI there is
-  no keyboard on the PC. The character is the system's (the PC keyboard layout). In a program with a GUI, the GUI itself
-  takes the keyboard to its controls (the focus, Tab, Enter), and the screen has the keys as they come, <code>onKey</code>
-  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the <strong>boards with Bluetooth</strong> (the P4, the C5 and
-  the S3, <a href="#stdlib-air-bt">§14.19</a>), a Bluetooth keyboard, with or without a screen; the character is the one
-  of the US layout (each country's, later on): a Spanish keyboard gives its <code>ñ</code> as <code>;</code>.
-</p>
-
-<h3 id="stdlib-mice">14.21 <code>Mice</code> (the mouse)</h3>
-<p>
-  The mouse (<code>import Mice</code>; V8). It goes with a screen: its position is in the points of that screen, like
-  the GUI's (<code>(0,0)</code> at the top left; with the screen rotated, as it is seen). Without a screen it can be
-  connected, but it does nothing. The buttons, named in the <code>Mice.Button</code> enum: <code>LEFT</code>,
-  <code>RIGHT</code>, <code>MIDDLE</code>, and <code>BACK</code> and <code>FORWARD</code>, the two side buttons many mice
-  have.
-</p>
-<pre><code><span class="kw">import</span> Mice
-
-<span class="kw">var</span> mo: Mice.Mouse := Mice.Mouse()
-mo.onPress := screen::pressed            // on the thread that created the mouse
-mo.onMove := screen::moved
-mo.onWheel := screen::wheel
-
-<span class="kw">function</span> <span class="kw">event</span> pressed(m: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
-  <span class="kw">if</span> b == Mice.Button.LEFT <span class="kw">then</span>
-    <span class="kw">print</span> "click at " + x + ", " + y
-  <span class="kw">endif</span>
-<span class="kw">end</span> pressed
-
-<span class="kw">function</span> <span class="kw">event</span> moved(m: Mice.Mouse, x: integer, y: integer)
-  <span class="kw">if</span> m.isPressed(Mice.Button.LEFT) <span class="kw">then</span>
-    <span class="kw">print</span> "dragging at " + x + ", " + y
-  <span class="kw">endif</span>
-<span class="kw">end</span> moved
-
-<span class="kw">function</span> <span class="kw">event</span> wheel(m: Mice.Mouse, d: integer)   // +1 up, -1 down, per notch
-<span class="kw">end</span> wheel</code></pre>
-<table>
-  <tr><th><code>Mice.Mouse</code></th><th>What it does</th></tr>
-  <tr><td><code>Mouse()</code></td><td>A program mouse: from now on, what the mouse does reaches it as events, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: each one gets every event</td></tr>
-  <tr><td><code>onPress(m, b, x, y)</code></td><td>When a button is pressed: the mouse, the button and the point where it was pressed. The <code>onMove</code> to that point comes first. There is no event on release, for now</td></tr>
-  <tr><td><code>onMove(m, x, y)</code></td><td>When it moves, with <strong>only the last position</strong>: if between two turns the mouse goes through several points, the program gets the last one (a Bluetooth mouse sends about 100 reports a second). The buttons and the wheel are never lost: they come in order</td></tr>
-  <tr><td><code>onWheel(m, d)</code></td><td>The wheel: the notches, +1 up and -1 down</td></tr>
-  <tr><td><code>getX(): integer</code>, <code>getY(): integer</code></td><td>The position, as it is now. From any thread</td></tr>
-  <tr><td><code>isPressed(b: Mice.Button): boolean</code></td><td>Is that button pressed, now? That is why, if the program is slow, the <code>onMove</code> at the end of a drag may reach it with the button already released</td></tr>
-  <tr><td><code>isConnected(): boolean</code></td><td>Is a mouse connected?</td></tr>
-  <tr><td><code>close()</code></td><td>Stops receiving events (<code>getX</code>, <code>getY</code> and <code>isPressed</code> still work)</td></tr>
-</table>
-<p>
-  <strong>Where.</strong> On the <strong>PC</strong>, the mouse of the GUI window, only with a mouse connected: the
-  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». As a touch screen, the
-  window stays the same: the GUI buttons and fields respond to the PC mouse, connected or not. Without a GUI there is no
-  mouse on the PC. In a program with a GUI, the GUI itself takes the mouse to its controls, with an arrow, and with «Ratón
-  simulado» the PC mouse stops acting as a touch screen (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the
-  <strong>boards with Bluetooth and a screen</strong> (the P4 and the C5, <a href="#stdlib-air-bt">§14.19</a>), a
-  Bluetooth mouse, with the GUI's arrow; on the S3, which has no screen, it connects but does nothing. When fully asleep,
-  a click wakes it up.
-</p>
-
 <h3 id="stdlib-gui">14.16 <code>Gui</code> — separate volume</h3>
 <p>
   The graphical interface (screen and widget tree, the full catalog, color and fonts,
@@ -2870,6 +2692,269 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
 <p>
   <strong>Pulling the card out while the program is writing</strong> corrupts whatever was
   half-written, exactly like on a PC. There is no magic: close first.
+</p>
+
+<h3 id="stdlib-sound">14.18 <code>Sound</code> (the sound)</h3>
+<p>
+  A <code>.wav</code> through the speaker, <strong>always in parallel</strong> with the program (<code>import Sound</code>):
+  <code>play</code> returns at once and the sound goes on while the program does its own work —a warning, for example—.
+  One at a time: a <code>play</code> while another one is sounding cuts the previous one. It is played by a task of its
+  own, which reads the file in chunks of about 50&nbsp;ms; the path is resolved like that of <code>readFile</code>.
+</p>
+<pre><code>import Sound
+Sound.play("/sd/aviso.wav")   // returns at once: it sounds while the program goes on
+...
+var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
+</code></pre>
+<table>
+  <tr><th>Member</th><th>Description</th></tr>
+  <tr><td><code>play(path)</code></td>
+      <td>Plays the WAV and returns. What is known at the call —the file cannot be opened, it is not a WAV, a format
+          that is not supported, a board with no sound— is a <code>RuntimeError</code> right then; what comes later
+          (the SD card fails halfway through a song) stops the sound and is left in the log.</td></tr>
+  <tr><td><code>stop()</code></td>
+      <td>Stops whatever is sounding (if nothing is, it does nothing).</td></tr>
+  <tr><td><code>isPlaying(): boolean</code></td>
+      <td><code>true</code> from <code>play</code> until it ends, or until <code>stop</code>.</td></tr>
+  <tr><td><code>setVolume(v)</code> / <code>getVolume(): integer</code></td>
+      <td>From 0 (nothing) to 100, 85 by default; outside that range, an error. It also works while it is sounding. The
+          scale goes from −50 to 0&nbsp;dB, half a dB per step, and on the PC it is 20&nbsp;dB lower than on a board, so
+          that 85 sounds alike.</td></tr>
+  <tr><td><code>getPosition()</code> / <code>getLength(): integer</code></td>
+      <td>The progress of the last <code>play</code>, in bytes of sound (without the WAV header): the position moves
+          forward in chunks of about 50&nbsp;ms and, at the end, it equals the length. The percentage, in
+          <code>long</code>: a WAV of more than 21&nbsp;MB times 100 no longer fits in an <code>integer</code>.</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td>
+      <td>Does this board have sound? The common layer answers it, without touching anything.</td></tr>
+</table>
+<p>
+  <strong>The formats:</strong> PCM WAV of 8 or 16 bits, mono or stereo, from 8000 to 48000&nbsp;Hz, at the file's
+  own rate. No MP3.
+</p>
+<p>
+  <strong>Where it sounds.</strong> On the PC, through the system's audio (the C VM, on Windows); with
+  <code>BPVM_SONIDO=mudo</code> in the environment, silently and at the same pace (the tests). On a board, if its family
+  carries the sound part and its ENV the <code>audio</code> line (<a href="#env">appendix A</a>) —the P4, with its ES8311
+  codec—; if not, <code>play</code> gives the error with the reason and <code>isAvailable()</code> returns
+  <code>false</code>.
+  The codec and the amplifier are only switched on while it sounds. When the program ends, whatever is sounding stops,
+  the progress goes back to 0 and the volume to 85.
+</p>
+
+<h3 id="stdlib-air">14.19 <code>Air</code> (WiFi and Bluetooth)</h3>
+<p>
+  Wireless (<code>import Air</code>), two classes: <code>Air.Wifi</code> and <code>Air.Bluetooth</code>. From a program
+  you only switch it on and off: the network goes in a file, the same on every board, and the rest is sockets
+  (<a href="#stdlib-net"><code>Net</code></a>).
+</p>
+<pre><code><span class="kw">import</span> Air
+<span class="kw">import</span> Net
+
+<span class="kw">var</span> wifi: Air.Wifi := Air.Wifi()
+<span class="kw">if</span> wifi.turnOn() <span class="kw">then</span>            // switches on and waits for an IP
+  <span class="kw">var</span> c: Net.Tcp := Net.Tcp()
+  <span class="kw">if</span> c.connect("192.168.1.50", 8080, 3000) <span class="kw">then</span>
+    c.sendStr("hello")
+    c.close()
+  <span class="kw">endif</span>
+<span class="kw">endif</span>
+wifi.turnOff()</code></pre>
+<table>
+  <tr><th>Method</th><th>What it does</th></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Switches on with <code>/sys/wifi.json</code> and waits for an IP, up to 20&nbsp;s, without stopping the other threads. <code>true</code> with an IP; <code>false</code> if it does not get one (the network does not show up, the password is wrong), with the reason in the log. If it does not make it in time, the radio keeps trying. On a board without WiFi or without the file, a <code>RuntimeError</code> with the reason</td></tr>
+  <tr><td><code>turnOff()</code></td><td>Switches it off completely, also if the boot switched it on. If the IDE was connected over the network, it is cut off</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>There is a link and an IP: connections can be opened. If the network is lost, the board looks for it on its own</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td><td>Does this board have WiFi? Without switching anything on</td></tr>
+</table>
+<p>
+  <strong>The file.</strong> <code>/sys/wifi.json</code>: <code>ssid</code>, and if needed <code>password</code>,
+  <code>country</code> (two letters), <code>autoStart</code> (<code>true</code>: it switches on when the board boots) and
+  <code>autoOff</code> (seconds without activity before it switches itself off; 600 by default, 0 never; an open
+  connection counts as activity). It is written with the IDE's <strong>WiFi</strong> button, or like any file. The
+  password is stored in the clear. <code>/sys/net.json</code>, if needed: <code>hostname</code>, for DHCP, or
+  <code>ip</code>, <code>mask</code>, <code>gateway</code> and <code>dns</code> for a fixed IP. The ENV key
+  <code>wifi</code> overrides <code>autoStart</code> (<a href="#env">appendix A</a>).
+</p>
+<p>
+  <strong>When the program ends</strong>, if it touched it, the WiFi goes back to what the configuration says: if the
+  program switched it on and the file does not say <code>autoStart</code>, it is switched off; if the program switched it
+  off and the file says so, it is switched on, so the IDE can come back in over the network.
+</p>
+<p>
+  <strong>Where.</strong> The P4 (with <code>radio=c6</code> in its ENV), the S3 and the C5. Not the C3 or the C6: they
+  have no PSRAM, and just by carrying it they would lose between 33 and 88&nbsp;KB of RAM. On the Pico 2 W, a pack, later
+  on. On the <strong>PC</strong>, <code>turnOn()</code> always gives <code>true</code>, because it already has a network.
+</p>
+
+<h4 id="stdlib-air-bt">Bluetooth: <code>Air.Bluetooth</code> and <code>Air.BtDevice</code></h4>
+<p>
+  Turn on and off, scan, connect and disconnect (V8). A device is connected by its address: the first time it is paired
+  and remembered in <code>/sys/bluetooth.json</code>; after that it comes back on its own, without pairing again.
+</p>
+<pre><code><span class="kw">import</span> Air
+
+<span class="kw">var</span> bt: Air.Bluetooth := Air.Bluetooth()
+bt.turnOn()
+<span class="kw">var</span> seen: List := bt.scan(10000)           // 10 s: the ones in pairing mode
+<span class="kw">var</span> d: Air.BtDevice := Air.BtDevice(seen.get(0))
+<span class="kw">if</span> bt.connect(d) <span class="kw">then</span>                  // the first time it pairs and remembers it
+  print d.getName() + " connected"
+<span class="kw">endif</span>
+bt.disconnect(d)                             // that connection; Bluetooth stays on, with the others</code></pre>
+<table>
+  <tr><th><code>Air.Bluetooth</code> method</th><th>What it does</th></tr>
+  <tr><td><code>turnOn(): boolean</code></td><td>Turns on and waits until ready, up to 5&nbsp;s; remembered devices come back on their own (one that is not there is not an error: it just does not connect). On a board without Bluetooth, a <code>RuntimeError</code></td></tr>
+  <tr><td><code>turnOff()</code></td><td>Turns off: closes every connection</td></tr>
+  <tr><td><code>isOn(): boolean</code></td><td>Is it on and ready?</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td><td>Does this board have Bluetooth? Without turning anything on</td></tr>
+  <tr><td><code>scan(ms): List</code></td><td>Looks for <code>ms</code> for devices in pairing mode: a <code>List</code> of <code>BtDevice</code>, without the connected ones (up to 16)</td></tr>
+  <tr><td><code>connect(d): boolean</code></td><td>Connects. The first time it pairs and remembers it; after that, by its address. <code>false</code> if it is not found</td></tr>
+  <tr><td><code>disconnect(d)</code></td><td>Closes that connection; it stays remembered: it comes back with another <code>connect</code>, or on its own when Bluetooth is turned on again</td></tr>
+  <tr><td><code>forget(d)</code></td><td>Forgets it: the connection, its keys and its entry in the file</td></tr>
+  <tr><td><code>listDevices(): List</code></td><td>The remembered ones, in the order they were first connected</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is any remembered device connected?</td></tr>
+  <tr><td><code>isAutoStart(): boolean</code> / <code>setAutoStart(b)</code></td><td>Whether it turns on by itself at boot: the file says so (<code>"autoStart"</code>, as in <code>/sys/wifi.json</code>)</td></tr>
+</table>
+<p>
+  <code>Air.BtDevice</code>: <code>getName()</code>, <code>getAddress()</code> (<code>"AA:BB:CC:DD:EE:FF"</code>),
+  <code>getAddressType()</code> (<code>"public"</code> or <code>"random"</code>), <code>getKind()</code>
+  (<code>"keyboard"</code>, <code>"mouse"</code> or <code>"unknown"</code>: a keyboard does not say so in the scan, it does
+  when connected), <code>getRssi()</code> (the scan's signal strength, in dBm; 0 for remembered ones) and
+  <code>isConnected()</code>.
+</p>
+<p>
+  <strong>The file.</strong> <code>/sys/bluetooth.json</code> is written by the class: <code>autoStart</code> and the
+  devices, by address; and if needed, by hand, <code>autoOff</code> (seconds without use before it turns itself off; 600
+  by default, 0 never; a key or the mouse count as use). The board reads it at boot: if it says <code>autoStart</code>,
+  it turns on and waits for the remembered ones. The ENV key <code>bt</code> overrides <code>autoStart</code>
+  (<a href="#env">appendix A</a>). The pairing keys are kept by the board separately, in
+  <code>/sys/bluetooth.keys</code>, and <code>forget</code> also deletes the device's keys.
+  <strong>When the program ends</strong>, if it touched Bluetooth, it goes back to what the file says.
+</p>
+<pre><code>{ "autoStart": true,
+  "devices": { "02:00:00:00:00:01": { "name": "Teclado simulado", "addressType": "random", "kind": "keyboard" } } }</code></pre>
+<p>
+  <strong>Where.</strong> On the <strong>P4</strong> (with <code>radio=c6</code> in its ENV: it goes through the same C6
+  as the WiFi), the <strong>S3</strong> and the <strong>C5</strong>, with Bluetooth LE keyboards and mice: what they send
+  reaches <a href="#stdlib-keyboards"><code>Keyboards</code></a> and <a href="#stdlib-mice"><code>Mice</code></a>, and
+  in a program with a GUI, its controls. A device that is neither a keyboard nor a mouse does not stay:
+  <code>connect</code> returns <code>false</code>, and the log says why. The C3 and the C6 do not carry it (they are short
+  of RAM, with no PSRAM), nor do the Pico&nbsp;2 or the STM32s: there <code>isAvailable()</code> is <code>false</code> and
+  <code>turnOn()</code> throws a <code>RuntimeError</code>. On the <strong>PC</strong>, a simulated Bluetooth, the same in
+  both VMs and in the IDE's simulated micro, with two test devices: «Teclado simulado» (keyboard) and «Ratón simulado»
+  (mouse).
+</p>
+<p>
+  <strong>Two things about the devices, not the board.</strong> A mouse that is fully asleep (after many minutes unused,
+  or after a while with the board's Bluetooth off) may not wake up when moved: a click does, and within a few seconds it
+  comes back on its own; a keyboard wakes up with any key. And some devices change address every time they are paired
+  with something else (another board, the PC): the board no longer recognises them, and they have to be paired again
+  (<code>forget</code> the old one and <code>connect</code> the new one, from <code>scan</code>).
+</p>
+
+<h3 id="stdlib-keyboards">14.20 <code>Keyboards</code> (the keyboard)</h3>
+<p>
+  The keyboard (<code>import Keyboards</code>; V8). A key is a 32-bit number: the low part is the key code from the HID
+  standard (what a Bluetooth or USB keyboard sends), named in the <code>Keyboards.Key</code> enum; the high part is the
+  state: Ctrl, Shift, Alt, AltGr, Windows and the locks. Its character comes separately: <code>"a"</code>,
+  <code>"Ñ"</code>… or <code>""</code> for a special key (Enter, the arrows).
+</p>
+<pre><code><span class="kw">import</span> Keyboards
+
+<span class="kw">var</span> tk: Keyboards.Keyboard := Keyboards.Keyboard()
+tk.onKey := screen::key                  // one notice per press, on the thread that created the keyboard
+
+<span class="kw">function</span> <span class="kw">event</span> key(t: Keyboards.Keyboard, k: integer, c: string)
+  <span class="kw">if</span> Keyboards.isKey(k, Keyboards.Key.ENTER) <span class="kw">then</span>
+    <span class="kw">print</span> "Enter"
+  <span class="kw">elseif</span> Keyboards.isCtrl(k) <span class="kw">and</span> Keyboards.isKey(k, Keyboards.Key.C) <span class="kw">then</span>
+    <span class="kw">print</span> "Ctrl+C"
+  <span class="kw">elseif</span> c != "" <span class="kw">then</span>
+    <span class="kw">print</span> "key: " + c
+  <span class="kw">endif</span>
+<span class="kw">end</span> key</code></pre>
+<table>
+  <tr><th><code>Keyboards.Keyboard</code></th><th>What it does</th></tr>
+  <tr><td><code>Keyboard()</code></td><td>A program keyboard: from now on, every key reaches it through <code>onKey</code>, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: every key goes to all of them</td></tr>
+  <tr><td><code>onKey(t, k, c)</code></td><td>The event: the keyboard, the key (the 32-bit number) and its character. One notice per press: a key held down does not repeat, and the modifiers on their own (Shift, Ctrl…) are not keys</td></tr>
+  <tr><td><code>hasKey(): boolean</code></td><td>Is any key waiting? From any thread</td></tr>
+  <tr><td><code>readKey(): integer</code></td><td>The next key (0 if none). There is one buffer, the system's: whoever reads first takes it</td></tr>
+  <tr><td><code>getChar(): string</code></td><td>The character of the last key read by <code>readKey</code></td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is a keyboard connected?</td></tr>
+  <tr><td><code>close()</code></td><td>Stops receiving events (<code>readKey</code> still works)</td></tr>
+</table>
+<p>
+  <strong>What a key carries</strong>, without looking at bits: <code>Keyboards.getCode(k)</code> (the code),
+  <code>isKey(k, Keyboards.Key.X)</code>, <code>isShift(k)</code>, <code>isCtrl(k)</code>, <code>isAlt(k)</code> (the
+  left one), <code>isAltGr(k)</code>, <code>isWin(k)</code>, <code>isCapsLock(k)</code>, <code>isNumLock(k)</code>,
+  <code>isScrollLock(k)</code> and <code>isFn(k)</code>. The bits, in case you need them: 16 left Ctrl, 17 left Shift,
+  18 Alt, 19 left Windows, 20 right Ctrl, 21 right Shift, 22 AltGr, 23 right Windows, 24 Caps Lock, 25 Num Lock, 26
+  Scroll Lock and 27 Fn. The enum keys, with their English names: <code>A</code>…<code>Z</code>,
+  <code>D0</code>…<code>D9</code>, <code>ENTER</code>, <code>ESCAPE</code>, <code>BACKSPACE</code>, <code>TAB</code>,
+  <code>SPACE</code>, <code>F1</code>…<code>F24</code>, <code>UP</code>, <code>DOWN</code>, <code>LEFT</code>,
+  <code>RIGHT</code>, <code>HOME</code>, <code>END_KEY</code> (<code>end</code> is a reserved word), <code>PAGE_UP</code>,
+  <code>PAGE_DOWN</code>, <code>INSERT</code>, <code>DELETE</code>, the keypad ones (<code>KP_0</code>…) and the rest of
+  the standard.
+</p>
+<p>
+  <strong>Where.</strong> On the <strong>PC</strong>, the keys of the GUI window, only with a keyboard connected: the
+  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Teclado simulado». Without a GUI there is
+  no keyboard on the PC. The character is the system's (the PC keyboard layout). In a program with a GUI, the GUI itself
+  takes the keyboard to its controls (the focus, Tab, Enter), and the screen has the keys as they come, <code>onKey</code>
+  (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the <strong>boards with Bluetooth</strong> (the P4, the C5 and
+  the S3, <a href="#stdlib-air-bt">§14.19</a>), a Bluetooth keyboard, with or without a screen; the character is the one
+  of the US layout (each country's, later on): a Spanish keyboard gives its <code>ñ</code> as <code>;</code>.
+</p>
+
+<h3 id="stdlib-mice">14.21 <code>Mice</code> (the mouse)</h3>
+<p>
+  The mouse (<code>import Mice</code>; V8). It goes with a screen: its position is in the points of that screen, like
+  the GUI's (<code>(0,0)</code> at the top left; with the screen rotated, as it is seen). Without a screen it can be
+  connected, but it does nothing. The buttons, named in the <code>Mice.Button</code> enum: <code>LEFT</code>,
+  <code>RIGHT</code>, <code>MIDDLE</code>, and <code>BACK</code> and <code>FORWARD</code>, the two side buttons many mice
+  have.
+</p>
+<pre><code><span class="kw">import</span> Mice
+
+<span class="kw">var</span> mo: Mice.Mouse := Mice.Mouse()
+mo.onPress := screen::pressed            // on the thread that created the mouse
+mo.onMove := screen::moved
+mo.onWheel := screen::wheel
+
+<span class="kw">function</span> <span class="kw">event</span> pressed(m: Mice.Mouse, b: Mice.Button, x: integer, y: integer)
+  <span class="kw">if</span> b == Mice.Button.LEFT <span class="kw">then</span>
+    <span class="kw">print</span> "click at " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> pressed
+
+<span class="kw">function</span> <span class="kw">event</span> moved(m: Mice.Mouse, x: integer, y: integer)
+  <span class="kw">if</span> m.isPressed(Mice.Button.LEFT) <span class="kw">then</span>
+    <span class="kw">print</span> "dragging at " + x + ", " + y
+  <span class="kw">endif</span>
+<span class="kw">end</span> moved
+
+<span class="kw">function</span> <span class="kw">event</span> wheel(m: Mice.Mouse, d: integer)   // +1 up, -1 down, per notch
+<span class="kw">end</span> wheel</code></pre>
+<table>
+  <tr><th><code>Mice.Mouse</code></th><th>What it does</th></tr>
+  <tr><td><code>Mouse()</code></td><td>A program mouse: from now on, what the mouse does reaches it as events, on the thread that creates it, which has to be running (a loop with <code>sleep</code>, for example). There can be several: each one gets every event</td></tr>
+  <tr><td><code>onPress(m, b, x, y)</code></td><td>When a button is pressed: the mouse, the button and the point where it was pressed. The <code>onMove</code> to that point comes first. There is no event on release, for now</td></tr>
+  <tr><td><code>onMove(m, x, y)</code></td><td>When it moves, with <strong>only the last position</strong>: if between two turns the mouse goes through several points, the program gets the last one (a Bluetooth mouse sends about 100 reports a second). The buttons and the wheel are never lost: they come in order</td></tr>
+  <tr><td><code>onWheel(m, d)</code></td><td>The wheel: the notches, +1 up and -1 down</td></tr>
+  <tr><td><code>getX(): integer</code>, <code>getY(): integer</code></td><td>The position, as it is now. From any thread</td></tr>
+  <tr><td><code>isPressed(b: Mice.Button): boolean</code></td><td>Is that button pressed, now? That is why, if the program is slow, the <code>onMove</code> at the end of a drag may reach it with the button already released</td></tr>
+  <tr><td><code>isConnected(): boolean</code></td><td>Is a mouse connected?</td></tr>
+  <tr><td><code>close()</code></td><td>Stops receiving events (<code>getX</code>, <code>getY</code> and <code>isPressed</code> still work)</td></tr>
+</table>
+<p>
+  <strong>Where.</strong> On the <strong>PC</strong>, the mouse of the GUI window, only with a mouse connected: the
+  simulated one from <a href="#stdlib-air-bt"><code>Air.Bluetooth</code></a>, «Ratón simulado». As a touch screen, the
+  window stays the same: the GUI buttons and fields respond to the PC mouse, connected or not. Without a GUI there is no
+  mouse on the PC. In a program with a GUI, the GUI itself takes the mouse to its controls, with an arrow, and with «Ratón
+  simulado» the PC mouse stops acting as a touch screen (<a href="gui.html#ev-teclado">gui.html §22.6</a>). On the
+  <strong>boards with Bluetooth and a screen</strong> (the P4 and the C5, <a href="#stdlib-air-bt">§14.19</a>), a
+  Bluetooth mouse, with the GUI's arrow; on the S3, which has no screen, it connects but does nothing. When fully asleep,
+  a click wakes it up.
 </p>
 
 <!-- =========================================================== -->
@@ -3442,9 +3527,11 @@ imported exactly like one living in <code>/lib</code>.</p>
   console's <code>kill</code> command, without rebooting the board.
 </p>
 <p>
-  Five families, eight images, ten boards. The VM's memory (heap + BP thread stacks)
-  is decided by each image at boot and printed in the log; <code>stack=N</code> (KB) in
-  the board's environment changes the split between stacks and heap.
+  Five families, eight images, ten boards. The VM's memory is decided by each image at
+  boot and printed in the log: almost all of it is heap, and each BP thread's stack comes
+  out of it when the thread starts (V8), so the RAM the threads use is that of the ones
+  there are. Outside the heap there is the <code>Main</code> stack, 16&nbsp;KB;
+  <code>stack=N</code> (KB) in the board's environment changes it.
 </p>
 <p>
   <strong>Two cores</strong> (V7). On the Pico&nbsp;2, the Metro, the S3 and the P4 the VM runs two
@@ -3795,7 +3882,7 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   on the toolbar; <a href="guia-ide.html#entorno">IDE guide §9.3</a>). A program reads any of
   them with <code>Machine.getEnv("key")</code> (<a href="#stdlib-pico">§14.9</a>), from the
   flash and without rebooting; on the PC, always <code>""</code>. This is the full list of the
-  ones V7's firmware reads.
+  ones V8's firmware reads.
 </p>
 <p>
   <strong>How they are written.</strong> Keys are case-insensitive. Numbers go in decimal or with
@@ -3814,11 +3901,13 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><td><code>SQLite</code></td><td>MB, from 2 to 4095</td><td>The same block, asked for in MB for the database; it only counts without <code>packRam</code>. It fits where 2 MB are free</td><td>the Metro with <code>psram=1</code> · S3 · C5 · P4</td><td>at boot</td></tr>
   <tr><td><code>psram</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Turns on the Metro's PSRAM (fixed CS, GPIO47, which then belongs to the system) and the VM moves to it. On the Pico 2 it says so and does nothing; the ESP32s decide it by their image</td><td>RP2350</td><td>at boot</td></tr>
   <tr><td><code>vmheap</code></td><td>KB; by default, whatever the split leaves (on the C3 and C6, 128)</td><td>The whole VM block, heap and stacks. Above the ceiling, the ceiling; below the floor —64 KB; on the P4, 2 MB, also when <code>packRam</code> or <code>SQLite</code> take the rest— there is no VM: the board boots degraded and says why —in the board panel and when you run—, and the ENV is fixed from the IDE. Without PSRAM, what the block does not take belongs to the system (<code>malloc</code>), and that is where the tables used to load and link the modules go: on the Pico 2 the block leaves 64 KB, and a program of nine modules with <code>Gui</code> and <code>Json</code> needs about 80. It does not link and says so («no hay memoria del sistema (malloc)…», no system memory); with <code>vmheap=288</code> the block leaves 96 KB and it links</td><td>all</td><td>at boot</td></tr>
-  <tr><td><code>stack</code></td><td>KB; by default, 25 % of the block, between 64 and 512 KB (with a 128 KB block, half)</td><td>The part of the VM block for the threads' stacks; the rest is heap. It is clamped between 16 KB and half the block, and it says so</td><td>all</td><td>at boot</td></tr>
+  <tr><td><code>stack</code></td><td>KB; by default, 16</td><td>The <code>Main</code> stack: the part of the VM block that is not heap (each thread's comes out of the heap, since V8). It is clamped between 16 KB and half the block, and it says so</td><td>all</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>Threads and cores</strong></td></tr>
   <tr><td><code>quantum</code></td><td>opcodes (1024)</td><td>How many opcodes a thread runs before yielding its turn</td><td>all</td><td>at boot</td></tr>
   <tr><td><code>vm.runs</code></td><td><code>1</code> or <code>2</code>; by default, one per core: 2 on the Pico 2, the Metro, the S3 and the P4; 1 on the rest</td><td>How many of the program's threads run at once. On the C3, C5 and C6, <code>2</code> puts the second one on the same core</td><td>RP2350 · ESP32</td><td>at boot</td></tr>
   <tr><td><code>vm.cores</code></td><td><code>1</code> (by default, both)</td><td>Every VM task on core 0: the way back from two cores, without re-flashing</td><td>RP2350 · S3 · P4</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Frequency</strong></td></tr>
+  <tr><td><code>cpu.mhz</code></td><td>MHz: the S3 and the C5, <code>80</code>, <code>160</code> or <code>240</code>; the C3, <code>80</code> or <code>160</code>; the C6, <code>80</code>, <code>120</code> or <code>160</code>; the P4, <code>360</code>. By default, the image's: 160 on the S3, the C3 and the C6; 240 on the C5; 360 on the P4</td><td>The CPU frequency at boot, the same one <code>Machine.setCpuFreqMHz</code> sets (<a href="#stdlib-pico">§14.9</a>). A value the board does not provide is reported in the log, and the image's stays</td><td>ESP32</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>The screen</strong></td></tr>
   <tr><td><code>display</code></td><td><code>ek79007</code> (default: the Function-EV, 1024×600) or <code>st7701</code> (the Waveshare 4.3", 480×800)</td><td>The board's MIPI-DSI panel</td><td>P4</td><td>when the GUI starts</td></tr>
   <tr><td><code>lcd</code></td><td><code>&lt;controller&gt;,spi:N,dc:N,cs:N,w:N,h:N</code>; and <code>rst:P</code>, <code>bl:P</code>, <code>mhz:N</code> (20), <code>ram:WxH</code>, <code>off:XxY</code>, <code>seq:PATH</code>, <code>inv</code>, <code>bgr</code>, <code>traza</code>. P is a GPIO, or <code>x0</code>…<code>x7</code> on the expander (<code>xpwm</code>, only for <code>bl</code>)</td><td>An SPI panel —ST7789, ILI9341…— for the <code>DriverSpi</code> pack's driver; it needs its <code>spiN</code> line</td><td>C5 · C6</td><td>when the GUI starts</td></tr>
@@ -3829,6 +3918,8 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><td><code>i2cN</code></td><td><code>sda:N,scl:N[,khz:N][,ms:N]</code>; <code>khz</code> 100</td><td>The same, with the bus speed. The touch panel's I²C is declared by the image (P4: <code>i2c0</code>; DK2: <code>i2c2</code>), and a line for it is rejected</td><td>N: RP2350, S3 and P4 0–1 · C3, C5 and C6 0 · Nucleo 1–4 · DK2 1–5</td><td>at boot</td></tr>
   <tr><td><code>sd</code> (SPI)</td><td><code>cs:N</code>; <code>sck</code>, <code>mosi</code> and <code>miso</code> if the bus is not in <code>spiN</code>; <code>bus:N</code> (0), <code>cd:N</code>, <code>cdalto:1</code>, <code>khz:N</code> (25000)</td><td>The SPI card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>RP2350 · C5 · C6</td><td>at boot</td></tr>
   <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, and <code>d1</code>, <code>d2</code> and <code>d3</code> all three (4 bits) or none (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = no LDO)</td><td>The SDMMC card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Sound</strong></td></tr>
+  <tr><td><code>audio</code></td><td><code>&lt;codec&gt;,mclk:N,bclk:N,ws:N,dout:N</code>; and <code>i2c:N</code> (0), <code>dir:N</code> (0x18), <code>pa:P</code> (none), <code>paalto:1</code> (1); <code>sda</code> and <code>scl</code>, if the board does not already declare that bus</td><td>The board's sound (<code>Sound</code>, <a href="#stdlib-sound">§14.18</a>): the codec —for now, <code>es8311</code>—, the pins of its I²S, its I²C and the amplifier, which is only switched on while it sounds. Its pins then belong to the system. Without the line, the board has no sound and <code>Sound.play</code> says so. The Waveshare P4: <code>audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53</code></td><td>P4</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>WiFi</strong></td></tr>
   <tr><td><code>wifi</code></td><td><code>1</code> / <code>0</code></td><td>1: it is switched on at boot, with what <code>/sys/wifi.json</code> says. 0: it is not, even if the file says <code>"autoStart": true</code>. Without the key, the file decides; and without a file, it stays off</td><td>P4 · S3 · C5</td><td>at boot</td></tr>
   <tr><td><code>radio</code></td><td><code>c6</code></td><td>The board carries an ESP32-C6 as its radio (not every P4 does). Without this line it has no WiFi or Bluetooth and its pins are free; with it, the SDIO and reset pins of the C6 belong to the system</td><td>P4</td><td>at boot</td></tr>

@@ -166,6 +166,7 @@
     <li><a href="#ventana">2. La ventana</a></li>
     <li><a href="#proyectos">3. Proyectos</a></li>
     <li><a href="#compilar">4. Editar y compilar</a></li>
+    <li style="padding-left:0.9rem;font-size:0.9em"><a href="#jc">4.1 JC: los .jc y la traducción</a></li>
     <li><a href="#ejecutar">5. Ejecutar (y parar)</a></li>
     <li style="padding-left:0.9rem;font-size:0.9em"><a href="#aot">5.1 native (AOT): el toolchain</a></li>
     <li><a href="#placa">6. Conectarse a la placa</a></li>
@@ -180,6 +181,7 @@
   <h2>Volúmenes</h2>
   <ul>
     <li><a href="manual.html">Manual del lenguaje</a></li>
+    <li><a href="jc.html">JC, BasicPlus con llaves</a></li>
     <li><a href="referencia.html">Referencia</a></li>
     <li><a href="gui.html">Interfaz gráfica</a></li>
     <li><a href="bp-desde-dentro.html">Basic Plus desde dentro</a></li>
@@ -202,7 +204,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>o, si lo prefieres a mano:</p>
-<pre><code>java -jar BpIde-7.0.jar</code></pre>
+<pre><code>java -jar BpIde-8.0.jar</code></pre>
 <p>
   Junto al <code>.jar</code> viajan las carpetas de las que el IDE tira solo,
   <strong>sin configurar nada</strong>: la biblioteca de packs
@@ -220,12 +222,13 @@
   <li><strong>Árbol del proyecto</strong> (arriba-izquierda): fuentes,
       recursos, salida compilada y dependencias del proyecto abierto.</li>
   <li><strong>Editor</strong> (arriba-derecha): pestañas con resaltado de
-      sintaxis BP; la línea actual queda marcada y la posición se ve en
-      la barra de estado.</li>
+      sintaxis BP, o de JC en un <code>.jc</code> (§4.1); la línea actual queda
+      marcada y la posición se ve en la barra de estado.</li>
   <li><strong>Explorador de la placa</strong> (abajo-izquierda): el
-      selector de backend (<em>Placa serial</em> o <em>VM Java por
-      TCP</em>), el puerto, el botón Connect y — una vez conectado — el
-      árbol de ficheros del micro con su botonera.</li>
+      selector de backend (<em>Placa (serial v1)</em>, <em>Placa (red)</em>,
+      <em>VM Java (TCP v1)</em> o <em>Micro simulado (VM-C)</em>), el puerto o la
+      dirección, el botón Connect y — una vez conectado — el árbol de ficheros
+      del micro con su botonera.</li>
   <li><strong>Consola y depuración</strong> (abajo-derecha): pestañas
       <em>Consola</em>, <em>Errores</em>, <em>Variables</em>,
       <em>Properties módulo</em>, <em>Call Stack</em> y
@@ -252,8 +255,8 @@
   organiza en:
 </p>
 <ul>
-  <li><strong>Sources</strong> — los <code>.bp</code> del proyecto
-      (en la captura: <code>App.bp</code> y <code>Util.bp</code>).</li>
+  <li><strong>Sources</strong> — los fuentes del proyecto, <code>.bp</code> y
+      <code>.jc</code> (§4.1) (en la captura: <code>App.bp</code> y <code>Util.bp</code>).</li>
   <li><strong>Resources</strong> — ficheros de datos que el Run copia
       al micro tal cual (configuraciones, tablas…).</li>
   <li><strong>Output</strong> — lo que produce el compilador: los
@@ -286,6 +289,58 @@
   un «y N más».
 </p>
 
+<h3 id="jc">4.1 JC: los <code>.jc</code> y la traducción</h3>
+<p>
+  <strong>JC</strong> es BasicPlus con la sintaxis de Java y C# —llaves, punto y coma, el tipo delante del nombre—
+  sobre el mismo compilador y el mismo bytecode: un <code>.jc</code> compila a un <code>.mod</code> como el de un
+  <code>.bp</code>, y corre igual en el PC y en la placa. El lenguaje está en su volumen,
+  <a href="jc.html">JC, BasicPlus con llaves</a>; aquí, lo que hace el IDE con él.
+</p>
+<ul>
+  <li><strong>Abrir y guardar.</strong> <em>File → Load</em> abre los <code>.bp</code> y los <code>.jc</code>
+      («BasicPlus (*.bp, *.jc)»), y el árbol del proyecto enseña los dos en <em>Sources</em>. El editor colorea cada
+      fichero según su extensión, y un <code>.jc</code> se pliega por llaves. Un fichero nuevo (<em>File → New</em>) se
+      colorea como BP hasta que lo guardas: con <code>.jc</code>, pasa a JC; y si al guardarlo no le pones extensión,
+      el IDE le pone la del lenguaje de su pestaña.</li>
+  <li><strong>Un proyecto con el main en JC.</strong> Basta con que el fuente del main sea
+      <code>&lt;main&gt;.jc</code> en vez de <code>&lt;main&gt;.bp</code>: compilar, ejecutar (también en la ventana y
+      en la placa) y depurar lo encuentran solos. <em>New Project</em> lo crea en BP; para pasarlo a JC, se traduce
+      (abajo), se guarda como <code>.jc</code> y se quita el <code>.bp</code>. Si están los dos, el IDE no adivina:
+      lo dice antes de compilar nada («El main está dos veces, App.bp y App.jc: el proyecto no sabe cuál compilar.
+      Quita uno de los dos.»). Los módulos que el main importa van, de momento, en <code>.bp</code>: es el fuente que
+      busca el compilador.</li>
+  <li><strong>Los errores y el depurador</strong>, como con un <code>.bp</code>: la pestaña <em>Errores</em> da cada
+      uno con su línea del <code>.jc</code>, y los puntos de parada van por fichero y línea (§11).</li>
+</ul>
+<p>
+  <strong>Edit → Traducir a JC</strong> y <strong>Edit → Traducir a BP</strong> traducen el fichero de la pestaña
+  activa: lo guardan (si es nuevo, preguntan dónde) y abren la traducción en una <strong>pestaña nueva, sin
+  guardar</strong> —«(Saludo.jc, sin guardar)»—, coloreada en su lenguaje; al guardarla, la extensión que se pone sola
+  es la suya. El original no cambia. <strong>Los comentarios no viajan</strong>: el compilador los tira al leer el
+  fuente, y la traducción sale sin ellos. Lo que no se puede traducir —un fuente con errores (a JC, además, tiene que
+  compilar: se traduce desde el programa ya analizado) o algo que el otro lenguaje no tiene— lo dice la Consola, con el
+  motivo («no se traduce: …»), y no se abre nada. El <code>Saludo</code> de §7, con un comentario, y lo que da
+  <em>Traducir a JC</em>:
+</p>
+<pre><code><span class="kw">module</span> Saludo
+  <span class="comment">// saluda a quien se diga al ejecutarlo</span>
+  <span class="kw">public function</span> Main(arg: string := <span class="str">"mundo"</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span> + arg
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Saludo</code></pre>
+<pre data-bp="jc"><code><span class="kw">module</span> Saludo
+{
+   <span class="kw">public function void</span> Main(string arg = <span class="str">"mundo"</span>)
+   {
+      <span class="kw">println</span>(<span class="str">"hola, "</span> + arg);
+   }
+}</code></pre>
+<p>
+  Y <em>Traducir a BP</em> sobre ese JC devuelve el primero, sin el comentario. Fuera del IDE hacen lo mismo las
+  opciones del compilador <code>--escribir-jc</code> y <code>--escribir-bp</code> (en el
+  <a href="jc.html">volumen de JC</a>).
+</p>
+
 <h2 id="ejecutar">5. Ejecutar (y parar)</h2>
 <ul>
   <li><strong>Run → Run</strong>: ejecuta en el PC, sobre la VM Java
@@ -301,13 +356,17 @@
       respondiendo, también si el programa está dentro de una función
       <code>native</code> larga. El programa termina con código 130.
       El <code>kill</code> (o <code>stop</code>) de la línea de comandos del
-      explorador hace lo mismo.</li>
+      explorador hace lo mismo. Stop espera la respuesta y la Consola dice lo
+      que pasó: que la placa (o la VM local) para el programa —«Stop: la placa
+      para el programa»—, que no había ninguno en marcha, o que no contesta.</li>
 </ul>
 <p>
   <strong>Un programa a la vez.</strong> Mientras hay uno en marcha, <em>Run</em>,
   <em>Run Window</em>, <em>Debug</em>, <em>Run on Device</em> y el <code>run</code> de la
   línea de comandos no lanzan otro: lo dicen, y hay que pararlo antes con Stop. Compilar
-  sí se puede. Y al cerrar el IDE, lo que tenga en marcha en el PC se para.
+  sí se puede. Y al cerrar el IDE, lo que tenga en marcha en el PC se para. Un Run que la
+  placa no acepta lo dice en el acto («la placa rechaza el RUN: …»), en vez de quedarse
+  esperando a un programa que no ha empezado.
 </p>
 <p>
   <strong>Dónde corre en el PC.</strong> La VM Java tiene su flash, como una
@@ -317,15 +376,16 @@
   (<code>"/data/Termostato/lecturas.csv"</code>) va dentro de ella. El
   programa corre en <code>app\&lt;proyecto&gt;</code> de esa flash, con el
   nombre que le daría la placa (<code>/app/&lt;proyecto&gt;</code>), o en
-  <code>app</code> si no hay proyecto, y la carpeta se queda al acabar: lo que
+  <code>app</code> si no hay proyecto (la Consola la dice al empezar: «la carpeta
+  del programa: …»), y la carpeta se queda al acabar: lo que
   el programa guarda con una ruta relativa (<code>"lecturas.csv"</code>) sigue
   ahí en el siguiente Run, y lo puedes mirar. En la placa, en cambio, esa misma
   ruta va a la raíz de la flash (<code>/lecturas.csv</code>), no a la carpeta
   del programa: para que guarde lo mismo en el PC y en la placa, una ruta de
-  <code>/data</code> (<code>"/data/Termostato/lecturas.csv"</code>; referencia
-  §13.11). Con proyecto, el IDE borra de esa
+  <code>/data</code> (<code>"/data/Termostato/lecturas.csv"</code>;
+  <a href="referencia.html#stdlib-io">referencia §13.11</a>). Con proyecto, el IDE borra de esa
   carpeta los <code>.mod</code>, <code>.bpi</code> y <code>.dbg</code> que ya
-  no sube; lo que escribe el programa, nunca. Los <code>resources</code> del
+  no sube («sobraba X.mod: borrado»); lo que escribe el programa, nunca. Los <code>resources</code> del
   proyecto no se copian: si el programa los necesita en el PC, hazlo un pack
   de aplicación (§10).
 </p>
@@ -361,6 +421,17 @@
   (en segundos a partir de los 10 s). El tiempo es el de la ejecución,
   con el módulo ya cargado, y lo miden igual la VM Java y las placas. Qué
   significa cada código, en <code>help error</code> (§7).
+</p>
+<p>
+  Si acaba con un <strong>error sin atrapar</strong>, la Consola dice además
+  <strong>dónde</strong>, en la placa y en el PC: la línea del error y las llamadas
+  que llevaron a ella, hasta 8, cada una con su fichero —<code>en Prueba.bp:23</code>,
+  <code>llamado desde Prueba.bp:9</code>—. La placa no tiene el <code>.dbg</code>: da
+  posiciones, y el IDE las traduce con el de la carpeta de salida. Los marcos de
+  dentro de la biblioteca estándar se quedan en posiciones
+  (<code>Collections+1815</code>); y en la placa, si el error nace dentro de una
+  función <code>native</code> compilada, la línea es la de quien la llamó —para ver la
+  suya, quítale <code>native</code>— (<a href="manual.html#excepciones">manual §11</a>).
 </p>
 <p>
   Si el programa pide datos al usuario con <code>IO.prompt</code>, el
@@ -522,17 +593,27 @@
   la nueva.
 </p>
 <p>
-  <strong>Por la WiFi.</strong> Una placa con WiFi se usa igual sin cable: backend
-  <em>Placa (red)</em>, su IP y <strong>Connect</strong>. Si no la sabes,
-  <strong>Buscar en la red</strong> pregunta a toda la red qué placas hay. El IDE recuerda la
-  última, y si te conectas por el cable aprende su IP. La placa escucha por los dos sitios a la
-  vez y habla con el último que le ha mandado algo, así que puedes entrar por la red con un
-  programa en marcha y pararlo. Si la placa desaparece, porque se cae la red o se apaga, el IDE lo
-  dice en unos 15 s y vuelve a desconectado; un programa que estuviera corriendo puede seguir en
-  marcha en la placa. El botón <strong>WiFi</strong> escribe la red y su clave en
-  <code>/sys/wifi.json</code>; para que entre, hay que reiniciar la placa. La clave queda en
-  claro en la placa, y la placa acepta a cualquier ordenador de la red: úsala en una red de
-  confianza.
+  <strong>Por la WiFi.</strong> Una placa con WiFi —la P4 (con <code>radio=c6</code> en su
+  Entorno), la S3 y la C5— se usa igual sin cable: backend <em>Placa (red)</em>, su IP y
+  <strong>Connect</strong>. Si no la sabes, <strong>Buscar en la red</strong> pregunta a toda la
+  red qué placas hay y pone la IP de la que contesta (si contestan varias, se elige de la lista). El
+  IDE recuerda la última, y si te conectas por el cable aprende su IP. La placa escucha por los dos
+  sitios a la vez y habla con el último que le ha mandado algo, así que puedes entrar por la red con
+  un programa en marcha y pararlo. Si la placa desaparece, porque se cae la red o se apaga, el IDE lo
+  dice en unos 15 s («se ha perdido la conexión con la placa») y vuelve a desconectado; un programa
+  que estuviera corriendo puede seguir en marcha en la placa.
+</p>
+<p>
+  La WiFi de la placa está <strong>apagada</strong> mientras no se le diga otra cosa, y para entrar
+  por la red tiene que estar encendida. Se prepara con el botón <strong>WiFi</strong> del explorador
+  (la primera vez, por el cable), que escribe <code>/sys/wifi.json</code>: la red y su clave, el país,
+  <em>Encenderla al arrancar la placa</em> y <em>Apagarla sin actividad</em>, los segundos tras los que
+  se apaga sola (600 si no se cambia; 0, nunca). Una conexión abierta, también la del IDE, cuenta como
+  actividad; pero si se apaga con el IDE desconectado, por la red ya no se vuelve a entrar hasta
+  reiniciar la placa: para trabajar con el IDE por la red, 0. Lo guardado entra al reiniciar la placa.
+  El fichero entero, y la clave <code>wifi</code> del Entorno, que manda sobre la casilla, en la
+  <a href="referencia.html#stdlib-air">referencia §14.19</a>. La clave queda en claro en la placa, y la
+  placa acepta a cualquier ordenador de la red: úsala en una red de confianza.
 </p>
 <p>
   El mismo panel sirve para la <em>VM Java (TCP v1)</em>: apuntas a un
@@ -542,7 +623,7 @@
 
 <h3 id="simulado">6.1 El micro simulado: una placa que no existe</h3>
 <p>
-  El tercer backend, <em>Micro simulado (VM-C)</em>, es <strong>una placa de
+  El backend <em>Micro simulado (VM-C)</em> es <strong>una placa de
   mentira que corre en tu PC</strong>. No es un emulador de silicio: es la
   misma VM-C que va en los micros, compilada para el ordenador y servida por
   TCP — el IDE la trata <em>exactamente</em> igual que a una placa de verdad.
@@ -562,7 +643,8 @@
   En la captura, <code>GuiColorDemo</code> corriendo en un micro simulado con
   <strong>pantalla de 480×800</strong> —el tamaño está en su configuración, no
   en el programa—. Abajo a la izquierda, el selector de <em>backend</em> con
-  las tres opciones y el simulador «en marcha :5099»; y en la consola, dos
+  las tres opciones de entonces (hoy hay una más, <em>Placa (red)</em>) y el
+  simulador «en marcha :5099»; y en la consola, dos
   líneas que cuentan de dónde salió cada módulo: <code>Gui</code>, del sistema
   de ficheros, eclipsando al del pack (§10.2), y <code>Core</code>, cargado
   <em>XIP</em> desde el pack —el código se ejecuta donde está, sin copiarse.
@@ -581,21 +663,29 @@
       en una placa (§9.2).</li>
   <li><strong>Pantalla</strong> — ancho y alto, o sin pantalla. Puedes
       comprobar cómo queda tu interfaz en 480×320 y en 800×480 sin tener las
-      dos placas.</li>
+      dos placas. Si el programa la gira (<code>Gui.setRotation</code>), la
+      ventana gira con ella (<a href="gui.html#ej-rotacion">GUI §23.4</a>).</li>
 </ul>
 <p>
   Su «flash» y su sistema de ficheros son <strong>ficheros del PC</strong> y
   <strong>persisten entre arranques</strong>, igual que en una placa: lo que
-  subas sigue ahí mañana. Al arrancar por primera vez el FS está vacío —a
-  diferencia de una placa, que trae la biblioteca estándar embebida en el
-  firmware—, así que el IDE le graba la <em>biblioteca de packs</em> que
-  acompaña a la instalación (§10).
+  subas sigue ahí mañana. Al arrancar por primera vez el FS sólo tiene sus
+  carpetas, <code>/sys</code>, <code>/lib</code>, <code>/app</code> y
+  <code>/data</code>, vacías —a diferencia de una placa, que trae la biblioteca
+  estándar embebida en el firmware—, así que el IDE le graba la <em>biblioteca de
+  packs</em> que acompaña a la instalación (§10).
 </p>
 <p class="note">
   El micro simulado <strong>no tiene pines</strong>. Los builtins de hardware
   —<code>Gpio</code>, <code>I2c</code>, <code>Spi</code>…— existen y se
   ejecutan, pero escriben por la consola en vez de mover nada. Para lógica,
   interfaz y sistema de ficheros vale; el hardware sigue necesitando la placa.
+  La WiFi y el Bluetooth sí los tiene, de mentira, como las dos VMs del PC:
+  <code>Air.Wifi</code> enciende en el acto (la red es la del PC), y el Bluetooth
+  encuentra dos aparatos de prueba, «Teclado simulado» y «Ratón simulado». Con
+  ellos conectados, el teclado y el ratón del PC llegan al programa por su ventana
+  —y por la de <em>Run Window</em>—; sin el teclado conectado, la ventana no teclea, y
+  sin el ratón, el del PC hace de táctil (<a href="gui.html#ev-teclado">GUI §22.6</a>).
 </p>
 
 <h2 id="consola">7. La consola del micro</h2>
@@ -643,7 +733,10 @@ hola, Eduardo
 <p>
   El autorun (§12) no pasa argumento a propósito: el defecto que declara el
   fuente <em>es</em> la configuración de despliegue. Desde la línea de comandos
-  del PC es el segundo posicional: <code>bpgenvm-c Saludo.mod Eduardo</code>.
+  del PC es el segundo posicional: <code>bpgenvm-c Saludo.mod Eduardo</code>. El
+  argumento cabe en 127 bytes; uno más largo no se corta: es un error («el
+  argumento no cabe: 128 bytes (el tope es 127)»), y con el defecto del fuente, ya
+  al compilar.
 </p>
 
 <p>
@@ -694,7 +787,8 @@ hola, Eduardo
   <code>dir</code>, <code>mem</code>, <code>log</code>…) contesta ocupado hasta que
   termine, y el explorador lo dice: «placa ocupada» — <code>kill</code> recupera
   el control. <code>reset</code> sí llega con el programa corriendo: no hace falta
-  matarlo antes.
+  matarlo antes, y si el programa no para (un hilo metido en una función en C), a
+  los 2 s la placa se reinicia igual.
 </p>
 
 <h2 id="info">8. INFO del dispositivo</h2>
@@ -728,7 +822,7 @@ hola, Eduardo
       la placa con la imagen de esta versión, o poner el IDE al día si la imagen es
       más nueva. (En la S3, que no tiene AOT: «sin receta».)</li>
   <li><strong>Reset</strong> — la causa del último reinicio; tras un fallo fatal (§12),
-      «fallo fatal» en la Pico&nbsp;2 y la Metro, y en las ESP32 la del chip:
+      «fallo fatal» en la Pico&nbsp;2, la Metro y las STM32, y en las ESP32 la del chip:
       «panic/exception» o «int-watchdog».</li>
 </ul>
 
@@ -943,15 +1037,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 </p>
 
 <p class="warn">
-  <strong>Limitación conocida (<code>#665</code>, para V8).</strong> En la RP2350 —la
+  <strong>Limitación conocida (<code>#665</code>, para V9).</strong> En la RP2350 —la
   Pico&nbsp;2 y la Metro— es la propia imagen de dos núcleos, la de por defecto, la que hace
-  más lento un programa de un solo hilo, con uno o con dos runs. En la Metro, con la VM en
-  la PSRAM, el cálculo va un 35&nbsp;% más lento (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms frente
-  a 2&nbsp;892 con la imagen de un núcleo; con <code>vm.cores=1</code>, 3&nbsp;951); en la
-  Pico&nbsp;2 el cálculo apenas lo nota (un 2&nbsp;%), pero lo que escribe mucho por
-  <code>print</code> sí (PrintBench, 1&nbsp;270&nbsp;ms frente a 817). Ni <code>vm.runs=1</code>
-  ni <code>vm.cores=1</code> lo arreglan —es la imagen, no los runs—: la vuelta atrás es
-  compilar la imagen de un núcleo (<a href="INSTALAR_FIRMWARE.md#nucleos">instalación</a>).
+  más lento un programa de un solo hilo, con uno o con dos runs. Medido con la imagen de V8:
+  en la Pico&nbsp;2, el cálculo va un 7,7&nbsp;% más lento (<code>fib(26)</code>,
+  3&nbsp;575&nbsp;ms frente a 3&nbsp;320 con la imagen de un núcleo), y lo que escribe mucho por
+  <code>print</code>, bastante más (PrintBench, 1&nbsp;321&nbsp;ms frente a 745); en la Metro,
+  poco (<code>fib(26)</code>, un 3,5&nbsp;%; PrintBench, de un 4 a un 9&nbsp;%). Con dos hilos a la
+  vez, la de dos núcleos gana en las dos. Ni <code>vm.runs=1</code> ni <code>vm.cores=1</code>
+  lo arreglan —es la imagen, no los runs—: la vuelta atrás es compilar la imagen de un núcleo
+  (<a href="INSTALAR_FIRMWARE.md#nucleos">instalación</a>).
 </p>
 
 <div class="note">
@@ -1113,7 +1208,8 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <h2 id="debug">11. Depurar</h2>
 <p>
   El depurador funciona igual contra la VM local y <em>dentro del
-  micro</em> (Debug on Device):
+  micro</em> (Debug on Device), con un <code>.bp</code> o con un
+  <code>.jc</code> (§4.1):
 </p>
 <ul>
   <li><strong>F9</strong> — poner/quitar breakpoint en la línea.</li>
@@ -1155,25 +1251,26 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <a href="QUICKSTART.md">inicio rápido</a>.
 </p>
 <p>
-  En la Pico&nbsp;2 y la Metro (la imagen de dos núcleos, la de por defecto), un
-  <strong>fallo fatal</strong> —no una excepción del programa, sino un fallo del
+  En la Pico&nbsp;2 y la Metro (la imagen de dos núcleos, la de por defecto) y en las
+  STM32, un <strong>fallo fatal</strong> —no una excepción del programa, sino un fallo del
   sistema: un HardFault, una pila de tarea desbordada…— deja su informe en el log,
-  aunque esté apagado, y reinicia la placa; en las ESP32, un fallo así es un pánico
+  aunque esté apagado, y reinicia la placa (las STM32, desde V8, por su perro y a los
+  pocos segundos: antes se quedaban paradas); en las ESP32, un fallo así es un pánico
   del IDF (o su perro de interrupciones), que da su informe por la consola y también
   reinicia la placa. Y ese arranque <strong>no lanza el autorun</strong>: un programa
-  que fallara al arrancar la tendría reiniciándose sin fin. El log lo dice
-  («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»; las ESP32,
-  también la consola), el <em>Info</em> da la causa del reinicio —«fallo fatal» en la
-  RP2350; «panic/exception» o «int-watchdog» en las ESP32— y el programa se arranca a
-  mano desde el IDE. El perro del módulo <code>Wdt</code> no es un fallo fatal: tras
-  él, el autorun se lanza. En las STM32, un HardFault deja su informe en el log y la
-  placa parada: no se reinicia sola.
+  que fallara al arrancar la tendría reiniciándose sin fin. El log lo dice, también si
+  está apagado («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»;
+  las ESP32, también la consola), el <em>Info</em> da la causa del reinicio —«fallo
+  fatal» en la RP2350 y en las STM32; «panic/exception» o «int-watchdog» en las ESP32—,
+  que el log de todas apunta también al arrancar («boot: causa del reset = …»), y el
+  programa se arranca a mano desde el IDE. El perro del módulo <code>Wdt</code> no es
+  un fallo fatal: tras él, el autorun se lanza.
 </p>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   Guía del IDE BasicPlus — capturas de Eduardo sobre una Metro RP2350;
-  escrita al cierre de V2 y puesta al día en cada versión (V7, octubre de 2026).
+  escrita al cierre de V2 y puesta al día en cada versión (V8, noviembre de 2026).
 </p>
 
 </main>

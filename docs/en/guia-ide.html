@@ -166,6 +166,7 @@
     <li><a href="#ventana">2. The window</a></li>
     <li><a href="#proyectos">3. Projects</a></li>
     <li><a href="#compilar">4. Editing and compiling</a></li>
+    <li style="padding-left:0.9rem;font-size:0.9em"><a href="#jc">4.1 JC: .jc files and translation</a></li>
     <li><a href="#ejecutar">5. Running (and stopping)</a></li>
     <li style="padding-left:0.9rem;font-size:0.9em"><a href="#aot">5.1 native (AOT): the toolchain</a></li>
     <li><a href="#placa">6. Connecting to the board</a></li>
@@ -180,6 +181,7 @@
   <h2>Volumes</h2>
   <ul>
     <li><a href="manual.html">Language manual</a></li>
+    <li><a href="jc.html">JC, BasicPlus with braces</a></li>
     <li><a href="referencia.html">Reference</a></li>
     <li><a href="gui.html">Graphical interface</a></li>
     <li><a href="../bp-desde-dentro.html">BasicPlus from the inside <small>(Spanish)</small></a></li>
@@ -192,8 +194,7 @@
 <h1>BasicPlus — IDE guide</h1>
 <p style="color:var(--fg-muted)">
   BpIde is the BasicPlus development environment: editor, compiler, local
-  and remote execution, board explorer and debugger — in a single jar with
-  no installation.
+  and remote execution, board explorer and debugger.
 </p>
 
 <h2 id="arrancar">1. Starting the IDE</h2>
@@ -203,7 +204,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>or, by hand:</p>
-<pre><code>java -jar BpIde-7.0.jar</code></pre>
+<pre><code>java -jar BpIde-8.0.jar</code></pre>
 <p>
   Next to the <code>.jar</code> travel the folders the IDE finds by itself,
   <strong>with nothing to configure</strong>: the pack library
@@ -221,10 +222,12 @@
   <li><strong>Project tree</strong> (top-left): sources, resources,
       compiled output and dependencies of the open project.</li>
   <li><strong>Editor</strong> (top-right): tabs with BP syntax
-      highlighting; the current line is marked and the position shows in
-      the status bar.</li>
+      highlighting, or JC in a <code>.jc</code> (§4.1); the current line is
+      marked and the position shows in the status bar.</li>
   <li><strong>Board explorer</strong> (bottom-left): the backend selector
-      (<em>serial board</em> or <em>Java VM over TCP</em>), the port, the
+      (<em>Placa (serial v1)</em>, <em>Placa (red)</em>, <em>VM Java (TCP v1)</em>
+      or <em>Micro simulado (VM-C)</em>: the board by cable or over the network,
+      the Java VM over TCP, or the simulated micro), the port or the address, the
       Connect button and — once connected — the micro's file tree with its
       button bar.</li>
   <li><strong>Console and debugging</strong> (bottom-right): the
@@ -252,8 +255,8 @@
   <a href="referencia.html#artefactos">reference §16</a>) and organized as:
 </p>
 <ul>
-  <li><strong>Sources</strong> — the project's <code>.bp</code> files
-      (in the screenshot: <code>App.bp</code> and <code>Util.bp</code>).</li>
+  <li><strong>Sources</strong> — the project's sources, <code>.bp</code> and
+      <code>.jc</code> (§4.1) (in the screenshot: <code>App.bp</code> and <code>Util.bp</code>).</li>
   <li><strong>Resources</strong> — data files that Run copies to the
       micro as-is (configuration, tables…).</li>
   <li><strong>Output</strong> — what the compiler produces: the
@@ -285,6 +288,58 @@
   very many, they are capped with an "and N more".
 </p>
 
+<h3 id="jc">4.1 JC: <code>.jc</code> files and translation</h3>
+<p>
+  <strong>JC</strong> is BasicPlus with the syntax of Java and C# —braces, semicolons, the type before the name— on
+  the same compiler and the same bytecode: a <code>.jc</code> compiles to a <code>.mod</code> just like a
+  <code>.bp</code>, and runs the same on the PC and on the board. The language has its own volume,
+  <a href="jc.html">JC, BasicPlus with braces</a>; here, what the IDE does with it.
+</p>
+<ul>
+  <li><strong>Opening and saving.</strong> <em>File → Load</em> opens <code>.bp</code> and <code>.jc</code> files
+      («BasicPlus (*.bp, *.jc)»), and the project tree shows both under <em>Sources</em>. The editor highlights each
+      file according to its extension, and a <code>.jc</code> folds by braces. A new file (<em>File → New</em>) is
+      highlighted as BP until you save it: as <code>.jc</code>, it switches to JC; and if you save it with no
+      extension, the IDE adds the extension of its tab's language.</li>
+  <li><strong>A project with its main in JC.</strong> It is enough for the main's source to be
+      <code>&lt;main&gt;.jc</code> instead of <code>&lt;main&gt;.bp</code>: compiling, running (also in the window and
+      on the board) and debugging find it by themselves. <em>New Project</em> creates it in BP; to move it to JC,
+      translate it (below), save it as <code>.jc</code> and remove the <code>.bp</code>. If both are there, the IDE
+      does not guess: it says so before compiling anything («El main está dos veces, App.bp y App.jc: el proyecto no
+      sabe cuál compilar. Quita uno de los dos.», the main is there twice: remove one of them). The modules the main
+      imports go, for now, in <code>.bp</code>: that is the source the compiler looks for.</li>
+  <li><strong>Errors and the debugger</strong>, as with a <code>.bp</code>: the <em>Errores</em> tab gives each one
+      with its line in the <code>.jc</code>, and breakpoints go by file and line (§11).</li>
+</ul>
+<p>
+  <strong>Edit → Traducir a JC</strong> and <strong>Edit → Traducir a BP</strong> (translate to JC, to BP) translate
+  the file in the active tab: they save it (if it is new, they ask where) and open the translation in a <strong>new,
+  unsaved tab</strong> —«(Saludo.jc, sin guardar)»—, highlighted in its language; when you save it, the extension it
+  gets by default is its own. The original does not change. <strong>Comments do not travel</strong>: the compiler
+  drops them when it reads the source, and the translation comes out without them. What cannot be translated —a
+  source with errors (to JC it must also compile: it is translated from the already analysed program) or something
+  the other language does not have— the Console says, with the reason («no se traduce: …», not translated), and
+  nothing is opened. The <code>Saludo</code> of §7, with a comment, and what <em>Traducir a JC</em> gives:
+</p>
+<pre><code><span class="kw">module</span> Saludo
+  <span class="comment">// greets whoever is named when it is run</span>
+  <span class="kw">public function</span> Main(arg: string := <span class="str">"mundo"</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span> + arg
+  <span class="kw">end</span> Main
+<span class="kw">end</span> Saludo</code></pre>
+<pre data-bp="jc"><code><span class="kw">module</span> Saludo
+{
+   <span class="kw">public function void</span> Main(string arg = <span class="str">"mundo"</span>)
+   {
+      <span class="kw">println</span>(<span class="str">"hola, "</span> + arg);
+   }
+}</code></pre>
+<p>
+  And <em>Traducir a BP</em> on that JC gives back the first one, without the comment. Outside the IDE, the compiler
+  options <code>--escribir-jc</code> and <code>--escribir-bp</code> do the same (in the
+  <a href="jc.html">JC volume</a>).
+</p>
+
 <h2 id="ejecutar">5. Running (and stopping)</h2>
 <ul>
   <li><strong>Run → Run</strong>: runs on the PC, on the Java VM (local
@@ -294,11 +349,46 @@
       project's resources) and runs it there; the output streams back live
       to the Console.</li>
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborts the running program —
-      local or on the board — without resetting anything. On the board it
+      local, in the <em>Run Window</em> window or on the board — without
+      resetting anything. On the board it
       is a cooperative KILL: the VM dies cleanly and the micro keeps
       responding, also when the program is inside a long
-      <code>native</code> function. The program ends with exit code 130.</li>
+      <code>native</code> function. The program ends with exit code 130.
+      The <code>kill</code> (or <code>stop</code>) of the explorer's command
+      line does the same. Stop waits for the answer and the Console says what
+      happened: that the board (or the local VM) stops the program —«Stop: la
+      placa para el programa»—, that none was running, or that it does not
+      answer.</li>
 </ul>
+<p>
+  <strong>One program at a time.</strong> While one is running, <em>Run</em>,
+  <em>Run Window</em>, <em>Debug</em>, <em>Run on Device</em> and the command line's
+  <code>run</code> do not launch another: they say so, and you have to stop it first with
+  Stop. Compiling is allowed. And when the IDE is closed, whatever it has running on the PC
+  stops. A Run the board does not accept says so at once («la placa rechaza el RUN: …», the
+  board rejects the RUN), instead of waiting for a program that has not started.
+</p>
+<p>
+  <strong>Where it runs on the PC.</strong> The Java VM has its flash, like a
+  board, with its <code>/sys</code>, <code>/lib</code>, <code>/app</code> and
+  <code>/data</code> (§6): the <code>.basicplus\flash</code> folder of your
+  user. An absolute path in the program
+  (<code>"/data/Termostato/lecturas.csv"</code>) goes inside it. The program
+  runs in <code>app\&lt;project&gt;</code> of that flash, with the name the board
+  would give it (<code>/app/&lt;project&gt;</code>), or in <code>app</code> if there
+  is no project (the Console names it when it starts: «la carpeta del programa: …»,
+  the program's folder), and the folder stays when it ends: what the program saves
+  with a relative path (<code>"lecturas.csv"</code>) is still there on the next Run,
+  and you can look at it. On the board, instead, that same path goes to the root of
+  the flash (<code>/lecturas.csv</code>), not to the program's folder: for it to save
+  the same on the PC and on the board, a <code>/data</code> path
+  (<code>"/data/Termostato/lecturas.csv"</code>;
+  <a href="referencia.html#stdlib-io">reference §13.11</a>). With a project, the IDE
+  deletes from that folder the <code>.mod</code>, <code>.bpi</code> and
+  <code>.dbg</code> files it no longer uploads («sobraba X.mod: borrado», left over:
+  deleted); what the program writes, never. The project's <code>resources</code> are
+  not copied: if the program needs them on the PC, make it an application pack (§10).
+</p>
 <p>
   When a program ends —fine, with an error or with Stop— its objects are
   destroyed and each one releases what it holds: a PWM stops, the pins and the
@@ -332,6 +422,17 @@
   (in seconds from 10 s up). The time is that of the execution, with the
   module already loaded, and the Java VM and the boards measure it alike.
   What each code means: <code>help error</code> (§7).
+</p>
+<p>
+  If it ends with an <strong>uncaught error</strong>, the Console also says
+  <strong>where</strong>, on the board and on the PC: the line of the error and the
+  calls that led to it, up to 8, each with its file —<code>en Prueba.bp:23</code>,
+  <code>llamado desde Prueba.bp:9</code> (at…, called from…)—. The board does not have
+  the <code>.dbg</code>: it gives positions, and the IDE translates them with the one in
+  the output folder. The frames inside the standard library stay as positions
+  (<code>Collections+1815</code>); and on the board, if the error starts inside a
+  compiled <code>native</code> function, the line is that of its caller —to see its
+  own, remove the <code>native</code>— (<a href="manual.html#excepciones">manual §11</a>).
 </p>
 <p>
   If the program asks the user for data with <code>IO.prompt</code>, the
@@ -457,6 +558,11 @@
   <li><code>/sys</code> — configuration: <code>board.json</code> (board
       identity), <code>device.json</code>, <code>auto.txt</code> (autorun,
       §12).</li>
+  <li><code>/data</code> — your programs' data, each one in its own folder
+      (<code>/data/&lt;project&gt;</code>), like Windows' <code>ProgramData</code>.
+      The IDE never touches it. In <code>/app/&lt;project&gt;</code>, on the other
+      hand, the IDE deletes on Run what it no longer uploads: what a program
+      wants to keep is better here.</li>
 </ul>
 <p class="warn">
   <strong>Do not upload copies of the standard library to <code>/app</code>.</strong>
@@ -485,17 +591,31 @@
   version does not stay there passing itself off as the new one.
 </p>
 <p>
-  <strong>Over WiFi.</strong> A board with WiFi works the same without a cable: backend
-  <em>Placa (red)</em>, its IP and <strong>Connect</strong>. If you do not know it,
-  <strong>Buscar en la red</strong> asks the whole network which boards are there. The IDE
-  remembers the last one, and if you connect by cable it learns its IP. The board listens on both
-  at once and talks to whoever sent it something last, so you can come in over the network with a
-  program running and stop it. If the board disappears, because the network drops or it is
-  switched off, the IDE says so within about 15 s and goes back to disconnected; a program that
-  was running may still be running on the board. The <strong>WiFi</strong> button writes the network and its
-  password to <code>/sys/wifi.json</code>; the board has to be reset for it to take effect. The
-  password stays in clear on the board, and the board accepts any computer on the network: use it
-  on a network you trust.
+  <strong>Over WiFi.</strong> A board with WiFi —the P4 (with <code>radio=c6</code> in its
+  environment), the S3 and the C5— works the same without a cable: backend <em>Placa (red)</em>
+  (board, network), its IP and <strong>Connect</strong>. If you do not know it, <strong>Buscar en la
+  red</strong> (search the network) asks the whole network which boards are there and puts in the IP
+  of the one that answers (if several answer, you pick from the list). The IDE remembers the last
+  one, and if you connect by cable it learns its IP. The board listens on both at once and talks to
+  whoever sent it something last, so you can come in over the network with a program running and
+  stop it. If the board disappears, because the network drops or it is switched off, the IDE says
+  so within about 15 s («se ha perdido la conexión con la placa», the connection to the board is
+  lost) and goes back to disconnected; a program that was running may still be running on the
+  board.
+</p>
+<p>
+  The board's WiFi is <strong>off</strong> unless told otherwise, and to come in over the network it
+  has to be on. You set it up with the explorer's <strong>WiFi</strong> button (the first time, by
+  cable), which writes <code>/sys/wifi.json</code>: the network and its password, the country,
+  <em>Encenderla al arrancar la placa</em> (switch it on when the board boots) and <em>Apagarla sin
+  actividad</em> (switch it off with no activity), the seconds after which it switches itself off
+  (600 unless changed; 0, never). An open connection, the IDE's too, counts as activity; but if it
+  switches off with the IDE disconnected, there is no coming back in over the network until the
+  board is reset: to work with the IDE over the network, 0. What is saved takes effect when the
+  board is reset. The whole file, and the <code>wifi</code> key of the environment, which overrides
+  the checkbox, in the <a href="referencia.html#stdlib-air">reference §14.19</a>. The password stays
+  in clear on the board, and the board accepts any computer on the network: use it on a network you
+  trust.
 </p>
 <p>
   The same panel serves the <em>Java VM (TCP v1)</em>: point it at a local
@@ -505,7 +625,7 @@
 
 <h3 id="simulado">6.1 The simulated micro: a board that does not exist</h3>
 <p>
-  The third backend, <em>Micro simulado (VM-C)</em>, is <strong>a make-believe
+  The <em>Micro simulado (VM-C)</em> backend is <strong>a make-believe
   board running on your PC</strong>. It is not a silicon emulator: it is the
   same VM-C that runs on the micros, compiled for the computer and served over
   TCP — the IDE treats it <em>exactly</em> like a real board. Same file tree,
@@ -524,16 +644,18 @@
 <p>
   In the screenshot, <code>GuiColorDemo</code> running on a simulated micro
   with a <strong>480×800 screen</strong> — the size lives in its configuration,
-  not in the program. Bottom left, the <em>backend</em> selector with its three
-  options and the simulator «en marcha :5099»; and in the console, two lines
+  not in the program. Bottom left, the <em>backend</em> selector with the three
+  options of the time (today there is one more, <em>Placa (red)</em>) and the
+  simulator «en marcha :5099»; and in the console, two lines
   telling where each module came from: <code>Gui</code>, from the filesystem,
   eclipsing the one in the pack (§10.2), and <code>Core</code>, loaded
   <em>XIP</em> from the pack — the code runs where it sits, without being
   copied.
 </p>
 <p>
-  <strong>Starting and stopping it</strong> is done from the panel itself, and
-  the gear button opens its configuration. And that is where it gets
+  <strong>Starting and stopping it</strong> is done from the panel itself:
+  <em>Arrancar</em> starts it and <em>Parar</em> stops it; the gear button opens
+  its configuration. And that is where it gets
   interesting — the <strong>&quot;silicon&quot; is configurable</strong>:
 </p>
 <ul>
@@ -544,21 +666,30 @@
       board (§9.2).</li>
   <li><strong>Screen</strong> — width and height, or no screen at all. You can
       check how your interface looks at 480×320 and at 800×480 without
-      owning both boards.</li>
+      owning both boards. If the program rotates it (<code>Gui.setRotation</code>),
+      the window rotates with it (<a href="gui.html#ej-rotacion">GUI §23.4</a>).</li>
 </ul>
 <p>
   Its &quot;flash&quot; and its filesystem are <strong>files on the PC</strong>
   and they <strong>persist across restarts</strong>, just like on a board: what
-  you upload is still there tomorrow. On first start the FS is empty — unlike a
-  board, which carries the standard library embedded in its firmware — so the
-  IDE burns into it the <em>pack library</em> that ships with the installation
-  (§10).
+  you upload is still there tomorrow. On first start the FS only has its
+  folders, <code>/sys</code>, <code>/lib</code>, <code>/app</code> and
+  <code>/data</code>, empty — unlike a board, which carries the standard library
+  embedded in its firmware — so the IDE burns into it the <em>pack library</em>
+  that ships with the installation (§10).
 </p>
 <p class="note">
   The simulated micro <strong>has no pins</strong>. The hardware builtins —
   <code>Gpio</code>, <code>I2c</code>, <code>Spi</code>… — exist and run, but
   they log to the console instead of moving anything. It is fine for logic,
   interface and filesystem; hardware still needs the board.
+  WiFi and Bluetooth it does have, make-believe ones, like the two PC VMs:
+  <code>Air.Wifi</code> switches on at once (the network is the PC's), and
+  Bluetooth finds two test devices, «Teclado simulado» and «Ratón simulado» (a
+  keyboard and a mouse). With them connected, the PC's keyboard and mouse reach
+  the program through its window —and through the <em>Run Window</em> one—;
+  with no keyboard connected the window does not type, and with no mouse the
+  PC's acts as a touch screen (<a href="gui.html#ev-teclado">GUI §22.6</a>).
 </p>
 
 <h2 id="consola">7. The micro console</h2>
@@ -605,7 +736,10 @@ hola, Eduardo
 <p>
   Autorun (§12) deliberately passes no argument: the default declared in the
   source <em>is</em> the deployment configuration. From the PC command line it
-  is the second positional: <code>bpgenvm-c Saludo.mod Eduardo</code>.
+  is the second positional: <code>bpgenvm-c Saludo.mod Eduardo</code>. The
+  argument fits in 127 bytes; a longer one is not cut: it is an error («el
+  argumento no cabe: 128 bytes (el tope es 127)», the argument does not fit), and
+  with the source's default, already when compiling.
 </p>
 
 <p>
@@ -644,9 +778,9 @@ hola, Eduardo
   </p>
 </div>
 <p>
-  Two of them deserve a highlight: <code>kill</code> aborts the running
-  program (equivalent to Run → Stop) and <code>autorun</code> manages the
-  standalone startup (§12). While a program runs the board serves the
+  Two of them deserve a highlight: <code>kill</code> (or <code>stop</code>) aborts
+  the running program, on the PC or on the board (equivalent to Run → Stop), and
+  <code>autorun</code> manages the standalone startup (§12). While a program runs the board serves the
   connection greeting, <code>kill</code> and <code>reset</code> and, since V7,
   also <strong>reads</strong>: the explorer tree refreshes, and <code>get</code>,
   <code>type</code>, <code>edit</code> and <em>Download</em> fetch files —in
@@ -654,7 +788,8 @@ hola, Eduardo
   <code>dir</code>, <code>mem</code>, <code>log</code>…) answers busy until it
   ends, and the explorer says so: «placa ocupada» (board busy) —
   <code>kill</code> takes back control. <code>reset</code> does get through with
-  the program running: no need to kill it first.
+  the program running: no need to kill it first, and if the program does not stop
+  (a thread stuck inside a C function), after 2 s the board resets anyway.
 </p>
 
 <h2 id="info">8. Device INFO</h2>
@@ -690,8 +825,8 @@ hola, Eduardo
       the board with this version's image, or bring the IDE up to date if the image
       is newer. (On the S3, which has no AOT: «sin receta», no recipe.)</li>
   <li><strong>Reset</strong> — the cause of the last reboot; after a fatal failure
-      (§12), «fallo fatal» (fatal failure) on the Pico&nbsp;2 and the Metro, and on the
-      ESP32 the chip's own: «panic/exception» or «int-watchdog».</li>
+      (§12), «fallo fatal» (fatal failure) on the Pico&nbsp;2, the Metro and the STM32,
+      and on the ESP32 the chip's own: «panic/exception» or «int-watchdog».</li>
 </ul>
 
 <h2 id="gestion">9. Board management: boot and partitions</h2>
@@ -743,9 +878,9 @@ hola, Eduardo
 </ul>
 <p>
   The table on top is <strong>informational</strong> (offset, size); sizes are
-  written <strong>below, in KB</strong>. <em>Propose defaults</em> fills the
-  fields with a sensible split for that flash — adjust and press <em>Apply
-  sizes</em>.
+  written <strong>below, in KB</strong>. <em>Proponer defaults</em> (propose
+  defaults) fills the fields with a sensible split for that flash — adjust and
+  press <em>Aplicar tamaños</em> (apply sizes).
 </p>
 <p class="note">
   <strong>Only the File System is set.</strong> The last partition — Packs — is
@@ -862,18 +997,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 </p>
 
 <p>
-  <code>stack</code> deserves a line of its own because it splits a scarce
-  resource. The memory the firmware gives the VM is divided in two: the
-  <em>stacks</em> of the threads and the <em>heap</em> where objects live. By
-  default 25&nbsp;% goes to stacks and the rest to the heap, and for almost
-  everything that is fine. But that ratio is a bet on the program: one with
-  many threads runs out of stack with heap to spare, and a single-threaded one
-  that moves data wastes that 25&nbsp;%. <code>stack=100</code> asks for 100 KB
-  of stacks; removing the key returns to the usual split. Each thread takes the
-  stack it asks for (<code>Thread(stackSize)</code>; 2 KB if it asks for none) and
-  the main one 16, so the number comes from counting threads. If you ask for more
-  than fits, the firmware adjusts it and <strong>says so in the log</strong> — it
-  does not stay quiet.
+  <code>stack</code> deserves a line of its own. The memory the firmware gives the
+  VM is almost all <em>heap</em>, where objects live, and since V8 the threads'
+  <em>stacks</em> too: each thread asks for its own when it starts, like a
+  <code>new</code> (<code>Thread(stackSize)</code>; 2 KB if it asks for none), and
+  gives it back when it ends. So the RAM of the stacks is that of the threads there
+  are, and the number of threads comes from counting heap. Outside the heap only the
+  main thread's stack is left, 16 KB: that is what <code>stack</code> asks for.
+  <code>stack=64</code> gives 64 KB to a program that recurses a lot in the main
+  thread; removing the key goes back to 16. If you ask for more than fits, the
+  firmware adjusts it and <strong>says so in the log</strong> — it does not stay
+  quiet.
 </p>
 
 <p>
@@ -881,7 +1015,15 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   many opcodes of one thread and then yields — to the program's other threads
   and to the micro's system, which is what lets the communications breathe on
   a single-core chip. At 1024 nobody should need to touch it; it is there for
-  measuring, not for tuning.
+  measuring, not for tuning. Except in one case (<code>#801</code>): a long
+  builtin counts as one opcode, so a thread that spends its time in them —writing
+  and reading files on the SD, for instance— makes the others wait until it has
+  used up its 1024, which can be three files. On the C5, a GUI label that another
+  thread was changing ran four times slower than in September (41 changes instead
+  of 176; 155&nbsp;ms the worst gap). With <code>quantum=256</code> its turn comes
+  sooner (99 changes and 87&nbsp;ms), at the cost of 20&nbsp;% fewer files. On a
+  two-core board with two runs (<code>vm.runs</code>, below), while one is in the
+  file, the other serves the remaining threads.
 </p>
 
 <p>
@@ -900,16 +1042,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 </p>
 
 <p class="warn">
-  <strong>Known limitation (<code>#665</code>, for V8).</strong> On the RP2350 —the
+  <strong>Known limitation (<code>#665</code>, for V9).</strong> On the RP2350 —the
   Pico&nbsp;2 and the Metro— it is the dual-core image itself, the default one, that
-  makes a single-threaded program slower, with one run or with two. On the Metro, with
-  the VM in PSRAM, computing is 35&nbsp;% slower (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms
-  against 2&nbsp;892 with the single-core image; with <code>vm.cores=1</code>, 3&nbsp;951);
-  on the Pico&nbsp;2 computing barely notices it (2&nbsp;%), but heavy output through
-  <code>print</code> does (PrintBench, 1&nbsp;270&nbsp;ms against 817). Neither
-  <code>vm.runs=1</code> nor <code>vm.cores=1</code> fixes it —it is the image, not the
-  runs—: the way back is to build the single-core image
-  (<a href="INSTALAR_FIRMWARE.md#nucleos">installation guide</a>).
+  makes a single-threaded program slower, with one run or with two. Measured with the V8
+  image: on the Pico&nbsp;2, computing is 7.7&nbsp;% slower (<code>fib(26)</code>,
+  3&nbsp;575&nbsp;ms against 3&nbsp;320 with the single-core image), and heavy output
+  through <code>print</code> much more so (PrintBench, 1&nbsp;321&nbsp;ms against 745); on
+  the Metro, little (<code>fib(26)</code>, 3.5&nbsp;%; PrintBench, 4 to 9&nbsp;%). With two
+  threads at once, the dual-core image wins on both. Neither <code>vm.runs=1</code> nor
+  <code>vm.cores=1</code> fixes it —it is the image, not the runs—: the way back is to
+  build the single-core image (<a href="INSTALAR_FIRMWARE.md#nucleos">installation
+  guide</a>).
 </p>
 
 <div class="note">
@@ -1072,7 +1215,8 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <h2 id="debug">11. Debugging</h2>
 <p>
   The debugger works the same against the local VM and <em>inside the
-  micro</em> (Debug on Device):
+  micro</em> (Debug on Device), with a <code>.bp</code> or with a
+  <code>.jc</code> (§4.1):
 </p>
 <ul>
   <li><strong>F9</strong> — toggle a breakpoint on the line.</li>
@@ -1114,25 +1258,27 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <a href="QUICKSTART.md">quick start</a>.
 </p>
 <p>
-  On the Pico&nbsp;2 and the Metro (the dual-core image, the default one), a
-  <strong>fatal failure</strong> —not an exception of the program, but a failure of
-  the system: a HardFault, an overflowed task stack…— leaves its report in the log,
-  even if the log is off, and reboots the board; on the ESP32, such a failure is an
-  IDF panic (or its interrupt watchdog), which gives its report on the console and
-  also reboots the board. And that boot <strong>does not launch the autorun</strong>:
-  a program that failed on start would keep the board rebooting forever. The log says
-  so («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»; on the
-  ESP32, the console too), the <em>Info</em> gives the cause of the reboot —«fallo
-  fatal» on the RP2350; «panic/exception» or «int-watchdog» on the ESP32— and the
-  program is started by hand from the IDE. The watchdog of the <code>Wdt</code> module
-  is not a fatal failure: after it, the autorun is launched. On the STM32, a HardFault
-  leaves its report in the log and the board stopped: it does not reboot by itself.
+  On the Pico&nbsp;2 and the Metro (the dual-core image, the default one) and on the
+  STM32, a <strong>fatal failure</strong> —not an exception of the program, but a failure
+  of the system: a HardFault, an overflowed task stack…— leaves its report in the log,
+  even if the log is off, and reboots the board (the STM32, since V8, through their
+  watchdog and within a few seconds: before, they stayed stopped); on the ESP32, such a
+  failure is an IDF panic (or its interrupt watchdog), which gives its report on the
+  console and also reboots the board. And that boot <strong>does not launch the
+  autorun</strong>: a program that failed on start would keep the board rebooting
+  forever. The log says so, also when it is off («autorun: … NO arranca: el arranque
+  anterior acabo en un fallo fatal»; on the ESP32, the console too), the <em>Info</em>
+  gives the cause of the reboot —«fallo fatal» on the RP2350 and the STM32;
+  «panic/exception» or «int-watchdog» on the ESP32—, which every board's log also
+  records at boot («boot: causa del reset = …», cause of the reset), and the program is
+  started by hand from the IDE. The watchdog of the <code>Wdt</code> module is not a
+  fatal failure: after it, the autorun is launched.
 </p>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus IDE guide — screenshots by Eduardo on a Metro RP2350; written at the
-  V2 close-out and brought up to date with every version (V7, October 2026).
+  V2 close-out and brought up to date with every version (V8, November 2026).
 </p>
 
 </main>

@@ -175,6 +175,8 @@
     <li class="sub"><a href="#enums">4.3 Enums</a></li>
     <li class="sub"><a href="#clases-tipo">4.4 Classes</a></li>
     <li class="sub"><a href="#any">4.5 any</a></li>
+    <li class="sub"><a href="#genericos">4.6 Generics</a></li>
+    <li class="sub"><a href="#indice-objeto">4.7 An object with an index</a></li>
 
     <li class="group"><a href="#declaraciones">5. Declarations</a></li>
     <li class="sub"><a href="#var">5.1 var</a></li>
@@ -182,6 +184,8 @@
     <li class="sub"><a href="#var-owner">5.3 var owner</a></li>
 
     <li class="group"><a href="#operadores">6. Operators</a></li>
+    <li class="sub"><a href="#compuestos">6.1 Compound assignments</a></li>
+    <li class="sub"><a href="#iif">6.2 The ternary, iif</a></li>
     <li class="group"><a href="#control">7. Control flow</a></li>
     <li class="sub"><a href="#if">7.1 if / elseif</a></li>
     <li class="sub"><a href="#while">7.2 while / do</a></li>
@@ -192,7 +196,7 @@
 
     <li class="group"><a href="#funciones">8. Functions</a></li>
     <li class="sub"><a href="#defaults">8.1 Default parameter values</a></li>
-    <li class="sub"><a href="#var">8.1b var parameters</a></li>
+    <li class="sub"><a href="#param-var">8.1b var parameters</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuples (multiple return)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 native functions (AOT)</a></li>
     <li class="sub"><a href="#inline">8.3b Intrinsic functions: <code>inline</code></a></li>
@@ -206,6 +210,7 @@
     <li class="sub"><a href="#props">9.5 Properties</a></li>
     <li class="sub"><a href="#static">9.6 Static members / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
+    <li class="sub"><a href="#interfaces-clase">9.8 Interfaces</a></li>
 
     <li class="group"><a href="#modulos">10. Modules</a></li>
     <li class="sub"><a href="#raiz">10.0 The root module: Core</a></li>
@@ -310,6 +315,14 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   The open line comes out whole with the next line break (<a href="#conc-print">§14.5</a>), so a
   piece is not seen until then; if the thread ends first, it comes out as it is.
 </p>
+<p>
+  The line break that <code>print</code> puts is the platform's end of line, the one
+  <code>eol()</code> gives: <code>"\r\n"</code> on Windows, <code>"\n"</code> on Linux and on the micros
+  (like Java's <code>System.lineSeparator()</code>). What the program writes inside a string comes
+  out as it is: <code>"\n"</code> is always LF (10), and <code>"\r"</code>, CR (13), in both VMs (V8).
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"one\ntwo"</span>              <span class="comment">// on Windows: one LF two CR LF</span>
+<span class="kw">print</span> <span class="str">"a"</span> + eol() + <span class="str">"b"</span>        <span class="comment">// a, the platform's line break, b</span></code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -335,10 +348,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Category</th><th>Tokens</th></tr>
   <tr><td>Structure</td>
-      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code>
-          (<code>interface</code> <code>implements</code>: reserved, unused — <a href="#interfaces">§10.4</a>)</td></tr>
+      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code></td></tr>
   <tr><td>Declarations</td>
-      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
+      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code>
+          <code>interface</code> <code>implements</code> (<a href="#interfaces-clase">§9.8</a>) <code>enum</code>
           <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code>
           <code>event</code> <code>raise</code> <code>inline</code> (<a href="#inline">§8.3b</a>)</td></tr>
   <tr><td>Visibility / modifiers</td>
@@ -421,6 +434,28 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   zero-extends according to the type). Assigning an out-of-range literal is a
   compile error, with the exact range in the message.
 </p>
+<p id="utf8">
+  <strong>A <code>string</code> is always valid UTF-8, and it does not change</strong> (V8). What comes from outside
+  —a file, a line, a network packet, a <code>byte[]</code>— is <em>decoded</em> when it is turned into text:
+  <code>fromBytes(b)</code>, <code>readFile(path)</code>, <code>TextFile.readLine()</code> and
+  <code>readStr(n)</code>, <code>Net.Tcp.recvStr(…)</code>. If the bytes are not valid UTF-8 (a file in Latin-1,
+  for example), they throw <code>EncodingError</code>, a child of <code>IOError</code> (and so of
+  <code>RuntimeError</code>), with the place. With a last argument <code>true</code> (<code>ignorarError</code>),
+  instead of the exception, each bad piece becomes «�» (U+FFFD), as the Unicode standard says:
+</p>
+<pre><code><span class="kw">var</span> t: <span class="type">string</span> := readFile(<span class="str">"latin1.txt"</span>, <span class="kw">true</span>)   <span class="comment">// "año" in Latin-1 (61 F1 6F): a�o</span>
+<span class="kw">try</span>
+  t := readFile(<span class="str">"latin1.txt"</span>)
+<span class="kw">catch</span> e: EncodingError
+  <span class="kw">print</span> e.msg      <span class="comment">// readFile('latin1.txt'): UTF-8 mal formado en el byte 1 (0xF1)</span>
+<span class="kw">endtry</span></code></pre>
+<p>
+  <code>readLine()</code> leaves the bad line read: a loop with a <code>try</code> carries on with the next one.
+  <code>recvStr</code> waits for the rest of a character that arrives split between two packets. And
+  <code>appendChar</code> with something that is not a character —a UTF-16 surrogate (<code>0xD800</code> to
+  <code>0xDFFF</code>) or a number outside <code>0..0x10FFFF</code>— also throws <code>EncodingError</code>, with no
+  argument to ignore it: it is a bug in the program. For text that changes, <code>StringBuilder</code>.
+</p>
 <p>
   <strong>A caveat about <code>double</code> on the RP2350</strong> (Pico 2,
   Metro): <em>subnormal</em> values —those below
@@ -485,7 +520,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><th>Scope</th><th>Where it lives</th></tr>
   <tr><td>Function local</td><td>In the frame: <code>4 + ⌈N·width/4⌉·4</code> bytes (the data is rounded up to 4: a <code>byte[3]</code> takes 8), zeroed when it is declared. No heap, no GC.</td></tr>
   <tr><td>Class <code>private var</code> field</td><td>Inside the object: <code>1 + ⌈N·width/4⌉</code> slots (up to 255), zeroed when the object is constructed. Only the class itself indexes it.</td></tr>
-  <tr><td>Module global</td><td><strong>No</strong> (compile error): at module level write <code>T[]</code>, with a literal <code>[…]</code> or <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
+  <tr><td>Module global</td><td><strong>No</strong> (compile error): at module level write <code>T[]</code>, with a literal <code>[…]</code> or <code>T[n]</code>.</td></tr>
 </table>
 <pre><code><span class="kw">public class</span> Media
   <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// inside the object</span>
@@ -517,7 +552,21 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <span class="comment">// From a function: split, listDir, etc. return arrays</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
-<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// sorted; on both VMs and on the board</span></code></pre>
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// sorted; on both VMs and on the board</span>
+
+<span class="comment">// With its size: T[n], of any type</span>
+<span class="kw">var</span> puntos: Punto[] := Punto[<span class="num">10</span>]              <span class="comment">// ten slots, set to null</span>
+<span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="type">string</span>[n + <span class="num">1</span>]        <span class="comment">// the size is computed at run time</span>
+<span class="kw">var</span> cuentas: <span class="type">integer</span>[] := <span class="type">integer</span>[n]          <span class="comment">// set to zero</span></code></pre>
+<p>
+  <code>T[n]</code> creates an array of <code>n</code> slots of <code>T</code>: a class, an interface, an
+  enum, <code>string</code> or a number, also with the module in front (<code>Mod.Punto[n]</code>). The
+  slots of a number start at zero; those of an object or a string, at <code>null</code>. It is an expression,
+  not the fixed array of <a href="#arrays">§4.2.1</a>, which goes in the type (<code>var v: integer[10]</code>). It
+  is written like indexing, and what the name is decides it: if there it names something with a value (a
+  variable, a parameter, a field), that wins and it is indexed. In JC it is written <code>new Punto[10]</code>,
+  <code>new int[n]</code>. An array of arrays does not exist.
+</p>
 <p>
   The VM uses five physical heap types depending on the element width:
   <code>TYPE_ARRAY_I8</code> (byte/int8 and UTF-8 strings),
@@ -569,6 +618,20 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   Dia.VALOR)"—. When printed, or in a string, it gives its number: with <code>d</code> from
   above, <code>print "d=" + d</code> gives <code>d=2</code>, just like <code>print d</code> (V7).
 </p>
+<p>
+  The other way round, yes: an enum converts into its integer with the numeric conversion,
+  <code>integer(d)</code> (and <code>long(d)</code>, <code>float(d)</code> or <code>double(d)</code>), whether it is a
+  constant, a variable or a parameter: with <code>d</code> from above, <code>integer(d) + 1</code> gives
+  <code>3</code>, and <code>integer(Dia.SABADO)</code>, <code>10</code> (V8).
+</p>
+<p>
+  <strong>Its name</strong>, with <code>Enum.getName(d)</code>: with <code>d</code> from above, <code>MIERCOLES</code>; and
+  <code>Enum.getName(Dia.SABADO)</code>, <code>SABADO</code>. It works with the module's enums and with another
+  module's (their names travel in its interface). The compiler resolves it: it writes into the module, once per enum,
+  the function that goes from the value to the name; there is nothing to import (V8, <code>#778</code>). In a string,
+  an enum is still its number: <code>"d=" + d</code> gives <code>d=2</code>, and <code>"d=" + Enum.getName(d)</code>,
+  <code>d=MIERCOLES</code>.
+</p>
 
 <h3 id="clases-tipo">4.4 Classes</h3>
 <p>
@@ -602,7 +665,137 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   The cast <code>Class(x)</code> goes down from an <code>Object</code> or from any ancestor of
   the class (<code>Perro(a)</code> with <code>a: Animal</code>); if the value is not of that
   class, it throws at run time. If the class has a constructor that accepts that argument, the
-  constructor wins.
+  constructor wins. In JC there is no doubt, because what constructs carries <code>new</code>:
+  <code>new Caja(x)</code> creates an object and <code>(Caja) x</code> always converts, whether the
+  constructor accepts <code>x</code> or not, and if <code>x</code> is already a <code>Caja</code>, it
+  stays as it is, as in Java. That conversion cannot be written in BP, and the JC-to-BP translator says so.
+</p>
+<p>
+  A <code>string</code> also fits in an <code>Object</code> (and so, in a list or in a
+  <code>Map</code>), and it is still text: printing it, concatenating it or calling its
+  <code>toString()</code> gives its content, as in C#. An object gives its <code>toString()</code>,
+  which, if its class does not override it, is its identifier (<code>object@…</code>) (V8, #748).
+</p>
+
+<h3 id="genericos">4.6 Generics: an order to the compiler</h3>
+<p>
+  <code>List&lt;Sensor&gt;</code> is the usual <code>List</code> with an order for the compiler: it
+  tells it what it holds (V8/H8, #793). The class does not change and the VM does not notice. Where the
+  class's signature says its <em>base type</em>, <code>Object</code> in a <code>List</code>, the compiler reads
+  <code>Sensor</code>: what goes in has to be a <code>Sensor</code>, and what comes out is a <code>Sensor</code>,
+  without writing the cast. The same in its children, <code>SyncList&lt;Sensor&gt;</code> and
+  <code>OwnerList&lt;Sensor&gt;</code>:
+</p>
+<pre><code><span class="kw">var</span> sensores: <span class="type">List</span>&lt;<span class="type">Sensor</span>&gt; := List()
+sensores.add(Sensor(<span class="num">4</span>))
+sensores.add(<span class="str">"hola"</span>)            <span class="comment">// compile error: 'List&lt;Sensor&gt;' holds 'Sensor', not 'string' (add)</span>
+<span class="kw">print</span> sensores.get(<span class="num">0</span>).valor()        <span class="comment">// no cast</span>
+<span class="kw">for</span> s <span class="kw">in</span> sensores <span class="kw">do</span>              <span class="comment">// s is a Sensor</span>
+  <span class="kw">print</span> s.valor()
+<span class="kw">next</span></code></pre>
+<p>
+  The compiler writes the cast: it is the one that by hand would be <code>Sensor(sensores.get(0))</code>, with
+  the same code. It stays because the compiler sees what goes in through <code>add</code>, but not what the
+  class does inside, nor what takes a detour through an <code>Object</code> or a plain <code>List</code>: if
+  something else arrives there, the program stops on that line with «conversion invalida: el valor no es un
+  'Sensor'», and it does not corrupt the memory of the object next door.
+</p>
+<ul>
+  <li><strong>Between <code>&lt;</code> and <code>&gt;</code> goes a class, an interface or <code>string</code></strong>,
+      as in Java. A number goes in its box: <code>List&lt;Integer&gt;</code>. <code>l.add(5)</code> and
+      <code>l.getInteger(0)</code> work as always, and <code>l.get(0)</code> gives an <code>Integer</code>.
+      A number in a list costs about 28 bytes (the box, its reference and its handle), and in an array, 4: for
+      many numbers, an array.</li>
+  <li><strong>A <code>Map</code> takes two:</strong> the key, <code>integer</code> or <code>string</code>, and the
+      value. <code>put</code> receives the value, and <code>get</code> and <code>valueAt</code> return it. The key is
+      checked on every call, and the factory has to match it: <code>Collections.Map()</code> for the
+      <code>string</code> one and <code>Collections.numericMap()</code> for the <code>integer</code> one.</li>
+  <li><strong>Assigning:</strong> <code>List&lt;Perro&gt;</code> does not pass as a <code>List&lt;Animal&gt;</code>, as
+      in Java and C#: through that variable a <code>Gato</code> would get in among the dogs. The plain <code>List</code>
+      mixes with <code>List&lt;Sensor&gt;</code> both ways, like Java's raw types.</li>
+  <li><strong>What does not travel:</strong> the list does not know what it holds; <code>&lt;Sensor&gt;</code> goes in
+      the declarations, not in the object. If it goes through an <code>Object</code> or a plain <code>List</code>, it is
+      lost there, and whoever receives it declares it again: <code>var l: List&lt;Sensor&gt; := otro.dame()</code>.</li>
+  <li><strong>Between modules:</strong> the type arrives through the interface of the module that declares it, and the
+      cast goes in the one that reads. To use a <code>Sensor</code> you have to import its module; to pass the list from
+      hand to hand, you do not.</li>
+  <li><strong>In a <code>native</code>:</strong> a cast is not translated, so using the element as a
+      <code>Sensor</code> is the same error as writing the cast by hand. Do it outside the native.</li>
+</ul>
+<p>
+  A new class is generic if it states its base type with <code>@element{type}</code>. It is written and compiled
+  like any other, with that type in its signatures; its children inherit it, and whoever uses it can only ask for
+  something that descends from it:
+</p>
+<pre><code>@element{Medida}
+<span class="kw">public class</span> Bolsa
+  <span class="kw">public function</span> mete(m: <span class="type">Medida</span>) ...
+  <span class="kw">public function</span> saca(i: <span class="type">integer</span>): <span class="type">Medida</span> ...
+<span class="kw">end</span> Bolsa
+
+<span class="kw">var</span> b: <span class="type">Bolsa</span>&lt;<span class="type">Metro</span>&gt; := Bolsa()
+b.mete(Metro(<span class="num">2</span>))
+<span class="kw">print</span> b.saca(<span class="num">0</span>).enCm()               <span class="comment">// comes out as a Metro</span>
+<span class="kw">var</span> c: <span class="type">Bolsa</span>&lt;<span class="type">Sensor</span>&gt; := Bolsa()         <span class="comment">// compile error: 'Bolsa' holds 'Medida', and 'Sensor' is not one</span></code></pre>
+<p>
+  The rule applies to the class's methods and properties; in their signatures, the base type is
+  always the element. There is no <code>T</code> variable: inside the class everything is still the base type.
+  A class carries a single type (only <code>Map</code> carries two), and a class that inherits does not fix it:
+  <code>class Sensores extends List&lt;Sensor&gt;</code> cannot be written. In JC, <code>new List&lt;Sensor&gt;()</code>
+  and <code>foreach (var s in sensores)</code>, and <code>new Collections.Map&lt;int, Tarea&gt;()</code> creates the
+  one with <code>integer</code> keys (<code>Collections.numericMap()</code>).
+</p>
+
+<h3 id="indice-objeto">4.7 An object with an index: <code>x[i]</code></h3>
+<p>
+  A <code>property</code> is two methods: <code>getP()</code> and <code>setP(v)</code>. With an index, they are the
+  same ones with the index in front, and that is <code>x[i]</code> on an object (V8/H8, #794). There is nothing to
+  declare: a class becomes indexable by writing those methods, and the VM does not notice.
+</p>
+<table>
+  <tr><th>Written</th><th>Is</th></tr>
+  <tr><td><code>x[i]</code></td><td><code>x.get(i)</code></td></tr>
+  <tr><td><code>x[i] := v</code></td><td><code>x.set(i, v)</code> (<code>x.put(i, v)</code> in a <code>Map</code>, which has no <code>set</code>)</td></tr>
+  <tr><td><code>x.pin[i]</code></td><td><code>x.getPin(i)</code></td></tr>
+  <tr><td><code>x.pin[i] := v</code></td><td><code>x.setPin(i, v)</code></td></tr>
+</table>
+<pre><code><span class="kw">var</span> sensores: <span class="type">List</span>&lt;<span class="type">Sensor</span>&gt; := List()
+sensores.add(Sensor(<span class="num">4</span>))
+<span class="kw">print</span> sensores[<span class="num">0</span>].valor()          <span class="comment">// sensores.get(0), with its cast</span>
+sensores[<span class="num">0</span>] := Sensor(<span class="num">5</span>)           <span class="comment">// sensores.set(0, …)</span>
+sensores[<span class="num">0</span>] := <span class="str">"hola"</span>              <span class="comment">// compile error: 'List&lt;Sensor&gt;' holds 'Sensor', not 'string' (set)</span>
+
+<span class="kw">var</span> m: <span class="type">Collections.Map</span>&lt;<span class="type">string</span>, <span class="type">Tarea</span>&gt; := Collections.Map()
+m[<span class="str">"riego"</span>] := Tarea(<span class="num">3</span>)             <span class="comment">// m.put("riego", …)</span>
+<span class="kw">print</span> m[<span class="str">"riego"</span>].hora()            <span class="comment">// m.get("riego")</span>
+
+<span class="kw">class</span> Gpio
+  <span class="kw">public function</span> getPin(i: <span class="type">integer</span>): <span class="type">boolean</span> ...
+  <span class="kw">public function</span> setPin(i: <span class="type">integer</span>, v: <span class="type">boolean</span>) ...
+<span class="kw">end</span> Gpio
+
+gpio.pin[<span class="num">3</span>] := <span class="kw">true</span>        <span class="comment">// gpio.setPin(3, true)</span>
+<span class="kw">print</span> gpio.pin[<span class="num">3</span>]            <span class="comment">// gpio.getPin(3)</span></code></pre>
+<ul>
+  <li><strong>It is a normal call:</strong> it works with overloads (<code>t[3]</code> and <code>t["a"]</code>, next to
+      a <code>get()</code> without an index), through an interface and through the vtable, and it is checked like any
+      call. Without <code>get</code> it is not indexable, and without <code>set</code> it is read and not written.</li>
+  <li><strong>It looks like an array and it is not one:</strong> <code>l[i]</code> costs what <code>l.get(i)</code>
+      does, a little more than twice reading from an array. For a tight loop, an array.</li>
+  <li><strong><code>x[i] += e</code></strong> reads with <code>get</code> and writes with <code>set</code>, and the object
+      and the index are computed only once, as in an array.</li>
+  <li><strong>A <code>property</code> <code>pin</code> can live alongside <code>getPin(i)</code>:</strong>
+      <code>x.pin</code> is the property, and <code>x.pin[3]</code>, the method. What clashes with the accessor is what
+      has its shape: <code>getPin()</code> and <code>setPin(v)</code>.</li>
+  <li><strong>Inside the class, if there is a field or a property <code>pin</code>, <code>pin[i]</code> indexes that
+      member</strong>, with <code>this</code> or without it: that is what the body of <code>getPin(i)</code> writes,
+      which would otherwise call itself. If there is no member <code>pin</code>, it is <code>getPin(i)</code> too.</li>
+  <li><strong>In a <code>native</code>,</strong> <code>x[i]</code> is the call, with its bounds, and
+      <code>x[i] += e</code> is not translated. <code>x[i]</code> does not go in an unpacking.</li>
+</ul>
+<p>
+  There is no <code>x[i, j]</code>: it is written <code>x.get(i, j)</code>. And <code>s[i]</code> still does not work on
+  a string.
 </p>
 
 <!-- =========================================================== -->
@@ -630,15 +823,39 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   with the same name as the module), which finds them already set.
 </p>
 <p>
-  A global <code>string</code> or a <code>string</code> field with no value —that nobody has
-  assigned— is <code>""</code>: it prints and concatenates as <code>""</code>, <code>len</code> gives 0 and
+  A global <code>string</code>, a <code>string</code> field or a <code>string</code> property with no value —that nobody
+  has assigned— is <code>""</code> from birth, like Java's <code>null</code>: a field has it before any constructor
+  runs, so whatever the parent's constructor gives it (through a method of the child) is not lost; a written
+  <code>:= ""</code>, on the other hand, runs after the <code>super()</code>, like every initializer (<code>#776</code>).
+  It prints and concatenates as <code>""</code>, <code>len</code> gives 0, <code>== ""</code> gives <code>true</code> and
   <code>charAt(s, 0)</code> throws the same <code>RuntimeError</code> as with <code>""</code>
-  ("charAt: idx fuera de rango 0 (len=0)"), the same on both VMs. (A <code>string</code> is a
-  scalar: it does not take <code>null</code>; assigning it is a compile error.) A global array or an
+  ("charAt: idx fuera de rango 0 (len=0)"), the same on both VMs. A global array or an
   array field with no value is indeed <code>null</code>: <code>len</code> gives 0 and a <code>for</code> over it does
   not loop at all, but indexing it throws a <code>RuntimeError</code> (index out of range), the
   same on both VMs; and <code>print</code> does not show its contents (for one with no value it
   prints 0).
+</p>
+<p id="string-null">
+  <strong>A string is never <code>null</code>; a <code>string</code> variable can be</strong> (<code>#774</code>,
+  V8): <code>var s: string := null</code> is a variable that references no string, and the same goes for a
+  parameter, a field or what a function returns. With it, as in C#:
+</p>
+<ul>
+  <li>concatenating it and writing it, as <code>""</code>: <code>"x" + s + "y"</code> is <code>"xy"</code>, and
+      <code>print s</code> writes an empty line;</li>
+  <li><code>==</code> and <code>!=</code>: <code>null</code> is only equal to <code>null</code> (<code>s == null</code>,
+      <code>true</code>; <code>s == ""</code>, <code>false</code>);</li>
+  <li>a <code>switch</code> on it goes to the <code>default</code>;</li>
+  <li>what needs a string —<code>len</code>, <code>upper</code>, <code>charAt</code>, <code>substring</code>,
+      <code>contains</code>, <code>&lt;</code> and the other ordering operators, <code>Str.compare</code>, files, the
+      network, the GUI…— throws a catchable <code>RuntimeError</code>, «referencia nula: <code>len</code> de un string
+      null» (with the name of the primitive), like a <code>null</code> object; and a <code>null</code> key in a
+      <code>Map</code>, «referencia nula: Map.put con una clave null».</li>
+</ul>
+<p>
+  A <em>local</em> <code>string</code> with no value is neither <code>null</code> nor <code>""</code>: it is indeterminate,
+  and reading it before giving it a value is a compile error (below). And the literal <code>null</code> written as is
+  in a concatenation (<code>"x" + null</code>) is still a compile error.
 </p>
 <p>
   <strong>A local variable is initialized before it is read.</strong> A module <code>var</code> with no
@@ -648,7 +865,9 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   compiler checks that along <em>every</em> path that reaches a read —the branches of an <code>if</code>,
   the <code>case</code>s of a <code>switch</code>, a <code>while</code> that may not run, a
   <code>catch</code>…— the variable already has a value. Declaring it without a value and assigning it
-  later is fine (<code>#540</code>, V7).
+  later is fine (<code>#540</code>, V7). (Since <code>#799</code>, V8, both VMs zero the locals on entering a
+  function, so that the collector does not take for live an old reference left on the stack; but the language does
+  not promise it: reading a local with no value is still a compile error.)
 </p>
 <pre><code><span class="kw">var</span> total: <span class="type">integer</span>          <span class="comment">// no value yet</span>
 <span class="kw">if</span> n &gt; <span class="num">0</span> <span class="kw">then</span>
@@ -672,6 +891,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   non-primitive type, use a <code>var</code> assigned in the module's
   initializer function. It is not assignable in any scope, and there are no
   const arrays (<a href="#arrays">§4.2.1</a>).
+</p>
+<p>
+  A <code>string</code> <code>const</code> is a real string: <strong>it cannot be <code>null</code></strong>
+  (<code>const NADA: string := null</code> is a compile error). A constant is a value, not a variable: it references
+  nothing, so it cannot «reference no string» either, just as an <code>integer</code> cannot be <code>null</code>. A
+  <code>string</code> <em>variable</em> can (<a href="#string-null">§5.1</a>; <code>#777</code>, V8).
 </p>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
@@ -705,13 +930,20 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Arithmetic</td><td><code>+ - * / mod</code> (with int↔float coercion)</td></tr>
   <tr><td>Power</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> is exact (integer);
       <code>float^int</code> by squaring; <code>float^float</code> via exp·ln (float)</td></tr>
-  <tr><td>Bitwise (integer only)</td><td><code>&amp; | xor shl shr</code> (there is no bitwise NOT: <code>x xor -1</code>; <code>~</code> belongs to the destructor, <a href="#destructor">§9.4b</a>)</td></tr>
-  <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>. Between two objects, <code>==</code> and
+  <tr><td>Bitwise (integer and long)</td><td><code>&amp; | xor shl shr</code> (there is no bitwise NOT: <code>x xor -1</code>; <code>~</code> belongs to the destructor, <a href="#destructor">§9.4b</a>). Between two <code>boolean</code>s, <code>&amp; | xor</code> work too, and they evaluate <strong>both sides</strong>: <code>f() &amp; g()</code> always calls both, and <code>f() and g()</code> skips <code>g()</code> if <code>f()</code> already gives <code>false</code></td></tr>
+  <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>. Between two strings they compare the
+      <strong>text</strong>: <code>==</code> and <code>!=</code>, the content; <code>&lt; &lt;= &gt; &gt;=</code>, the
+      alphabetical order by code point (that of the UTF-8 bytes: <code>"Z" &lt; "a"</code>, <code>"ab" &lt; "abc"</code>,
+      <code>"z" &lt; "ñ"</code>), like <code>Str.compare</code>. With a <code>string</code> variable set to <code>null</code>,
+      <code>==</code> is only equal to another <code>null</code>, and ordering throws «referencia nula»
+      (<a href="#string-null">§ the null variable</a>). Between two objects, <code>==</code> and
       <code>!=</code> tell whether they are <strong>the same object</strong>; they work with two of the same type, with an
       interface, with <code>null</code> and with a class and one of its ancestors (<code>Object</code> included), as in
       Java. Two unrelated classes cannot be compared: they could never be the same object</td></tr>
   <tr><td>Logical</td><td><code>and or not</code></td></tr>
-  <tr><td>Assignment</td><td><code>:= += -=</code></td></tr>
+  <tr><td>Assignment</td><td><code>:= += -= *= /= mod= &amp;= |= xor= shl= shr=</code> (the compound ones, below)</td></tr>
+  <tr><td>Ternary</td><td><code>iif(condition, a, b)</code>: the value of <code>a</code> if the condition holds, and
+      otherwise that of <code>b</code>; only the one that applies is evaluated (below)</td></tr>
   <tr><td>Access</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
   <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
   <tr><td>String</td><td><code>+</code> concatenates: it turns primitives, enums (their number) and objects
@@ -728,6 +960,44 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <code>-x ^ 2</code> = <code>-(x ^ 2)</code>.
 </p>
 
+<h3 id="compuestos">6.1 Compound assignments</h3>
+<p>
+  <code>x op= e</code> is <code>x := x op e</code>, with <code>x</code> evaluated <strong>once</strong>
+  (<code>a[f()] += 5</code> calls <code>f</code> once). The word ones are written joined:
+  <code>x mod= 3</code>, <code>xor=</code>, <code>shl=</code>, <code>shr=</code>. The types, as in C#: the operation is
+  done in the type of <code>x op e</code>; if the result does not fit on its own in that of <code>x</code>, it is only
+  valid if <code>e</code> would fit on its own in <code>x</code> (or it is a shift), and then the result is cut down to
+  the size of <code>x</code>, wrapping around. Anything else is an error: nothing is lost silently.
+</p>
+<pre><code><span class="kw">var</span> b: <span class="type">byte</span> := <span class="num">255</span>
+b += <span class="num">1</span>                    <span class="comment">// 0: a byte operates in integer and keeps its size</span>
+<span class="kw">var</span> l: <span class="type">long</span> := <span class="num">1</span>
+l shl= <span class="num">40</span>                 <span class="comment">// 1099511627776</span>
+<span class="kw">var</span> s: <span class="type">string</span> := <span class="str">"n="</span>
+s += <span class="num">5</span>                    <span class="comment">// "n=5": '+' concatenates</span>
+<span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">3</span>
+i *= <span class="num">1.5</span>                  <span class="comment">// compile error: integer * float gives float, which does not fit on its own in integer</span>
+i := <span class="type">integer</span>(i * <span class="num">1.5</span>)     <span class="comment">// 4: the conversion, written out</span></code></pre>
+
+<h3 id="iif">6.2 The ternary, <code>iif</code></h3>
+<p>
+  <code>iif(condition, a, b)</code> is the value of <code>a</code> if the condition holds, and otherwise that of
+  <code>b</code>. It has the shape of a function, but <strong>only the one that applies is evaluated</strong>, like
+  C#'s <code>c ? a : b</code> (and that is how it is written in JC): with <code>p</code> null, the line below does not
+  fail, and a recursive <code>fib</code> with <code>iif</code> terminates. Its type is that of the two branches: the
+  same one; or numbers, and the widest wins; or <code>null</code> and a reference; or a class and its child, and the
+  parent wins; or a class and one of its interfaces, and the interface wins. Two classes that only share an interface
+  have no common type: the conversion is written in one branch, <code>iif(c, B2(), IA(B1()))</code>, as in C#
+  (<code>c ? new B2() : (IA) new B1()</code>).
+</p>
+<pre><code><span class="kw">var</span> nombre: <span class="type">string</span> := iif(p != <span class="kw">null</span>, p.nombre, <span class="str">"nadie"</span>)
+<span class="kw">return</span> iif(n &lt; <span class="num">2</span>, n, fib(n - <span class="num">1</span>) + fib(n - <span class="num">2</span>))</code></pre>
+<p>
+  It is a value, not a statement (to choose what to do, an <code>if</code>); a local <code>var owner</code> cannot be a
+  branch (the ternary does not move an owner: an <code>if</code> does); and the name belongs to the language: a
+  function cannot be called <code>iif</code>.
+</p>
+
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="control">7. Control flow</h2>
@@ -740,6 +1010,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">else</span>
   <span class="kw">print</span> <span class="str">"senior"</span>
 <span class="kw">endif</span></code></pre>
+<p>
+  With a single statement, the <code>if</code> fits on one line: <code>if c then statement</code>, with no
+  <code>endif</code> (writing one after it is an error, which the compiler names). The same goes for
+  <code>while c do statement</code> and <code>for … do statement</code>, with no <code>endwh</code> or
+  <code>next</code>. They can go anywhere in a block, also as the last statement of a block of their own kind
+  (<code>#701</code>, V8).
+</p>
 
 <h3 id="while">7.2 <code>while / do</code></h3>
 <pre><code><span class="kw">while</span> i &lt; n <span class="kw">do</span>
@@ -775,7 +1052,21 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
 <span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
   total += n
-<span class="kw">next</span> n</code></pre>
+<span class="kw">next</span> n
+
+<span class="comment">// …and over a List: each element, an Object</span>
+<span class="kw">var</span> l: <span class="type">List</span>&lt;<span class="type">Object</span>&gt; := List()
+l.add(<span class="str">"uno"</span>)
+l.add(<span class="num">2</span>)
+<span class="kw">for</span> x <span class="kw">in</span> l <span class="kw">do</span>
+  <span class="kw">print</span> x                <span class="comment">// uno, 2</span>
+<span class="kw">next</span> x</code></pre>
+<p>
+  Over a <code>List</code> (also <code>SyncList</code> and <code>OwnerList</code>), the variable is an
+  <code>Object</code>; the list is measured <strong>once</strong>, on entry, like the limit of a numeric
+  <code>for</code>: what the body adds is not visited, and if the body shortens it, <code>get</code> gives its
+  index error.
+</p>
 <p>
   The body closes with <code>next [name]</code> (not <code>endfor</code>); the
   name after <code>next</code> is optional and, if present, must match the
@@ -816,10 +1107,30 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
 <p>
+  A loop can carry a name, and <code>break</code> and <code>continue</code> can name one of the loops that are open,
+  to leave several loops at once or to carry on with the outer one. The name goes after the loop's <code>do</code>,
+  alone on the line: <code>do fuera</code>, <code>while c do fuera</code>, <code>for i := 1 to 3 do fuera</code>. They
+  are not labels and there is no <code>goto</code>: the name is only seen inside its loop, and two open loops cannot
+  have the same name. It closes the <code>try</code>s in between and runs their <code>finally</code>s; there is no
+  leaving a <code>finally</code>. In JC, after the loop's word: <code>do fuera { … } while (c);</code>,
+  <code>while fuera (c) { … }</code>, <code>for fuera (…) { … }</code>, <code>foreach fuera (…) { … }</code>; and
+  <code>break fuera;</code>. With <code>do … loop false</code>, the loop is a block you leave with <code>break</code>:
+  it goes round only once.
+</p>
+<pre><code><span class="kw">do</span> fuera
+  <span class="kw">for</span> i := <span class="num">1</span> <span class="kw">to</span> <span class="num">3</span> <span class="kw">do</span>
+    <span class="kw">if</span> tabla[i] == buscado <span class="kw">then</span>
+      <span class="kw">break</span> fuera              <span class="comment">// leaves the for and the do</span>
+    <span class="kw">endif</span>
+  <span class="kw">next</span> i
+<span class="kw">loop</span> <span class="kw">false</span></code></pre>
+<p>
   <code>break</code> leaves the nearest enclosing <code>while</code>, <code>do</code>, <code>for</code> or
   <code>switch</code>; <code>continue</code> jumps to the next iteration of the nearest loop (a
   <code>switch</code> is not a loop: a <code>continue</code> inside a <code>case</code> goes on with the
-  loop around it).
+  loop around it). The next iteration of a <code>for</code> starts with its step, and that of a
+  <code>do … loop c</code> with its condition: if <code>c</code> no longer holds, the loop ends, as in C
+  (<code>#699</code>, V8).
 </p>
 
 <h3 id="parallel">7.6 <code>parallel</code> / <code>endpar</code></h3>
@@ -918,7 +1229,7 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       way when calling functions from another library.</li>
 </ul>
 
-<h3 id="var">8.1b <code>var</code> parameters</h3>
+<h3 id="param-var">8.1b <code>var</code> parameters</h3>
 <pre><code><span class="kw">function</span> <span class="fn">suma</span>(<span class="kw">var</span> n: <span class="type">integer</span>, m: <span class="type">integer</span>)
   n += m                          <span class="comment">// reads and writes the property it was given</span>
 <span class="kw">end</span> suma
@@ -1029,8 +1340,7 @@ suma(c::valor, <span class="num">5</span>)              <span class="comment">//
   <li><strong>Supported subset</strong>: functions and methods over primitives
       (<code>integer</code>, <code>long</code>, <code>float</code>,
       <code>double</code>, <code>boolean</code>, narrow types), <code>string</code>,
-      arrays of any element type (create them with
-      <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>/<code>newDoubleArray</code>
+      arrays of any element type (create them with <code>T[n]</code> or a literal,
       and index them), objects, module variables, the narrowing conversions
       (<code>byte(x)</code>, <code>int16(x)</code>…, with the interpreter's range and
       message) and <strong>any intrinsic function</strong> of the stdlib
@@ -1051,7 +1361,7 @@ suma(c::valor, <span class="num">5</span>)              <span class="comment">//
       properties</strong>, <code>super</code> and <code>Heap.compact()</code> — is
       rejected by the compiler with its message and the line. Local fixed arrays
       <code>type[N]</code> are not supported either (compile error):
-      use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
+      use <code>var v: type[] := type[n]</code>.
       The same goes for a <code>native</code> <em>class method</em>: it is the same
       error, naming the method and the line (<code>#519</code>, V7).
       The live detail is in <code>docs/AOT_LIMITES.md</code>.</li>
@@ -1150,15 +1460,48 @@ also the overloads of <strong>constructors</strong> (<code>Lib.Punto(1, 2)</code
 <code>Lib.Punto()</code>, with <code>super(...)</code> picking by signature) and of
 <strong>static methods</strong> (<a href="#static">§9.6</a>).</p>
 
+<h4>Which one it picks: the most specific</h4>
+<p>If several fit, the <strong>most specific</strong> one wins: the one that could be passed to all the others, as in
+Java. It is the same order as that of the <code>catch</code>es (<a href="#excepciones">§11</a>): <code>catch e: Animal</code>
+goes before <code>catch e: Object</code>, because an <code>Animal</code> is also an <code>Object</code>. Here the compiler
+does the ordering and the call comes out already chosen: the virtual machine decides nothing (V8, <code>#772</code>).</p>
+<pre><code><span class="kw">function</span> <span class="fn">mete</span>(o: Object): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">mete</span>(a: Animal): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">foo</span>(s: <span class="type">string</span>): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">foo</span>(o: Object): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(x: <span class="type">integer</span>): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(x: <span class="type">long</span>): <span class="type">string</span> ...
+
+<span class="kw">var</span> p: Perro := Perro()      <span class="comment">// Perro extends Animal</span>
+<span class="kw">print</span> mete(p)                <span class="comment">// mete(Animal): an Animal can be passed where an Object goes</span>
+<span class="kw">print</span> foo(<span class="kw">null</span>)              <span class="comment">// foo(string): a string, where an Object goes</span>
+<span class="kw">var</span> b: <span class="type">byte</span> := <span class="num">5</span>
+<span class="kw">print</span> g(b)                   <span class="comment">// g(integer): an integer, where a long goes</span>
+<span class="kw">var</span> o: Object := p
+<span class="kw">print</span> mete(o)                <span class="comment">// mete(Object): to pick another one, a variable of its parameter's type</span></code></pre>
+<p>If none is more specific than the others, the call is <strong>ambiguous</strong>, and the compiler says which ones
+compete. It happens even if one «climbs» less in total: <code>h(Perro, Object)</code> and <code>h(Animal, Animal)</code>
+with <code>(Perro, Perro)</code> is ambiguous too, as in Java and C#.</p>
+<pre><code><span class="kw">function</span> <span class="fn">f</span>(a: Perro, b: Object) ...
+<span class="kw">function</span> <span class="fn">f</span>(a: Object, b: Perro) ...
+
+f(p, p)</code></pre>
+<pre><code>error semántico: llamada ambigua a 'f' con (Perro, Perro): encajan f(Perro, Object) y f(Object, Perro), y ninguna es más específica que las otras; para elegir una, pasa el argumento en una variable del tipo de su parámetro</code></pre>
+
 <h4>What tells one overload from another</h4>
 <p>Only <strong>the parameter list</strong> (count and types). <strong>The return type
 does NOT count</strong>: two functions differing only in what they return are the same
 one to the compiler.</p>
 <pre><code><span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
 <span class="kw">function</span> <span class="fn">g</span>(a: <span class="type">integer</span>): <span class="type">string</span>  ...   <span class="comment">// ERROR</span></code></pre>
-<pre><code>error semantico: sobrecarga duplicada: 'g' con la misma firma de parametros ya declarada</code></pre>
+<pre><code>error semántico: sobrecarga duplicada: 'g' con la misma firma de parámetros ya declarada</code></pre>
 <p>The reason is that at the call site there is not always an expected type to decide
 with: <code>print g(1)</code> does not say which of the two you want.</p>
+
+<h4>Overloading and visibility</h4>
+<p>As in Java and C#, what cannot be seen from where the call is made is not a candidate: a
+<code>private</code> or protected overload does not compete from outside, and the choice is made among
+the visible ones. If the only one that fits cannot be seen, it is an error that says so (V8/H8, #796).</p>
 
 <h4>Overloading and inheritance: overriding one does NOT hide the others</h4>
 <p>If a subclass overrides <em>one</em> of the inherited overloads, the others are
@@ -1179,13 +1522,13 @@ the <code>(integer)</code> one is inherited untouched.</p>
 
 <h4>Careful when mixing it with default values</h4>
 <p>An overload and a <a href="#defaults">parameter with a default value</a> can end up
-accepting the <strong>same call</strong>. The compiler does not guess: it rejects it.</p>
+accepting the <strong>same call</strong>. With the same types in what the call gives, the one that
+<strong>fills in fewer default values</strong> wins: <code>h(1)</code> is the one with one parameter.</p>
 <pre><code><span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
 <span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span> := <span class="num">0</span>): <span class="type">integer</span> ...
 
-h(<span class="num">1</span>)    <span class="comment">// both fit</span></code></pre>
-<pre><code>error semantico: llamada ambigua a 'h' con (integer): varias sobrecargas encajan por igual (usa un cast)</code></pre>
-<p>The clean way out is usually to keep just one of the two forms: <strong>either</strong>
+h(<span class="num">1</span>)    <span class="comment">// both fit: h(a), the other one would have to fill in b</span></code></pre>
+<p>Even so, the clean way out is usually to keep just one of the two forms: <strong>either</strong>
 overloads <strong>or</strong> a default value, but not both covering the same case.</p>
 
 <!-- =========================================================== -->
@@ -1220,7 +1563,7 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
   A field may be a fixed-size array <code>type[N]</code> if it is <code>private var</code>:
   it lives inside the object and only the class itself indexes it (<a href="#arrays">§4.2.1</a>).
   If it has to be seen or passed, declare <code>type[]</code> and initialize it in the constructor
-  with <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
+  with <code>type[n]</code>.
   A field is <em>protected</em> (or <code>private</code>): its class and its
   descendants see it, also those in another module — since V7 the interface publishes
   the non-private fields with their slot (<a href="#visibilidad">§9.2.1</a>); to
@@ -1231,7 +1574,9 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
   <code>:= value</code>: <code>var n: integer := 5</code>, <code>var s: string := "hola"</code>,
   <code>public property etiqueta: string := "sin nombre"</code>. They run <em>once</em> per
   object, in declaration order, inside the constructor right after the <code>super(...)</code>
-  (written or implicit) and before its body — as in Java. A class with initializers and no
+  (written or implicit) and before its body — as in Java. The <code>""</code> of a <code>string</code> with
+  no value is not an initializer: it is its value from birth, and it is already there before the
+  <code>super(...)</code>, like Java's <code>null</code> (<a href="#var">§5.1</a>). A class with initializers and no
   constructor gets one that runs them: with no arguments or, if its parent has a constructor, one
   per overload of the parent's, with the same parameters, which it passes on with
   <code>super(...)</code> —so it is still constructed the same way: <code>Tarea(4096)</code> with
@@ -1289,6 +1634,19 @@ end Base</code></pre>
   <em>who may name it</em>, not how it is called or what it costs.
 </p>
 <p>
+  <strong>On another object, what is protected can be used if the object is of the class that uses it or of
+  one of its children</strong> (V8, <code>#760</code>; the rule of Java and C#). From <code>Perro</code>, the field
+  <code>edad</code> of <code>Animal</code> is read on <code>this</code>, on another <code>Perro</code> or on a
+  <code>Cachorro</code>, which is also a dog; on an object that is only an <code>Animal</code> —it could be a
+  <code>Gato</code>— it is not: you ask for it through a public property of its own.
+</p>
+<pre><code>class Perro extends Animal
+  function mayorQue(otro: Cachorro, a: Animal): boolean
+    return this.edad &gt; otro.edad    // fine: a Cachorro is a Perro
+    // a.edad                        // compile error: an Animal may be a Gato
+  end mayorQue
+end Perro</code></pre>
+<p>
   <code>private</code> only makes sense inside a class: at module level, whatever is not
   <code>public</code> is already private to the module, and there are no descendants to
   protect from. And <code>public private</code> does not exist: they are mutually
@@ -1324,7 +1682,9 @@ end Base</code></pre>
       <em>without</em> a constructor is built with the parent's (see «Initializers»). If the parent
       has no constructor, there is nothing to call.</li>
   <li><strong><code>super(args)</code></strong> — the parent through that constructor; it must be
-      the first statement.</li>
+      the first statement. Towards a parent with no constructor —<code>Object</code>, that of every
+      class with no parent written, or a class that does not declare one—, <code>super()</code> is valid
+      and does nothing, like the implicit one; with arguments, it is a compile error.</li>
   <li><strong><code>ClassName(args)</code></strong> — <em>delegation</em>: this same object is
       initialized by that other overload of the constructor (which in turn does its
       <code>super</code> and the initializers), and then the body goes on. Only as the first
@@ -1367,7 +1727,8 @@ end Base</code></pre>
 <span class="kw">end</span> Perro</code></pre>
 <p>
   Single inheritance. <code>super.method(args)</code> explicitly invokes the
-  parent's method inside an override. Inheritance also works
+  parent's method inside an override, and <code>super.prop</code> reads or writes its property
+  (<a href="#props">§9.5</a>). Inheritance also works
   <strong>cross-module</strong>: the base class can come from another imported
   library (vtable, protected fields, statics and <code>super(...)</code> by
   signature included: <a href="#visibilidad">§9.2.1</a> and <a href="#static">§9.6</a>).
@@ -1483,7 +1844,9 @@ end Base</code></pre>
   A subclass can <strong>redeclare</strong> a property of its parent: it is an override —its
   accessors are virtual and the child brings its own backing field—, so the parent's code that
   reads it sees the child's. It works the same with a parent in the same module as in another
-  (<code>#529</code>, V7).
+  (<code>#529</code>, V7). From the child, <code>super.prop</code> reads and writes the parent's,
+  just as <code>super.m()</code> calls its method (also <code>super.prop += 1</code>;
+  <code>#744</code>, V8).
 </p>
 
 <h4>sync properties (thread-safe)</h4>
@@ -1664,9 +2027,95 @@ Counter.bump()</code></pre>
   value is destroyed before the new one is written.
 </p>
 
+<h3 id="interfaces-clase">9.8 Interfaces</h3>
+<p>
+  A class inherits from <strong>one</strong> class (<a href="#herencia">§9.4</a>) and <strong>implements</strong>
+  as many interfaces as it wants: it is multiple inheritance of <em>types</em>, not of code (V8, #756). An
+  interface says which methods and which properties a type has, with no body, and it can inherit from several.
+</p>
+<pre><code><span class="kw">public interface</span> Forma
+  <span class="kw">function</span> area(): <span class="type">double</span>
+  <span class="kw">function</span> nombre(): <span class="type">string</span>
+<span class="kw">end</span> Forma
+
+<span class="kw">public interface</span> Poligono <span class="kw">extends</span> Forma
+  <span class="kw">function</span> lados(): <span class="type">integer</span>
+<span class="kw">end</span> Poligono
+
+<span class="kw">public interface</span> Etiquetado
+  <span class="kw">property</span> etiqueta: <span class="type">string</span>
+<span class="kw">end</span> Etiquetado
+
+<span class="kw">public class</span> Cuadrado <span class="kw">extends</span> Figura <span class="kw">implements</span> Poligono, Etiquetado
+  <span class="kw">var</span> lado: <span class="type">double</span>
+  @implement{ Etiquetado }
+  <span class="kw">public property</span> etiqueta: <span class="type">string</span>
+  <span class="kw">public function</span> Cuadrado(l: <span class="type">double</span>)
+    <span class="kw">this</span>.lado := l
+  <span class="kw">end</span> Cuadrado
+  @implement{ Poligono }
+  <span class="kw">public function</span> area(): <span class="type">double</span>
+    <span class="kw">return this</span>.lado * <span class="kw">this</span>.lado
+  <span class="kw">end</span> area
+  @implement{ Poligono }
+  <span class="kw">public function</span> lados(): <span class="type">integer</span>
+    <span class="kw">return</span> <span class="num">4</span>
+  <span class="kw">end</span> lados
+<span class="kw">end</span> Cuadrado</code></pre>
+<p>
+  <code>nombre()</code> is not in <code>Cuadrado</code>: it comes from <code>Figura</code>, its parent, which knows
+  nothing about <code>Forma</code>. What counts is that the class has it, its own or inherited.
+</p>
+<pre><code><span class="kw">var</span> f: Forma := Cuadrado(<span class="num">2.0</span>)
+<span class="kw">print</span> f.nombre(), f.area()                  <span class="comment">// figura 4</span>
+<span class="kw">var</span> p: Poligono := Poligono(f)               <span class="comment">// the conversion: if it is not one, RuntimeError</span>
+<span class="kw">print</span> p.lados(), f <span class="kw">instanceof</span> Etiquetado   <span class="comment">// 4 true</span>
+<span class="kw">var</span> e: Etiquetado := Etiquetado(f)
+e.etiqueta := <span class="str">"cuadrado de 2"</span>              <span class="comment">// the property, through the interface</span></code></pre>
+<ul>
+  <li><strong>What an interface carries:</strong> instance methods, only their signature, and properties in short
+      form (their name and their type: the class will have their getter and setter). There is no need for
+      <code>public</code>: everything in an interface is public. It carries no fields, constants, events,
+      constructors or anything <code>static</code>, nor <code>final</code>, <code>private</code>, <code>native</code>
+      or <code>owner</code>: what it carries is what a class exports.</li>
+  <li><strong>The class complies:</strong> it has every method of its interfaces —and of those they inherit from— with
+      the same name, the same parameters and the same return type, and every property with the same name and the same
+      type, all of them <code>public</code>. If one is missing, it is a compile error that says which.</li>
+  <li><strong><code>@implement{ A, B }</code>, mandatory</strong> on what the class declares that implements a member of
+      an interface: it names one or several of the interfaces the class implements, and each one has to have that
+      member (in the example, <code>area</code> belongs to <code>Forma</code>, and <code>@implement{ Poligono }</code>
+      is valid, because <code>Poligono</code> inherits it). What is inherited from the parent is not marked.</li>
+  <li><strong><code>@override{}</code>, optional</strong>, on what overrides a method or a property of the parent: it
+      changes nothing, it just leaves it written; if it overrides nothing, it is an error. A declaration can carry
+      several annotations, each one once (<code>@implement{ Forma }</code> and <code>@override{}</code>, for
+      example).</li>
+  <li><strong>Using them:</strong> an interface is a type like a class: variables, parameters, arrays
+      (<code>Forma[]</code>), <code>instanceof</code>, the conversion <code>Forma(x)</code> and <code>==</code>. A
+      child inherits its parent's interfaces and overrides its methods without repeating them. An interface is not
+      constructed.</li>
+  <li><strong>Between modules:</strong> a <code>public interface</code> is used and implemented from another module
+      (<code>class Rect implements Lib.Medible</code>), and the annotation carries the name without the module
+      (<code>@implement{ Medible }</code>). If the library changes an interface without recompiling whoever uses it,
+      the loader says so when linking —the class is missing a new member (E11), or it implements one the interface no
+      longer has (E12)— instead of failing on the call.</li>
+  <li><strong>Limits:</strong> a <code>Thread</code> and its children do not implement interfaces; interfaces belong to
+      format 9, the default one; and a <code>native</code> function does not call through an interface.</li>
+</ul>
+<p>
+  In JC they are written as in C#: <code>interface Poligono : Forma { function int lados(); string Etiqueta { get; set; } }</code>
+  and <code>class Cuadrado : Figura, Poligono, Etiquetado</code> —the first name can be the base class or an
+  interface—, with the same annotations.
+</p>
+
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="modulos">10. Modules</h2>
+<p>
+  <strong>The limit of a module.</strong> A module's data —its module variables, its literals (each distinct one,
+  once), its constants and what describes each class— fit in <strong>64 KB</strong> (until V8, in 32). A module that
+  does not fit is a compile error that says how much it already takes and what does not fit; for something bigger, it
+  is split into two modules (each one carries its own) or read from a file.
+</p>
 <h3 id="raiz">10.0 The root module: <code>Core</code></h3>
 <p>
   <code>Core</code> is the system module (Turbo Pascal's <code>System</code> unit), written in
@@ -1737,6 +2186,10 @@ Counter.bump()</code></pre>
       like any <a href="#defaults">parameter with a default</a>) or the empty string if
       there is none. The board's <em>autorun</em> deliberately passes no argument: the
       default in the source is the deployment configuration.</li>
+  <li><strong>The limit:</strong> the argument fits in <strong>127 bytes</strong> of UTF-8 (127 letters with no
+      accent; an «ñ» or an «é» take two). A longer one is an error, it is not cut: the default value is
+      rejected by the compiler, on its line, and the one passed at run time, by the VM or the board, without
+      running anything (<code>el argumento no cabe: 130 bytes (el tope es 127)</code>).</li>
   <li>Legacy form: <code>function Main()</code> with no parameters (still
       accepted).</li>
 </ul>
@@ -1800,11 +2253,12 @@ Counter.bump()</code></pre>
 </ul>
 
 <h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">WITHDRAWN</span></h3>
-<p><strong>BasicPlus has no interfaces.</strong> Not for classes —which would be the
-defensible case— and not for modules. The sections that described
-<code>module interface</code>, <code>implements</code> and the
-<code>import Contract:Impl</code> binding are withdrawn from the language (Eduardo's
-decision, 30-Aug-2026), along with the samples that used them.</p>
+<p><strong>Module interfaces do not exist.</strong> The sections that described
+<code>module interface</code> here, a module's <code>implements</code> and the
+<code>import Contract:Impl</code> binding were withdrawn from the language (Eduardo's
+decision, 30-Aug-2026), along with the samples that used them. <strong>Class</strong> interfaces,
+on the other hand, exist since V8 (<a href="#interfaces-clase">§9.8</a>; Eduardo, 31-Oct-2026), and with
+them <code>interface</code> and <code>implements</code> came back.</p>
 <p>What those three sections were after —<em>evolving a module without breaking its
 users</em>— is still a goal, and the intended shape is <strong>module
 inheritance</strong>: keep the original module and add one that inherits from it. It is
@@ -1812,10 +2266,10 @@ inheritance</strong>: keep the original module and add one that inherits from it
 does not exist yet. It will be revisited then. One part is already here: since V7, a library
 can <em>grow</em> —add methods, fields or properties— without recompiling its users
 (<a href="#imports">§10.3</a>).</p>
-<p>To compose functionality today: plain <code>import</code> (§10.3) and <strong>class
-inheritance</strong> (§9), which does exist and is used — the standard library has 38
+<p>To compose functionality today: plain <code>import</code> (§10.3), <strong>class
+inheritance</strong> (§9), which does exist and is used —the standard library has 38
 cases, from <code>SyncList extends Core.List</code> to
-<code>RuntimeError extends Exception</code>.</p>
+<code>RuntimeError extends Exception</code>—, and class interfaces (§9.8).</p>
 
 <h3 id="encapsulacion">10.5 Class ↔ module encapsulation</h3>
 <p>
@@ -2016,8 +2470,7 @@ in <code>samples/overlay</code>.</p>
         <li><code>IndexError</code>: an index outside an array, a string (<code>charAt</code>…) or a
             <code>List</code>.</li>
         <li><code>CastError</code>: <code>Caja(x)</code> when <code>x</code> is not a <code>Caja</code>.</li>
-        <li><code>IOError</code>: files (opening, reading, writing, removing, renaming…). Its child,
-            <code>EncodingError</code>: text from outside that is not valid UTF-8.</li>
+        <li><code>IOError</code>: files (opening, reading, writing, removing, renaming…).</li>
       </ul>
       The rest —pins and buses, the network, a full heap, a stack overflow— is still a
       <code>RuntimeError</code>. The same inside a <code>native</code> function.
@@ -2026,6 +2479,10 @@ in <code>samples/overlay</code>.</p>
 <span class="kw">catch</span> e: ArithmeticError
   <span class="kw">print</span> <span class="str">"no data: "</span> + e.msg     <span class="comment">// no data: División por cero</span>
 <span class="kw">endtry</span></code></pre></li>
+  <li>Text from outside that is not valid UTF-8 (<code>fromBytes</code>, <code>readFile</code>,
+      <code>readLine</code>…) throws <code>EncodingError</code>, a child of <code>IOError</code> (V8,
+      <a href="#utf8">§4.1</a>), as in Java: whoever catches <code>IOError</code> or <code>RuntimeError</code> catches
+      it too, and a <code>catch e: EncodingError</code> in front handles it apart.</li>
   <li><strong>Running out of memory is caught too.</strong> If an allocation
       does not fit in the heap, the VM raises a <code>RuntimeError</code> with
       the message <code>No space in heap</code> instead of dying: a program
@@ -2051,8 +2508,10 @@ in <code>samples/overlay</code>.</p>
       (<code>"División por cero"</code>), with neither the class nor the stack trace. Both also
       say <strong>where</strong>, in any of these cases: the call chain, up to 8 frames, as positions
       (<code>=== traza: Prueba+50 Prueba+72 ===</code> on stderr on the PC; in the <code>EXITED</code>
-      with a board), and the IDE translates it with the <code>.dbg</code>: <code>en Prueba.bp:5</code>,
-      <code>llamado desde Prueba.bp:9</code>. If the error starts inside a <code>native</code>
+      with a board), and the IDE translates it with the <code>.dbg</code>, with the board and with the
+      local VM: <code>en Prueba.bp:5</code>, <code>llamado desde Prueba.bp:9</code>. The frames inside
+      the standard library stay as positions (<code>Collections+1815</code>): the line that matters is
+      the one in your code, which does come out. If the error starts inside a <code>native</code>
       function, the line is that of its caller.</li>
 </ul>
 
@@ -2163,7 +2622,10 @@ in <code>samples/overlay</code>.</p>
   the same instructions in the Java VM and in the C VM (the Java VM used to use a
   10&nbsp;ms timer, and the order of the output changed from run to run). The C VM
   also yields to the system, so an IDE <code>stop</code> gets through even if the
-  program never sleeps.
+  program never sleeps. A builtin counts as one opcode, however long it is: a thread
+  that spends its turn writing files to an SD card makes the others wait until it has
+  used up its own; if it shows, <code>quantum=256</code> (the IDE guide, §9.3, has the
+  measured case).
 </p>
 <p>
   In parallel with preemption, BP code can yield the CPU
@@ -2365,6 +2827,9 @@ accepts <a href="#defaults">default values</a> like any other signature:</p>
     <span class="kw">raise</span> onClick(<span class="kw">this</span>, n)      <span class="comment">// raises it</span>
   <span class="kw">end</span> pulsa
 <span class="kw">end</span> Boton</code></pre>
+<p>The <code>raise</code> works in any code of the emitting class, also in the
+<code>set</code> of a property: it is the way to give notice when a value changes
+(<code>#702</code>, V8).</p>
 
 <h3 id="ev-escuchar">15.2 Listening: <code>function event</code> and <code>::</code></h3>
 <p>The listener declares a <strong>handler</strong> with <code>function event</code>
@@ -2387,6 +2852,16 @@ one of its methods</strong>:</p>
 <span class="kw">var</span> b: Boton := Boton(<span class="num">7</span>)
 <span class="kw">var</span> p: Panel := Panel(<span class="str">"principal"</span>)
 b.onClick := p::pulsado          <span class="comment">// subscribes the method of THAT object</span></code></pre>
+<p id="ev-suscriptor"><strong>Does it have a subscriber?</strong> Inside the event's class (or a child), like the
+<code>raise</code>, <code>onClick != null</code> says whether someone has subscribed, and <code>onClick == null</code>,
+that nobody has: <code>b.onClick := null</code> unsubscribes it. It is the C# way (<code>if (Click != null)</code>). An
+event is not a value: anything else —storing it in a variable, writing it, comparing it with something else, or with
+<code>null</code> from outside its class— is a compile error (<code>#771</code>, V8).</p>
+<pre><code><span class="kw">public function</span> pulsa(veces: <span class="type">integer</span>)
+  <span class="kw">if</span> onClick != <span class="kw">null</span> <span class="kw">then</span>
+    <span class="kw">raise</span> onClick(<span class="kw">this</span>, veces)
+  <span class="kw">endif</span>
+<span class="kw">end</span> pulsa</code></pre>
 
 <h3 id="ev-cuando">15.3 The important part: <code>raise</code> does NOT call the handler</h3>
 <p class="warn">This is what you need to be clear about to avoid surprises:
@@ -2461,7 +2936,7 @@ with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
       inside a native (compile error, <a href="#funciones-native">§8.3</a>).</li>
   <li>Fixed-size array <code>type[N]</code> at module level and inside a
       <code>native function</code> (compile error, with the alternative:
-      <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
+      <code>var v: type[] := type[n]</code>).</li>
   <li><strong>AOT on the ESP32-S3 (Xtensa)</strong> — its <code>native</code> functions
       run <strong>interpreted</strong>: the AOT emits ARM (Thumb-2) and RISC-V, not
       Xtensa. The IDE says so at compile time, naming the targets that do exist, and the

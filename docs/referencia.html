@@ -516,6 +516,16 @@ sb.appendInt(<span class="num">42</span>)
   <code>msg</code>). Las excepciones propias extienden <code>Exception</code> (ver
   <a href="manual.html#excepciones">§11</a>).
 </p>
+<p>
+  Desde V8, los errores de la VM llevan su tipo, hijos de <code>RuntimeError</code>:
+  <code>ArithmeticError</code> (una división entera por cero, un número que no cabe en su tipo…),
+  <code>NullReferenceError</code> (usar <code>null</code>, o un objeto ya eliminado),
+  <code>IndexError</code> (un índice fuera de un array, de una cadena o de una <code>List</code>),
+  <code>CastError</code> (convertir un objeto a una clase que no es) e <code>IOError</code> (los ficheros; y
+  su hija <code>EncodingError</code>, una cadena que no es UTF-8 válido). <code>catch e: RuntimeError</code>
+  los sigue atrapando todos; con un <code>catch</code> de su clase delante, se tratan aparte
+  (<a href="manual.html#excepciones">manual §11</a>).
+</p>
 
 <h3 id="stdlib-thread">13.8 <code>Thread</code></h3>
 <pre><code><span class="kw">class</span> Worker <span class="kw">extends</span> Thread
@@ -3881,7 +3891,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   barra; <a href="guia-ide.html#entorno">guía del IDE §9.3</a>). Un programa lee cualquiera con
   <code>Machine.getEnv("clave")</code> (<a href="#stdlib-pico">§14.9</a>), de la flash y sin
   reiniciar; en el PC, siempre <code>""</code>. Ésta es la lista entera de las que lee el
-  firmware de V7.
+  firmware de V8.
 </p>
 <p>
   <strong>Cómo se escriben.</strong> Las claves no distinguen mayúsculas. Los números van en

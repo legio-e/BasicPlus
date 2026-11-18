@@ -40,13 +40,13 @@ cuyos números se ponen al día con los de esta tabla).
 
 | comprobación | resultado |
 |---|---|
-| Suite `lexer-java` · suite `miVM` | |
-| `samples_sweep.py` (corpus entero) | |
+| Suite `lexer-java` · suite `miVM` | 18-nov: **396/396** · **66/66** |
+| `samples_sweep.py` (corpus entero) | 18-nov: **415 OK, 0 FALLO** (los 2 avisos de import omitido de siempre: `fromtest.bp` y `hello.bp`) |
 | `doc_frags.py` (todos los fragmentos de docs/, BP y JC) | |
-| `h13-errores.sh` | |
-| `compat/compat.sh check` | |
+| `h13-errores.sh` | 18-nov: **151/151** |
+| `compat/compat.sh check` | 18-nov, sobre el árbol final: **VERDE** — paridad 217/217 en MOD9, 209 y 8 SKIP en MOD8, 217/217 con dos workers; C 117/117; cápsula V6 59/59; sim 15/15, sombra 15/15, norma 9/9; estrés, `packs-abi` y stdlib embebida; ninguna línea `!! stderr:` |
 | Guarda de las 4 portadas (tamaño + encabezados) | |
-| Las **8** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | |
+| Las **8** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | 18-nov: **8**, de los builds del lote (sin recompilar); `sha256sum -c`, 8 OK. En las cinco ESP32, la app de dentro de cada `_merged`, byte a byte la del build, y su CRC32, el `imageCrc` de cada placa en el lote; la Pico y las STM32, de los mismos `.uf2` y `.elf` |
 | Los **5** packs | |
 | `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. Queda comprobar que las del ZIP son esas mismas |
 | Micro simulado con LVGL y SQLite | |
@@ -267,7 +267,7 @@ vez**.
       formato viejo (`MOD_VIEJOS`).
 - [ ] **BpIde**: ⚠️ **con el IDE CERRADO**. `mvn install` en `miVM` y en
       `lexer-java`, luego `mvn package` en `BpIde`. La versión sale del pom
-      (`BpIde-7.0.jar`; el `<version>` del pom es la versión del producto en curso).
+      (`BpIde-8.0.jar`; el `<version>` del pom es la versión del producto en curso).
 - [ ] **Micro simulado con LVGL y SQLite**: `cd bpgenvm-c && make sim LVGL=1 SQLITE=1`
       (con SQLite desde V6: los demos de BD corren sin placa).
       ⚠️ *Trampa (hallazgo 37)*: **sin `LVGL=1` el simulador ejecuta pero no

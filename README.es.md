@@ -269,7 +269,7 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Opcional) el IDE
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-7.0.jar
+java -jar BpIde/target/BpIde-8.0.jar
 ```
 
 Los firmwares se compilan con sus toolchains habituales (pico-sdk + ninja,
@@ -286,6 +286,9 @@ precompilados** —imágenes y packs— de la [última release](https://github.c
   una placa con pantalla.
 - **[Manual del lenguaje](docs/manual.html)** — léxico, tipos, clases,
   módulos, excepciones, concurrencia.
+- **[JC, BasicPlus con llaves](docs/jc.html)** — la sintaxis de Java y C# sobre
+  el mismo compilador y el mismo bytecode: cada construcción, en JC y en BP, y
+  cómo traducir de uno a otro.
 - **[Referencia](docs/referencia.html)** — biblioteca estándar completa,
   línea de comandos y artefactos en disco.
 - **[Guía de interfaz gráfica](docs/gui.html)** — el módulo `Gui`: widgets,
@@ -294,6 +297,8 @@ precompilados** —imágenes y packs— de la [última release](https://github.c
   el explorador de la placa, la consola del micro y el depurador.
 - **[Basic Plus desde dentro](docs/bp-desde-dentro.html)** — la arquitectura:
   compilador, bytecode, las dos VMs, GC, AOT y firmwares.
+- **[Cómo se prueba BasicPlus](docs/pruebas.html)** — todas las pruebas que pasa
+  cada versión, en el PC y en las placas, con sus números y los fallos que cazaron.
 - [Filosofía del proyecto](docs/PHILOSOPHY.md) — qué es y qué no quiere ser.
 - Especificaciones: [formato .mod](docs/MOD_FORMAT.md),
   [opcodes](docs/OPCODES.md), [layout del heap](docs/HEAP_LAYOUT.md),
