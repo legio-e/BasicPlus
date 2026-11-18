@@ -81,6 +81,10 @@ MARCAS EN EL DOCUMENTO (para lo que a proposito no compila solo)
            <pre data-bp="sigue">  continua el trozo suelto anterior del mismo
                                   doc (se compilan juntos): para las secciones
                                   que van construyendo un ejemplo paso a paso
+           <pre data-bp="jc">     JC (V8, docs/jc.html): un MODULO ENTERO
+                                  (`module X { ... }`), compilado como X.jc;
+                                  sus lineas `// error` dan error, como en BP
+           <pre data-bp="jc-trozo"> un fragmento de JC: no se compila (se cuenta)
     MD:    ```basic skip  /  ```basic error  /  ```basic sigue  (en el fence)
     Ademas, un fragmento con una linea que es o termina en `...` / `…` es un
     ESQUEMA: se lista, no se compila y no cuenta como fallo. Que se vea, no
@@ -508,17 +512,17 @@ def asc(s):
     return s.encode("ascii", "replace").decode("ascii")
 
 
-def escribir(work, nombre, texto):
-    with open(os.path.join(work, nombre + ".bp"), "w", encoding="utf-8", newline="\n") as fh:
+def escribir(work, nombre, texto, ext=".bp"):
+    with open(os.path.join(work, nombre + ext), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(texto)
 
 
-def compilar(work, nombre):
+def compilar(work, nombre, ext=".bp"):
     mod = os.path.join(work, nombre + ".mod")
     if os.path.exists(mod):
         os.remove(mod)
     try:
-        r = subprocess.run(["java", "-jar", JAR, nombre + ".bp", "--compile", ".", "--backend=mivm"],
+        r = subprocess.run(["java", "-jar", JAR, nombre + ext, "--compile", ".", "--backend=mivm"],
                            cwd=work, capture_output=True, timeout=120)
         log = decodificar(r.stdout) + decodificar(r.stderr)
         rc = r.returncode
@@ -568,6 +572,42 @@ def separar_esperados(errs, marcadas):
     return resto, fallaron
 
 
+RE_MODULO_JC = re.compile(r"^\s*module\s+([A-Za-z_]\w*)", re.M)
+
+
+def procesar_jc(f, r, work):
+    """V8, D1 (18-nov) — los bloques de JC (docs/jc.html), con su marca: `data-bp="jc"`, un MÓDULO ENTERO (`module X
+    { ... }`), se compila como `X.jc` con el mismo compilador, y sus líneas `// error` tienen que dar error, como en BP
+    (#832); `data-bp="jc-trozo"`, un fragmento: no se compila (se cuenta). Sin andamio: un trozo de JC no se envuelve."""
+    if f["marca"] == "jc-trozo":
+        r["estado"] = "JC-TROZO"
+        return r
+    m = RE_MODULO_JC.search(f["codigo"])
+    if not m:
+        r["estado"] = "FALLO"
+        r["errores"] = ['un bloque data-bp="jc" es un modulo entero (module X { ... }); un fragmento, data-bp="jc-trozo"']
+        return r
+    n = m.group(1)
+    escribir(work, n, f["codigo"], ".jc")
+    ok, rc, errs, _log = compilar(work, n, ".jc")
+    marcadas = lineas_de_error_esperado(f["codigo"])
+    no_fallan, comprobadas = [], []
+    if marcadas:
+        lineas = f["codigo"].split("\n")
+        errs, fallaron = separar_esperados(errs, marcadas)
+        comprobadas = [lineas[k - 1].strip() + "  =>  " + e for k, e in sorted(fallaron.items())]
+        no_fallan = [n + ": el doc dice que esta linea da error, y compila: " + lineas[k - 1].strip()
+                     for k in sorted(marcadas - set(fallaron))]
+        ok = not errs
+    r["modulos"] = [n]
+    r["rc"] = rc
+    r["estado"] = "JC-OK" if ok and not no_fallan else "FALLO"
+    r["errores"] = [n + ": " + e for e in errs[:8]] + no_fallan
+    if comprobadas:
+        r["comprobadas"] = comprobadas
+    return r
+
+
 def procesar_doc(ruta, base_work, slug, stdlib):
     abs_ruta = os.path.join(RAIZ, ruta)
     with open(abs_ruta, encoding="utf-8") as fh:
@@ -587,6 +627,9 @@ def procesar_doc(ruta, base_work, slug, stdlib):
     for f in frags:
         r = {"doc": ruta, "idx": f["idx"], "linea": f["linea"], "sec": f["sec"], "marca": f["marca"],
              "primera": next((l.strip() for l in f["codigo"].splitlines() if l.strip()), "")[:70]}
+        if f["marca"] in ("jc", "jc-trozo"):
+            res.append(procesar_jc(f, r, work))
+            continue
         if not es_bp(f):
             r["estado"] = "SKIP-MARCA" if f["marca"] == "skip" else "NO-BP"
             res.append(r)
@@ -667,7 +710,8 @@ def imprimir_doc(ruta, res, verbose):
                 continue
         for e in r.get("errores", [])[:4]:
             lineas.append("      ! " + e[:200])
-    partes = ["%d %s" % (cnt[k], k) for k in ("OK", "TROZO", "FALLO", "ERROR-ESPERADO", "ESQUEMA", "NO-BP", "SKIP-MARCA")
+    partes = ["%d %s" % (cnt[k], k) for k in ("OK", "TROZO", "FALLO", "ERROR-ESPERADO", "ESQUEMA", "NO-BP", "SKIP-MARCA",
+                                               "JC-OK", "JC-TROZO")
               if k in cnt]
     lineas.append("  => " + ", ".join(partes) if partes else "  => sin bloques de codigo")
     with LOCK:
@@ -737,7 +781,8 @@ def main():
     plano = [r for ruta in docs for r in todos[ruta]]
     n = {}
     for r in plano:
-        n[r["estado"]] = n.get(r["estado"], 0) + 1
+        clave = "JC-FALLO" if r["estado"] == "FALLO" and r["marca"] == "jc" else r["estado"]
+        n[clave] = n.get(clave, 0) + 1
     fallos = [r for r in plano if r["estado"] == "FALLO"]
     print()
     print("=" * 72)
@@ -748,6 +793,9 @@ def main():
               n.get("OK", 0) + n.get("TROZO", 0) + n.get("FALLO", 0) + n.get("ERROR-ESPERADO", 0),
               n.get("OK", 0), n.get("TROZO", 0), n.get("FALLO", 0), n.get("ERROR-ESPERADO", 0),
               n.get("ESQUEMA", 0), n.get("NO-BP", 0), n.get("SKIP-MARCA", 0)))
+    if n.get("JC-OK") or n.get("JC-TROZO") or n.get("JC-FALLO"):
+        print("       JC: %d modulos (data-bp=jc): %d OK, %d FALLO; %d trozos sin compilar (data-bp=jc-trozo)" % (
+            n.get("JC-OK", 0) + n.get("JC-FALLO", 0), n.get("JC-OK", 0), n.get("JC-FALLO", 0), n.get("JC-TROZO", 0)))
     if fallos:
         por_doc = {}
         for r in fallos:
