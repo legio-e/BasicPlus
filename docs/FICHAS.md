@@ -7219,7 +7219,12 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > controlado o un pánico. Un error aleatorio, etc.»*): una tabla con cada situación, qué hace hoy la placa, cómo queda
 > registrada (el log, el `INFO`, el `EXITED`, el motivo del reinicio, `bootCount`) y qué querríamos; algunas, provocadas a
 > propósito en la prueba de días. Con eso se decide qué se hace de las tres piezas (contener el fallo en el run, el MPU y
-> el contador de reinicios).
+> el contador de reinicios). **18-nov, la tabla, hecha** (Eduardo: *«OK»*), en `V8_IDEAS` §E15: 16 situaciones, leídas en
+> el código y con lo que enseñaron la resistencia, `#825` y una prueba en la P4 que destapó `#836` (con dos runs, `Wdt`
+> reinicia una placa sana). Lo que más pesa: en el campo, sin `log=1`, un error sin atrapar no deja nada en el log; las
+> STM32, tras un HardFault, se quedan paradas; y un hilo metido en C no lo paran ni el KILL ni el RESET. Lo propuesto:
+> cinco cosas pequeñas para V8 (`#836`, los avisos urgentes al log siempre, el motivo del reinicio en el log de las ESP32,
+> reiniciar las STM32 tras un fatal y el RESET servido aunque el programa no pare) y el resto a V9; **por decidir**.
 >
 > 🏁 **15-nov, el lote final, hecho** (Eduardo: *«Tenemos varios pendientes para probar. Aprovechemos que tenemos mas
 > tiempo para hacer pruebas pendientes y vamos cerrando temas.»*; de 4 en 4: la P4, la C5, la S3 y la C6; la Pico 2, la
@@ -7600,6 +7605,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
+
+#### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12)
+
+- **Lo medido** (18-nov, la P4 con la imagen de la resistencia, `runs: 2`): un perro de 2 s alimentado cada 300 ms, tras
+  un `sleep(300)`, 20 vueltas (`WdtDosRuns`, con su guion, en `C:\tmp\v8_robustez_18nov\`): la placa se reinició entre
+  la vuelta 10 y la 15, con motivo `task-watchdog` (el `INFO`). El programa no hacía nada mal.
+- **Por qué:** en la ESP32, `Wdt` (`esp32/common/gpio_esp32.c`, su backend) suscribe con `esp_task_wdt_add(NULL)` la tarea
+  que llama a `enable`, y `feed` es `esp_task_wdt_reset()` de la tarea que llama. Con dos runs, a un hilo BP que duerme lo
+  puede despertar el otro run, que es otra tarea de FreeRTOS: desde ahí, sus `feed` no alimentan a la suscrita, que
+  vence. Y un `disable` desde la otra tarea (`esp_task_wdt_delete(NULL)`) no la suelta: vencería después del programa.
+  Con un run, una sola tarea: no se veía. En la Pico el perro es del chip (lo alimenta cualquier núcleo); en las STM32 no
+  hay `Wdt` (`#480`); la C3, la C5 y la C6 llevan un run.
+- **Lo que hace en el campo:** un programa con `Wdt` en el autorun, en la P4 o la S3, reinicia la placa cada pocos
+  segundos, y tras un reinicio del perro el autorun vuelve a arrancar (a propósito, `#681`): un bucle.
+- **El arreglo propuesto** (pequeño, en la familia ESP32): un «usuario» del perro en vez de una tarea
+  (`esp_task_wdt_add_user`, `esp_task_wdt_reset_user` y `esp_task_wdt_delete_user`, del IDF 6.1): lo alimenta cualquier
+  tarea. Y la prueba en placa, `WdtDosRuns` (hoy reinicia). V8 o V9, por decidir; en la tabla de la robustez.
 
 #### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 

@@ -7992,3 +7992,69 @@ Eduardo: *«con JC llamar al proyecto BasicPlus se queda un poco corto. Así que
 2. La división, no antes de empezar V9, y cuanto más quieto esté el lenguaje, mejor: lo que cuesta son los commits que cruzan.
 3. Antes, dentro del repositorio de hoy y con la red de testigo: quitar las rutas escritas a mano (`../lexer-java`, `C:\lenguajes\pm\bpgenvm-c`), y dejar fuera lo viejo (`lexer`, `vm`…).
 4. Lo de en medio, decidido antes de cortar. La opción más sencilla: tres proyectos, el de Java, el de C y uno pequeño con la red y los contratos, que no es de ninguno de los dos.
+
+## E15 · La robustez en campo: la tabla (18-nov; de las pruebas finales)
+
+Lo que pidió Eduardo (14-nov): *«un programa que corre durante 2 dias seguidos, ¿ que situaciones nos podemos encontrar ? .
+Que todo vaya bien, OK, nada que hacer. Que se quede sin memoria. Que se fragmente la memoria. Que se produzca un error
+imprevisto pero que esté controlado. Que se produzca un error no controlado o un pánico. Un error aleatorio, etc.»*; una
+tabla con cada situación, qué hace hoy la placa, cómo queda registrada y qué querríamos. Con ella se decide qué se hace
+de las tres piezas que quedaron del 5-oct (contener el fallo en el run, el MPU y el contador de reinicios; `FICHAS`, el
+bloque de V8). Leído en el código el 18-nov, con lo que enseñaron la resistencia de 48 h, `#825` y `#836`.
+
+**Antes de la tabla, cómo se registra hoy, porque decide casi todas las filas:**
+
+- **El `EXITED`** sólo lo ve quien esté conectado (el IDE, la tanda). Con el autorun, en el campo, no lo recibe nadie.
+- **El log de la placa** apunta siempre el arranque; lo de después (el RUN, los avisos de la VM, el guardián del final),
+  sólo con `log=1` en el ENV, que viene apagado (`bpvm_boot2.c`: el ENV lo apaga justo antes del autorun). Hasta los
+  avisos «urgentes» («EXCEPCION NO ATRAPADA», el interbloqueo, sin memoria) van por `log_printf`: sin `log=1`, nada. Los
+  fallos fatales sí se apuntan siempre en la Pico y las STM32 (`#423`). El log vive en una RAM que sobrevive a un
+  reinicio por software o por un perro, no a uno por el cable de una ESP32 (el pin EN) ni a quitar la corriente: entonces
+  queda lo último que se volcó a la flash.
+- **El `INFO`** dice el motivo del último reinicio, hasta el reinicio siguiente. La Pico lo apunta además en el log al
+  arrancar; las ESP32 y las STM32, no (la STM32 lo dice por el cable al arrancar).
+- **`bootCount`** (y las marcas) sólo lo rellena la STM32.
+- **El log del programa** (como el de la prueba de resistencia, en `/data`) lo que el programa escriba.
+
+| # | Situación | Qué hace hoy la placa | Qué queda registrado | Qué querríamos |
+|---|---|---|---|---|
+| 1 | Todo va bien, días | Sigue: 48 h en cuatro placas, 61 360 vueltas, sin un error | El log del programa | Nada |
+| 2 | Sin sitio en el heap (un objeto que no cabe) | `RuntimeError` «No space in heap», atrapable; si no se atrapa, como la 5 | Lo que apunte el programa | Nada |
+| 3 | El heap fragmentado (hay sitio, pero no seguido) | Lo mismo que la 2; `Heap.compact()` lo junta si el programa lo pide | Lo mismo | Nada (compactar solo, no) |
+| 4 | Sin memoria del sistema (`malloc`) | Al cargar y enlazar, el error dice cuál falta (`#828`), y sin fugas desde `#835` (por grabar en las placas); en marcha, lo que haga cada driver | El `EXITED`; el log, con `log=1` | Nada nuevo |
+| 5 | Un error sin atrapar en `Main` | El programa acaba (`RUNTIME_ERROR`, con su línea); la placa se queda en el REPL, sin programa | El `EXITED`, si alguien mira; el log, sólo con `log=1` | **Que quede en el log siempre**, como un fatal; relanzar el programa, su `try` en `Main` |
+| 6 | Un error sin atrapar en otro hilo | Acaba ese hilo y los demás siguen (`#608`); al final, el RUN dice que hubo un error | Como la 5 | Como la 5 |
+| 7 | Un error previsto y atrapado | Sigue | Lo que apunte el programa | Nada |
+| 8 | Hilos que se esperan unos a otros (interbloqueo) | La VM lo ve y el programa acaba con error | Como la 5 | Como la 5 |
+| 9 | La pila de un hilo BP, desbordada | `RuntimeError` atrapable (`#605`) | Como la 2 | Nada |
+| 10 | Algo que sólo crece (una fuga) | Acaba en la 2 o la 4, a las horas o los días (`#831`, `#835`) | El guardián del final del RUN, con `log=1` | Lo caza la prueba de resistencia |
+| 11 | Un bucle sin fin en BP | El programa sigue «vivo»; el KILL lo para; `Wdt`, si lo usa | Nada | `Wdt` (con `#836` arreglado) |
+| 12 | Un hilo metido en C que no vuelve (`#825`) | Todo parado: ni el KILL ni el RESET se sirven hasta que el programa pare; las ESP32 vuelven por el cable (y pierden el log de la RAM), la Pico y las STM32, con las manos | Nada (en la tanda, desde el 18-nov, el PING y el log entero) | El RESET pedido, servido aunque el programa no pare: es un reinicio por software y el log se conserva; un perro del sistema que vigile a `io` |
+| 13 | Un pánico o un HardFault (algo en C que falla) | La Pico se reinicia en 250 ms y arranca sin autorun; las ESP32, se reinician y sin autorun; **las STM32, el informe y se quedan paradas** | La Pico, el informe y «FALLO FATAL» en el log; las ESP32, el motivo en el `INFO` y nada del pánico en el log (su informe va a la consola, que en la P4 está apagada); las STM32, el informe en el log | Las STM32, reiniciar como las otras (la regla del 5-oct: *«fatal error, el log y reset»*); las ESP32, el motivo en el log al arrancar |
+| 14 | Las interrupciones cortadas (el sistema, colgado) | Las ESP32: el perro de interrupciones (800 ms), como la 13; la Pico y las STM32, colgadas | Como la 13 en las ESP32; nada en las otras | Un perro del sistema (V9) |
+| 15 | Se va la corriente, o cae la tensión | Se reinicia y el autorun vuelve | El log de la flash, hasta el último volcado | Nada |
+| 16 | Un programa que falla al arrancar, una y otra vez | Tras un fatal, sin autorun (la Pico y las ESP32): la placa queda esperando al IDE; con `Wdt`, un bucle de reinicios (a propósito); con `#836`, también sin fallar | El motivo, en el `INFO` | El contador de reinicios (V3, «Pagar doble»): un fallo suelto relanza la app y un bucle (5 en 10 s), no; decidido «a V8» el 5-oct |
+
+**Las tres piezas del 5-oct, a la vista de la tabla:**
+
+- **El contador de reinicios** (la fila 16): hoy un solo fallo fatal deja la placa sin su programa hasta que llegue
+  alguien; con el contador, un fallo suelto lo relanza y sólo un bucle se para. Lo que cuesta: un contador que sobreviva
+  al reinicio en cada familia (la RAM que sobrevive y su marca, como la del fatal de la Pico) y la regla en el autorun.
+- **Contener el fallo en el run** (las filas 12 a 14): que muera la tarea y no la placa, que suelte sus cerrojos e `io`
+  informe. Toca el corazón de las VMs: V9.
+- **El MPU de la M33**: también V9, con la anterior.
+
+**Lo pequeño, propuesto para V8** (cada uno arregla algo que hoy falla o calla):
+
+1. `#836`: `Wdt` con dos runs, un «usuario» del perro de tareas del IDF en vez de una tarea (sólo la familia ESP32).
+2. Los avisos urgentes de la VM (el error sin atrapar, el interbloqueo, sin memoria), al log siempre, como un fatal
+   (filas 5, 6 y 8): en el campo son lo único que queda.
+3. Las ESP32: el motivo del reinicio en el log al arrancar, como la Pico, y la línea «NO arranca» del autorun antes de
+   apagar el log (filas 13 y 16).
+4. Las STM32: tras el informe de un HardFault, reiniciar y arrancar sin autorun (fila 13): la regla del 5-oct, que hoy
+   no cumplen.
+5. El RESET pedido durante un RUN, servido a los pocos segundos aunque el programa no pare (fila 12): la placa vuelve sin
+   manos en todas las familias, con su log.
+
+**Para V9:** contener el fallo en el run y el MPU; un perro del sistema que vigile a `io` (filas 12 y 14); el pánico de
+las ESP32 con su informe (hoy se pierde con la consola apagada); y, si no entra en V8, el contador.
