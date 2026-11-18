@@ -7335,8 +7335,9 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > en la S3 y la C6. **La tercera, la C3, sola** (*«C3 conectada»*; con la C6, Windows les da el mismo COM3): grabada,
 > sólo con la stdlib; la tanda, como en las otras ocho (24 pruebas en 24 s: las dos de `lastModified`; la GUI, saltada);
 > y `#836`, `#837` (con `log=0`, el informe de `ThrowSinAtrapar` y tres avisos de UAF), `#838` y `#840`, vistos.
-> **El lote, completo: las nueve placas con la imagen final.** Y `#841` (la Pico 2), decidida (Eduardo: *«La 1»*): la
-> tanda, tras un RESET sin respuesta, reabre de todos modos; lo de la Pico, a V9.
+> **El lote, completo: las nueve placas con la imagen final.** Y `#841`, medida en la Pico 2: la Pico sí entrega la
+> respuesta al RESET; la perdía el cliente de mis pruebas (`wire_serie.lines()`). La tanda, con su red de seguridad
+> (Eduardo: *«La 1»*); los dos lectores, por decidir.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7625,7 +7626,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🧬 `#841` — en la Pico 2, el `RESET_REPLY` no llega al PC: el puerto USB se va con el reinicio antes de entregarlo; la placa sí se reinicia (abierta el 18-nov, en el lote; preexistente; **la tanda, arreglada el mismo día** —Eduardo: *«La 1»*—: tras un RESET sin respuesta, reabre de todos modos; lo de la Pico, **a V9**)
+#### 🔵 `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; el lector de `wire_serie` y el de la tanda, por decidir)
 
 - **Lo medido** (18-nov, la Pico 2 con la imagen de hoy): un `RESET` con la placa en reposo, y dos durante un RUN: en
   los tres, a los ~0,19 s el puerto da error (el USB de la Pico desaparece al reiniciarse) y no ha llegado el
@@ -7659,6 +7660,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   sirve, como con la tanda de antes; el que no se sirve, sin dar la placa por recuperada. **Por ver en la Pico 2**, la
   próxima vez que esté conectada: su caso, el del puerto que se cae. Que la Pico entregue la respuesta (su firmware),
   **a V9**.
+- **18-nov, medido en la Pico 2, y corregida** (Eduardo la conectó para ver la red de seguridad; venía en BOOTSEL, y
+  tras reiniciarla, su imagen de hoy): sin cambiar nada, la tanda **sí** recibe el `RESET_REPLY` («RESET por el wire:
+  vuelve (resetReason=reinicio pedido, uptimeMs=1471)»). Con el mismo cliente (`wire_serie.Wire`) y el mismo RESET,
+  cambiando sólo cómo se lee después (`reset_lectura.py`, en `C:\tmp\v8_robustez_18nov\`; diez veces cada uno, en
+  reposo y durante un RUN, alternados): con `lines(0.2)` —un `read(4096)` con plazo de 0,2 s, el de
+  `prueba_reset_pico.py` y `prueba_840.py`—, **0 de 10**; con «lo que haya» (`read(in_waiting or 1)`, el de la tanda),
+  **10 de 10**: el `RESET_REPLY` a los 0,077–0,093 s (durante el RUN, antes, el `OUTPUT` y el `EXITED KILLED`), y el
+  puerto cae a los 0,17–0,20 s. **La Pico entrega la respuesta**: el `read` que espera su plazo no ha vuelto cuando el
+  USB se va, y pyserial lanza y tira lo que ya había llegado. Lo de arriba («no llega», «la tanda la daría por
+  perdida», «era peor»), deducido de esa medida: falso. La tanda nunca lo sufrió; su red de seguridad (lo de «la 1») se
+  queda: cubre una respuesta perdida de verdad, o un PC que no lea en esos ~0,1 s. En la Pico, nada que hacer (lo de
+  V9, fuera). **Lo que queda, por decidir:** el mismo lector está en `wire_serie.lines()` (su `run`, y las pruebas que
+  lo usan) y en el `lines()` de la tanda (el RUN de cada prueba, `esperar_exited` y `limpiar_arranque`): lo que llegue
+  en los ~0,2 s antes de que se vaya el puerto de una Pico (o de otra placa con su USB propio) se pierde. El arreglo,
+  pequeño: leer «lo que haya», como hace ya `_bocado`.
 
 #### ✅ `#840` — un RESET pedido durante un RUN no se servía si el programa no paraba, y tras un KILL la placa ya no leía el cable: con un hilo metido en C (`#825`), la placa sólo volvía con las manos (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#840`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7686,7 +7702,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **18-nov, visto en placa** (el lote; los guiones, en `C:\tmp\v8_robustez_18nov\`): en la P4 y la Pico 2,
   dos KILL seguidos, un `EXITED KILLED` y dos `KILL_REPLY`; un RESET durante un RUN, en la P4, el `EXITED` y el
   `RESET_REPLY` a los 0,51 s y la placa vuelve con «software»; en la Pico 2 se reinicia («reinicio pedido»), pero la
-  respuesta no llega: también en reposo, así que no es de aquí (`#841`). Y en la S3 y la C6 (la segunda tanda), lo mismo
+  respuesta no llega: también en reposo, así que no es de aquí (`#841`). **Corregido el mismo día** (`#841`): sí llega,
+  a los ~0,08 s, con el `EXITED KILLED` antes; la perdía el cliente de la prueba. Y en la S3 y la C6 (la segunda tanda), lo mismo
   que en la P4: dos `KILL_REPLY`, y el `RESET_REPLY` a los 0,41 y 0,42 s, con «software» al volver. Y en la C3 (la
   tercera tanda), igual: dos `KILL_REPLY`; el `EXITED KILLED` y el `RESET_REPLY` a los 0,41 s, y «software» al volver.
 

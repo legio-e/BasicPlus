@@ -101,10 +101,11 @@ UNA PLACA COLGADA (V7_IDEAS §4; V7/H9, 2-oct)
     al RESET, en las ESP32 el reinicio por el cable (RTS, como esptool); en la
     Pico y la STM32 no lo hay sin manos: se aborta la placa y se dice que hacer.
     #841 (18-nov): antes de eso, se reabre DE TODOS MODOS: la placa puede
-    haberse reiniciado sin que llegara la respuesta (la Pico 2: su USB se va
-    con el reinicio antes de entregarla, y el puerto se cae mientras se
-    espera). Si saluda y el INFO contesta, esta recuperada (el texto dice si
-    se reinicio, por su uptime); si no, el cable o las manos, como antes.
+    haberse reiniciado sin que la respuesta se leyera (la Pico 2 la manda a
+    los ~0,08 s y su USB se va a los ~0,19 s: un PC que no lea en ese rato
+    la pierde, y el puerto se cae mientras se espera). Si saluda y el INFO
+    contesta, esta recuperada (el texto dice si se reinicio, por su uptime);
+    si no, el cable o las manos, como antes.
     #825 (18-nov) — dos cosas mas, para que un cuelgue deje rastro:
     - ANTES del KILL, un PING (la placa lo atiende durante un RUN): si contesta,
       el cable vive y el programa esta parado dentro (una funcion en C que no
@@ -625,8 +626,9 @@ class Wire:
     def recuperar(self, sello):
         """V7/H9 (V7_IDEAS §4) — una placa COLGADA (el KILL no dio EXITED): RESET por el wire (se atiende aunque corra
         un programa, #452), reabrir, HELLO y el log post-mortem.
-        #841 (18-nov): sin el RESET_REPLY, la placa pudo reiniciarse igual —en la Pico 2 el USB se va con el reinicio
-        antes de entregarlo, y el puerto se cae mientras se espera—: se reabre DE TODOS MODOS y, si saluda y el INFO
+        #841 (18-nov): sin el RESET_REPLY, la placa pudo reiniciarse igual —la Pico 2 lo manda a los ~0,08 s y su USB
+        se va a los ~0,19 s: si no se lee en ese rato, se pierde, y el puerto se cae mientras se espera; un lector que
+        espera su plazo, como el `lines()` de wire_serie, lo pierde siempre—: se reabre DE TODOS MODOS y, si saluda y el INFO
         contesta (no corre nada), está recuperada; el texto dice si se reinició (su uptime, contado desde el RESET). Si no
         vuelve en reposo, lo de antes: en las ESP32 el reinicio POR EL CABLE (RTS 200 ms con DTR apagado, como esptool),
         por un puerto abierto otra vez; en la Pico y la STM32 no lo hay sin manos.
@@ -639,10 +641,10 @@ class Wire:
         try:
             respuesta = self.esperar("RESET_REPLY", 5)
         except (EOFError, OSError):
-            respuesta, se_fue = None, True      # #841: el puerto, caído antes de la respuesta (el USB de la Pico)
+            respuesta, se_fue = None, True      # #841: el puerto, caído sin haber leído la respuesta (el USB de la Pico)
         info = None
         if respuesta is None:
-            sin = "sin RESET_REPLY" + (" (el puerto se fue antes de entregarlo, #841)" if se_fue else "")
+            sin = "sin RESET_REPLY" + (" (el puerto se cayo mientras se esperaba, #841)" if se_fue else "")
             if self.reabrir():
                 info = self.info(6)
                 cod = self.codigo_error()
