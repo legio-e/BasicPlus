@@ -7337,7 +7337,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > y `#836`, `#837` (con `log=0`, el informe de `ThrowSinAtrapar` y tres avisos de UAF), `#838` y `#840`, vistos.
 > **El lote, completo: las nueve placas con la imagen final.** Y `#841`, medida en la Pico 2: la Pico sí entrega la
 > respuesta al RESET; la perdía el cliente de mis pruebas (`wire_serie.lines()`). La tanda, con su red de seguridad
-> (Eduardo: *«La 1»*); los dos lectores, por decidir.
+> (Eduardo: *«La 1»*), y los dos lectores, arreglados (*«1) si 2) OK»*): `#841`, cerrada.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7626,7 +7626,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; el lector de `wire_serie` y el de la tanda, por decidir)
+#### ✅ `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; y los dos lectores, arreglados: **CERRADA el 18-nov**, el commit de `#841`, Eduardo: *«1) si 2) OK»*)
 
 - **Lo medido** (18-nov, la Pico 2 con la imagen de hoy): un `RESET` con la placa en reposo, y dos durante un RUN: en
   los tres, a los ~0,19 s el puerto da error (el USB de la Pico desaparece al reiniciarse) y no ha llegado el
@@ -7675,6 +7675,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   lo usan) y en el `lines()` de la tanda (el RUN de cada prueba, `esperar_exited` y `limpiar_arranque`): lo que llegue
   en los ~0,2 s antes de que se vaya el puerto de una Pico (o de otra placa con su USB propio) se pierde. El arreglo,
   pequeño: leer «lo que haya», como hace ya `_bocado`.
+- **18-nov, los dos lectores, arreglados, y la red de seguridad, que se queda** (Eduardo: *«1) si 2) OK»*):
+  `wire_serie.lines()` y el `lines()` de la tanda leen lo que haya (`in_waiting`, o 1; en la tanda, `read_disponible`),
+  y si el puerto se cae, lo ya recibido se entrega en esa llamada y la excepción en la siguiente (la tanda ya lo hacía,
+  su «hallazgo 5»; `wire_serie`, ahora). **La prueba, en la Pico 2:** `reset_lectura.py`, con `lines`, 6 de 6 (eran 0
+  de 10); `lines_tanda.py` (en `C:\tmp\v8_robustez_18nov\`), el `lines()` de la tanda con un RESET durante un RUN, 3 de
+  3 (el `OUTPUT`, el `EXITED KILLED` y el `RESET_REPLY`, y la excepción después); y la tanda de 24 en la Pico 2 y la C3,
+  como en el lote (las dos de `lastModified`; la GUI, saltada).
 
 #### ✅ `#840` — un RESET pedido durante un RUN no se servía si el programa no paraba, y tras un KILL la placa ya no leía el cable: con un hilo metido en C (`#825`), la placa sólo volvía con las manos (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#840`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 

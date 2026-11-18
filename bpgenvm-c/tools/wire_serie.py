@@ -98,6 +98,7 @@ class Wire:
         self.pend = []
         self.trozo = 0       # #495: el trozo y la ventana que anuncia la placa en el HELLO (0 = no los anuncia)
         self.ventana = 0
+        self.roto = None     # #841: la excepcion del puerto, si se cayo con lineas ya recibidas (lines la entrega despues)
         if not es_puerto_serie(port):
             self.s = CableRed(port)
             return
@@ -125,10 +126,24 @@ class Wire:
         return self.id
 
     def lines(self, secs):
+        """Los mensajes que llegan en `secs`. #841 (18-nov): lee LO QUE HAYA (in_waiting, o 1). Un read(4096) con plazo
+        no vuelve hasta agotarlo, y si mientras tanto el puerto se va (la Pico al reiniciarse: su USB desaparece a los
+        ~0,19 s de un RESET), pyserial lanza y tira lo que ya había llegado: el RESET_REPLY de la Pico, a los 0,08 s, no
+        se veía nunca. Y si el puerto se cae, lo ya recibido se entrega en esta llamada y la siguiente lanza la excepción
+        (como la tanda, su «hallazgo 5»)."""
+        if self.roto is not None and not self.pend:
+            e, self.roto = self.roto, None
+            raise e
         out, t0 = self.pend, time.time()
         self.pend = []
         while time.time() - t0 < secs:
-            c = self.s.read(4096)
+            try:
+                c = self.s.read(self.s.in_waiting or 1)
+            except (EOFError, OSError) as e:
+                if not out:
+                    raise
+                self.roto = e
+                break
             if c:
                 self.buf += c
             while b"\n" in self.buf:

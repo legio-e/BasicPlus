@@ -344,14 +344,18 @@ class Wire:
         """Los mensajes JSON que llegan en `secs`. Si el transporte se cae, lo
         YA recibido se entrega en esta llamada y la siguiente lanza la excepcion
         (hallazgo 5: antes el raise se llevaba por delante los OUTPUT que
-        venian en el mismo chunk que el corte)."""
+        venian en el mismo chunk que el corte).
+        #841 (18-nov): lee LO QUE HAYA (read_disponible). Un read(4096) con
+        plazo no vuelve hasta agotarlo, y si el puerto se va mientras (la Pico
+        al reiniciarse), pyserial lanza y tira lo que ya habia llegado en esa
+        lectura: lo de los ultimos ~0,2 s antes del corte."""
         if self.roto is not None and not self.pend:
             raise self.roto
         out, t0 = self.pend, time.time()
         self.pend = []
         while time.time() - t0 < secs:
             try:
-                c = self.t.read(4096)
+                c = self.t.read_disponible()
             except (EOFError, OSError) as e:
                 self.roto = e
                 return out
