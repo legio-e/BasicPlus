@@ -382,6 +382,17 @@ static void stm32_run_despues(bpvm_t* vm) {
     (void) vm;
     stm32_mem_log();                            /* V7/H7: tras cada RUN, antes de soltar la VM */
 }
+/* V8 (18-nov, la tabla de la robustez) — SÓLO PRUEBAS, el gemelo del de la Pico y las ESP32 (#681): `prueba.fallo=1` en
+ * el ENV provoca aquí un HARDFAULT (una instrucción indefinida), para probar en la placa el camino fatal —el informe, el
+ * reinicio por el perro y el arranque siguiente sin autorun—. Con la clave puesta, CADA RUN falla: se quita después. */
+static void stm32_run_tras_cargar(bpvm_t* vm) {
+    (void) vm;
+    if (board_mgr_stm32_env_bool("prueba.fallo", 0)) {
+        log_printf_siempre("prueba.fallo=1: un HardFault a proposito (SOLO PRUEBAS)");
+        log_flush();
+        __asm volatile ("udf #0");
+    }
+}
 static char s_run_dbg_linea[512];               /* los comandos del depurador son cortos (un pc, un id) */
 static char s_run_mensaje[1024];                /* RUN_REPLY, EXITED y las respuestas del depurador */
 
@@ -394,6 +405,7 @@ static const bpvm_repl_run_ops_t s_run_ops = {
     .reiniciar         = stm32_hacer_reset,
     .cargar_motores    = packs_cargar_una_vez,
     .mdn_del_fs        = stm32_mdn_del_fs,
+    .tras_cargar       = stm32_run_tras_cargar,   /* V8: `prueba.fallo=1` (SÓLO PRUEBAS) */
     .despues_de_correr = stm32_run_despues,
     .led               = stm32_run_led,
     .env_bool          = board_mgr_stm32_env_bool,
@@ -430,6 +442,12 @@ static void autorun_boot(void) {
      * valiendo: sólo la CABEZA del fichero, nunca un espejo.) */
     char path[BPVM_FS_PATH_MAX];   /* paso 6: 64 B cortaban las rutas largas (el RUN ya las valía) */
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
+    /* V8 (18-nov, la tabla de la robustez) — como la Pico y las ESP32 (#681): tras un fallo fatal, sin autorun (un
+     * programa que falla al arrancar, en bucle, no). Por log_printf_siempre: aquí el ENV ya apagó el log (`log=0`). */
+    if (stm32_arranque_tras_fatal()) {
+        log_printf_siempre("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (ver el log)", path);
+        return;
+    }
 
     /* #345 paso 2 — la ventana de rescate. Decide el usuario. */
     if (!bpvm_autorun_gate(&s_autorun_wire, path, 500, 10000)) {
@@ -816,6 +834,10 @@ void stm32_repl_run(void) {
     log_printf(bpvm_log_origen_ram()
                ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
                : "log: arranque en frio (cargado de flash)");
+    stm32_fatal_mirar_arranque();   /* V8 (la tabla de la robustez): ¿acabó el anterior en un fallo fatal? */
+    /* V8 (la tabla de la robustez) — y por qué se reinició, en el log, como la Pico y las ESP32 (antes sólo por el cable
+     * al arrancar y en el INFO, hasta el reinicio siguiente). */
+    log_printf("boot: causa del reset = %s", stm32_reset_cause());
     /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
      * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
      * `_write` retargeteado, el stderr del núcleo se PERDÍA. */

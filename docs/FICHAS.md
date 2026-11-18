@@ -7610,6 +7610,26 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### ✅ `#839` — las STM32, tras un fallo fatal (un HardFault, el assert, la pila o el heap del RTOS), daban su informe y se quedaban paradas: en el campo, hasta que alguien las desenchufara (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#839`; preexistente; probada en la DK2, que Eduardo conectó para eso; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
+
+- **Lo que pasaba:** el informe del HardFault (`bpvm_fallo_cm33.c`) y los ganchos del RTOS (`stm32_rtos_parar`) acababan en
+  un bucle sin fin. La regla del 5-oct era *«fatal error, el log y reset»*, y la cumplían la Pico (el perro, `pico_fatal`)
+  y las ESP32 (el pánico reinicia); las STM32, no. Tampoco apuntaban en el log la causa del reinicio (sólo por el cable).
+- **Hecho:** `stm32_fatal` (`platform_stm32.c`), lo primero de cada camino fatal (en el HardFault de los dos proyectos,
+  tras leer LR —una llamada antes lo pisaría— y antes del informe; en `stm32_rtos_parar`): arma el IWDG (~2 s; una vez
+  armado sólo lo para un reinicio, por eso esta familia no tiene `Wdt`, `#480`) y deja una marca en la RAM `.noinit`. Al
+  arrancar, `stm32_fatal_mirar_arranque` la ve: «boot: el arranque anterior acabó en un FALLO FATAL (su informe, arriba):
+  sin autoarranque», el `INFO` dice «fallo fatal» y el autorun no arranca (su línea, con `log_printf_siempre`). Y «boot:
+  causa del reset = X» en el log, como las demás. `prueba.fallo=1` en el ENV (SÓLO PRUEBAS, como en la Pico y las ESP32,
+  `#681`): un HardFault (una instrucción indefinida) al empezar un RUN.
+- **La prueba, en la DK2** (grabada con la imagen de hoy, con lo de los commits hasta `#838` y esto): con `prueba.fallo=1`,
+  un RUN da `UNDEFINSTR` en `PC=0801521A` y la placa vuelve sola a los 5,3 s; el `INFO`, «fallo fatal»; en el log, el
+  informe, «el arranque anterior acabó en un FALLO FATAL» y «RAM SUPERVIVIENTE». Con `log=0` y un autorun que falla al
+  arrancar, el arranque siguiente no lo lanza y lo dice («autorun: /app/Bucle825.mod NO arranca…»). Y salió un fallo del
+  arreglo, corregido en el acto: «fallo fatal» se devolvía sin leer ni limpiar los flags de `RCC->CSR`, y el reinicio
+  siguiente, uno por software, decía «watchdog (IWDG)»; ahora, «software». El ENV y los ficheros de la DK2, como estaban;
+  el pack de la GUI carga. La Nucleo, compilada (sus 4 avisos, los de siempre, de `builtins.c`).
+
 #### ✅ `#838` — las ESP32 no apuntaban en el log por qué se reiniciaron, y la línea del autorun que no arranca tras un fallo fatal se perdía con el log apagado (también en la Pico) (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#838`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
 - **Lo que pasaba:** el motivo del reinicio sólo lo decía el `INFO`, y sólo hasta el reinicio siguiente; tras un pánico, el

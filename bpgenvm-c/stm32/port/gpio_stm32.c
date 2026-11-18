@@ -976,17 +976,22 @@ static const bpvm_i2c_backend_t s_i2c_backend = {
  * causas específicas antes que PIN/power, que suelen co-activarse. */
 const char* stm32_reset_cause(void) {
     static const char* s_cause = NULL;
-    if (s_cause) return s_cause;
-    uint32_t csr = RCC->CSR;
-    RCC->CSR |= RCC_CSR_RMVF;                  /* limpiar para el próximo reset */
-    if      (csr & RCC_CSR_IWDGRSTF) s_cause = "watchdog (IWDG)";
-    else if (csr & RCC_CSR_WWDGRSTF) s_cause = "window-watchdog (WWDG)";
-    else if (csr & RCC_CSR_SFTRSTF)  s_cause = "software";
-    else if (csr & RCC_CSR_LPWRRSTF) s_cause = "low-power";
-    else if (csr & RCC_CSR_BORRSTF)  s_cause = "power-on/brown-out";
-    else if (csr & RCC_CSR_PINRSTF)  s_cause = "pin (NRST)";
-    else if (csr & RCC_CSR_OBLRSTF)  s_cause = "option-byte-loader";
-    else                             s_cause = "desconocido";
+    if (!s_cause) {
+        uint32_t csr = RCC->CSR;
+        RCC->CSR |= RCC_CSR_RMVF;                  /* limpiar para el próximo reset */
+        if      (csr & RCC_CSR_IWDGRSTF) s_cause = "watchdog (IWDG)";
+        else if (csr & RCC_CSR_WWDGRSTF) s_cause = "window-watchdog (WWDG)";
+        else if (csr & RCC_CSR_SFTRSTF)  s_cause = "software";
+        else if (csr & RCC_CSR_LPWRRSTF) s_cause = "low-power";
+        else if (csr & RCC_CSR_BORRSTF)  s_cause = "power-on/brown-out";
+        else if (csr & RCC_CSR_PINRSTF)  s_cause = "pin (NRST)";
+        else if (csr & RCC_CSR_OBLRSTF)  s_cause = "option-byte-loader";
+        else                             s_cause = "desconocido";
+    }
+    /* V8 (la tabla de la robustez): el IWDG lo armó un fallo fatal (stm32_fatal), como la Pico: «fallo fatal». DESPUÉS de
+     * leer y limpiar los flags: si no, el del IWDG seguía puesto y el reinicio siguiente (uno por software) salía
+     * «watchdog (IWDG)» (visto en la DK2 al probarlo). */
+    if (stm32_arranque_tras_fatal()) return "fallo fatal";
     return s_cause;
 }
 

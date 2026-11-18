@@ -48,7 +48,7 @@ extern void stm32_wire_rx_drain(void);   /* RX por IRQ → ring (V3/H5.2, stm32_
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+void stm32_fatal(void);   /* V8 (la tabla de la robustez): el perro y la marca, antes del informe (platform_stm32.c) */
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -98,6 +98,9 @@ void HardFault_Handler(void)
     struct bpvm_fault_frame* marco = 0;
     __asm volatile ("mov %0, lr" : "=r" (exc_return));
     if (exc_return & 4u) __asm volatile ("mrs %0, psp" : "=r" (marco));
+    /* V8 (18-nov, la tabla de la robustez): el perro (~2 s) y la marca del fatal, DESPUÉS de leer LR —una llamada antes lo
+     * pisaría— y antes del informe: pase lo que pase en él, la placa se reinicia, y arranca sin autorun. */
+    stm32_fatal();
     bpvm_cm33_fallo_informe(marco, exc_return, "HardFault");
   }
   /* USER CODE END HardFault_IRQn 0 */

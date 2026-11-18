@@ -34,6 +34,7 @@
  */
 #include "bpvm_platform.h"
 #include "main.h"   /* HAL_GetTick, HAL_Delay, SystemCoreClock, CoreDebug, DWT */
+#include "gpio_stm32.h"   /* V8 (la tabla de la robustez): stm32_fatal y la marca del arranque */
 
 int64_t bpvm_platform_now_ms(void) { return (int64_t) HAL_GetTick(); }
 
@@ -112,9 +113,43 @@ uint32_t bpvm_platform_random_u32(void) {
 #include "FreeRTOS.h"
 #include "task.h"
 
+/* V8 (18-nov, la tabla de la robustez, V8_IDEAS §E15) — UN FALLO FATAL: EL INFORME Y REINICIAR, como la Pico y las
+ * ESP32 (la regla de Eduardo del 5-oct: «fatal error, el log y reset»). Hasta hoy la STM32 daba su informe y se quedaba
+ * parada: en el campo, hasta que alguien la desenchufara. El perro (el IWDG), LO PRIMERO, como `pico_fatal`: una vez
+ * armado sólo lo para un reinicio —por eso esta familia no tiene `Wdt` (#480)—, que es justo lo que se quiere aquí: pase
+ * lo que pase después (el informe, el volcado del log a la flash, que tarda unas decenas de ms), a los ~2 s la placa se
+ * reinicia. Y una marca en la RAM que sobrevive al reinicio (`.noinit`, como el log): el arranque siguiente la ve, lo
+ * dice en el log, el INFO dice «fallo fatal» y no hay autorun (un programa que falla al arrancar, en bucle, no). */
+#define STM32_FATAL_MAGIA 0xFA7A1B0Du
+static volatile uint32_t s_fatal_marca __attribute__((section(".noinit")));
+static int s_tras_fatal = 0;
+
+void stm32_fatal(void) {
+    /* KR=0xCCCC lo arranca (y enciende el LSI, ~32 kHz); 0x5555 deja escribir el divisor y la recarga: /64, 500 Hz, y
+     * 1000 cuentas, ~2 s. Si el cambio no se asienta (el bucle, con tope), queda el de serie, ~0,5 s: también reinicia. */
+    IWDG->KR = 0xCCCCu;
+    IWDG->KR = 0x5555u;
+    IWDG->PR = 4u;
+    IWDG->RLR = 999u;
+    for (uint32_t n = 0; n < 200000u && (IWDG->SR & (IWDG_SR_PVU | IWDG_SR_RVU)) != 0u; n++) { }
+    IWDG->KR = 0xAAAAu;
+    s_fatal_marca = STM32_FATAL_MAGIA;
+    bpvm_log_set_enabled(1);   /* un fatal se registra aunque el log esté apagado (#423) */
+}
+
+void stm32_fatal_mirar_arranque(void) {
+    if (s_fatal_marca == STM32_FATAL_MAGIA) {
+        s_tras_fatal = 1;
+        log_printf("boot: el arranque anterior acabo en un FALLO FATAL (su informe, arriba): sin autoarranque");
+    }
+    s_fatal_marca = 0u;
+}
+
+int stm32_arranque_tras_fatal(void) { return s_tras_fatal; }
+
 static void stm32_rtos_parar(const char* que, const char* det, unsigned num) {
-    bpvm_log_set_enabled(1);   /* V7/H5 P2b.3: fatal → se registra aunque el log esté apagado (#423) */
-    log_printf("RTOS: %s (%s:%u) - parado", que, det ? det : "?", num);
+    stm32_fatal();             /* V8: el perro, lo primero; después, el informe */
+    log_printf("RTOS: %s (%s:%u) - parado; la placa se reinicia en ~2 s", que, det ? det : "?", num);
     log_flush();
     __disable_irq();
     for (;;) { }
