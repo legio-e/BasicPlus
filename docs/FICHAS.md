@@ -7309,6 +7309,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > `C:\tmp\resistencia_v8_2\final\`. Queda, del balance, la tabla de la robustez (arriba); `#833`, decidido y hecho
 > esa tarde (en V8: el GC verifica el contador de cada referencia), falta verlo en las placas.
 >
+> 🏁 **18-nov, `#825`, la prueba larga, hecha: no sale** (Eduardo: *«OK, adelante»*): en la P4, 200 parejas
+> `GuiWinJson`–`GuiShot` y 500 capturas en un RUN, sin colgarse. Queda para las pruebas finales, con la tanda que ahora
+> deja rastro (el PING antes del KILL y el log entero); y para la tabla de la robustez, que el log de la RAM sobreviva a
+> un cuelgue.
+>
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
 > número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
@@ -8025,7 +8030,7 @@ ve sin analizar:
   de la P4, la C5 y la C6 cargan con la imagen nueva (el texto y el rodata en sus páginas; el bloque de RAM de la C6,
   que está en la SRAM, en su sitio pese a los 720 B más de la imagen).
 
-#### 🔵 `#825` — la P4 se colgó una vez en `GuiShot`, en la tanda del lote final: ni EXITED en 60 s ni tras el KILL, y el wire sin contestar (abierta el 15-nov, en el lote final; **V8: una prueba específica**)
+#### 🔵 `#825` — la P4 se colgó una vez en `GuiShot`, en la tanda del lote final: ni EXITED en 60 s ni tras el KILL, y sin respuesta al RESET (abierta el 15-nov, en el lote final; **V8: una prueba específica**; **18-nov**, releída, la tanda deja rastro y la prueba larga, 200 parejas y 500 capturas, no lo repite: **a las pruebas finales**)
 
 - **Lo que pasó** (15-nov, la tanda del lote, `compat/informes/lote_v8_15nov.md`): la P4, con la imagen del día y la
   GUI recién grabada (`#817`), con la WiFi conectada y el Bluetooth esperando al teclado y al ratón (`bt=1`). `GuiShot`
@@ -8043,6 +8048,43 @@ ve sin analizar:
   ms). Con las nueve de antes, 24 veces seguidas sin colgarse tras la que se colgó. Lo que lo haría visible si vuelve: en
   la P4 la consola está apagada y el vigilante de tareas del IDF avisa sin reiniciar (`CONFIG_ESP_TASK_WDT_PANIC`
   apagado), así que un cuelgue no deja rastro.
+- **18-nov, releída** (Eduardo: *«continuamos #825»*), con el informe del lote y el código:
+  - **El programa no acabó, y no fue el enlace con el PC:** no imprimió nada, y su captura (8 KB, tres bloques) no estaba
+    en la flash tras el reinicio (`fsUsed`, el de antes de `GuiWinJson`).
+  - **Que no contestara al RESET no prueba que el wire se parara.** Durante un RUN la placa no sirve el KILL ni el RESET
+    en el momento: el poll de `io` los apunta y se sirven cuando el programa para (`bpvm_repl.c`, `run_poll`; el RESET,
+    al final del RUN, `#452`), y desde el KILL ya no lee el cable. Un hilo metido en una función en C que no vuelve
+    explica las tres cosas (ni EXITED, ni KILL, ni RESET); la tanda no mandó nada que la placa conteste durante un RUN.
+  - **No fue un pánico ni las interrupciones cortadas:** las dos reinician solas (el pánico, con su motivo; el perro de
+    las interrupciones, a los 800 ms).
+  - **El log de ese momento se perdió:** en las ESP32, el reinicio por el cable (el pin EN) no conserva la RAM (H13,
+    `#439`); quedaron lo que se volcó a la flash al acabar `GuiWinJson` y el arranque nuevo, y la tanda guardaba sólo
+    las 40 últimas líneas.
+  - **Dónde se puede esperar sin plazo:** con dos runs, la GUI sólo la ejecuta el run 0 (`interp.c`, el viaje): si algo
+    se queda dentro de LVGL en el run 0, todo hilo que llame a la GUI espera sin fin (en `GuiShot`, los dos). La lectura
+    del táctil por el I2C espera sin plazo (lo de por defecto en el IDF 6.1), pero en la resistencia de 48 h la misma
+    P4 la hizo cada 33 ms, unos 5 millones de veces, sin colgarse: poco probable. El volcado a la pantalla no espera
+    (sin DMA2D, una copia). Lo que sólo tiene `GuiShot`: la captura (el refresco forzado, la compresión y el fichero) y
+    muchos RUN cortos que arrancan y paran la GUI.
+- **18-nov, que deje rastro si vuelve** (Eduardo: *«OK, adelante»*), en la tanda (`tools/tanda.py`), con una prueba que no
+  acaba: **antes del KILL, un PING** (se atiende durante un RUN; tiene que ir antes, porque tras el KILL la placa ya no lee
+  el cable): si contesta, el cable vive y el programa está parado dentro; y **el log post-mortem entero**, a
+  `build/tanda/<prueba>/<placa>/postmortem.log` y al `.json`, con la línea `log:` del arranque en el `.md` (si la RAM
+  sobrevivió al reinicio). Probado: en el micro simulado, un bucle sin fin (`Bucle825`), «PONG en 0 ms (el cable vive)» y
+  el KILL lo para; el control, con el simulador suspendido a mitad, «sin respuesta en 3 s (el cable tampoco contesta)»; y
+  en la P4, el ensayo de la recuperación (`--ensayo-colgada`): el log entero, 114 líneas con las de antes del reinicio, y
+  «log: RAM SUPERVIVIENTE».
+- **18-nov, la prueba larga: no sale.** En la P4, con la imagen de la resistencia (la del 15-nov por la tarde, `8484c53b`;
+  la del lote era la de la mañana, `579b84c9`, sin `#829` ni `#831`, que no tocan este camino), la WiFi conectada, `bt=1`
+  y dos runs: **200 parejas `GuiWinJson`–`GuiShot`, las 400 bien** (`GuiShot`, de 638 a 797 ms); y **`GuiShotSerie`** (la
+  pantalla de `GuiShot` y 500 capturas en un RUN, con la GUI en marcha), **las 500 en 124 s**, la última con su «captura
+  500». Con las del 15-nov, 224 `GuiShot` sin colgarse tras el que se colgó: si fuera 1 de cada 25, como parecía, saldría
+  así una vez de cada 9000; si fuera 1 de cada 50, una de cada 90. Lo bajado, las listas y los programas, en
+  `C:\tmp\v8_825_18nov\`.
+- **Lo que queda:** a las pruebas finales, con la tanda nueva. Y para la tabla de la robustez: que el log de la RAM
+  sobreviva a un cuelgue (el RESET servido aunque el programa no pare, o el `LOG_DUMP` durante un RUN), con `latido=1` en
+  la P4 (apunta el último hilo elegido y su pc); y `Wdt` con dos runs, por comprobar (`enable` y `feed` van a la tarea que
+  ejecuta el hilo en ese momento, y tras un `sleep` puede ser la otra).
 
 #### ✅ `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente** · **CERRADA el 14-nov**, el commit de `#824`; la SD de una placa, en las pruebas finales: **vista el 15-nov**, en la P4 y la C5)
 

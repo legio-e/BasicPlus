@@ -100,6 +100,16 @@ UNA PLACA COLGADA (V7_IDEAS §4; V7/H9, 2-oct)
     como evidencia; y se sigue con las demas pruebas. Si el wire no contesta
     al RESET, en las ESP32 el reinicio por el cable (RTS, como esptool); en la
     Pico y la STM32 no lo hay sin manos: se aborta la placa y se dice que hacer.
+    #825 (18-nov) — dos cosas mas, para que un cuelgue deje rastro:
+    - ANTES del KILL, un PING (la placa lo atiende durante un RUN): si contesta,
+      el cable vive y el programa esta parado dentro (una funcion en C que no
+      vuelve: ni el KILL ni el RESET se sirven hasta que el programa para); si
+      no, se paro todo. Tiene que ir antes: tras el KILL la placa ya no lee el
+      cable hasta que el programa para. Lo dice el detalle del veredicto.
+    - el log post-mortem ENTERO, a `build/tanda/<prueba>/<placa>/postmortem.log`
+      y al .json; en el .md, las 40 ultimas lineas y la linea `log:` del
+      arranque, que dice si la RAM sobrevivio al reinicio (en las ESP32, el del
+      cable no la conserva: queda lo que se volco a la flash).
 
 LIMPIEZA (Eduardo, 2-oct: «la tanda que no borra lo que sube»)
     Al acabar con una placa se borra lo que la tanda dejo en /app —los
@@ -545,6 +555,34 @@ class Wire:
                     return m, rezagados
         return None, rezagados
 
+    def ping_en_run(self, secs, session, out, rezagados):
+        """#825 (18-nov) — un PING con el programa sin acabar, ANTES del KILL: la placa lo atiende durante un RUN
+        (bpvm_repl_atiende_en_run), y tras el KILL ya no lee el cable hasta que el programa para (el poll, «pegajoso»):
+        un PING después no contestaría aunque el cable viviera. Contestar es un PONG o un ERROR con su id (una imagen
+        de antes de #803 contesta BUSY: también vive). Lo que llegue mientras, a su sitio: los OUTPUT de esta sesión, a
+        `out`; un EXITED de esta sesión (acabó justo después del plazo), se devuelve. Devuelve (ping, exited)."""
+        pid = self.send("PING")
+        t0 = time.time()
+        ping = {"contesto": False, "ms": None, "respuesta": None, "plazo_s": secs}
+        ex = None
+        lote, self.pend = self.pend, []
+        while True:
+            for m in lote:
+                typ = m.get("type")
+                if typ in ("OUTPUT", "EXITED") and self._de_otra_sesion(m, session, rezagados):
+                    continue
+                if typ == "OUTPUT":
+                    out.append(m.get("data", ""))
+                elif typ == "EXITED":
+                    ex = m
+                elif m.get("id") == pid and typ in ("PONG", "ERROR") and not ping["contesto"]:
+                    ping["contesto"] = True
+                    ping["ms"] = int((time.time() - t0) * 1000)
+                    ping["respuesta"] = typ if typ == "PONG" else "ERROR %s" % m.get("code")
+            if ping["contesto"] or time.time() - t0 >= secs:
+                return ping, ex
+            lote = self._bocado()
+
     def info(self, secs=6):
         return self.llamar("INFO", "INFO_REPLY", secs)
 
@@ -580,7 +618,7 @@ class Wire:
         """V7/H9 (V7_IDEAS §4) — una placa COLGADA (el KILL no dio EXITED): RESET por el wire (se atiende aunque corra
         un programa, #452), reabrir, HELLO y el log post-mortem. Si el wire no contesta al RESET, en las ESP32 el
         reinicio POR EL CABLE (RTS 200 ms con DTR apagado, como esptool); en la Pico y la STM32 no lo hay sin manos.
-        Devuelve (ok, texto, cola_del_log)."""
+        Devuelve (ok, texto, cola_del_log, log_entero) —#825: el log entero, además de su cola—."""
         via = "RESET por el wire"
         self.send("RESET")
         if self.esperar("RESET_REPLY", 3) is None:
@@ -588,7 +626,7 @@ class Wire:
             if self.t.nombre != "serie" or not placa.startswith("esp32"):
                 return False, ("no contesta al RESET por el wire, y %s no se reinicia sin manos: %s" % (
                     placa, "desenchufa y enchufa la placa" if placa.startswith("rp2350")
-                    else "reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton")), ""
+                    else "reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton")), "", ""
             via = "reinicio por el cable (RTS; el wire no contesto al RESET)"
             s = self.t.s
             s.dtr = False
@@ -599,13 +637,14 @@ class Wire:
             s.dtr = s.dtr
             time.sleep(0.2)
         if not self.reabrir():
-            return False, "%s: la placa no vuelve a contestar en 25 s" % via, ""
+            return False, "%s: la placa no vuelve a contestar en 25 s" % via, "", ""
         info = self.info(6) or {}
         self.send("LOG_DUMP")
         lg = self.esperar("LOG_DUMP_REPLY", 10) or {}
-        cola = "\n".join((lg.get("text") or "").splitlines()[-40:])
+        entero = lg.get("text") or ""
+        cola = "\n".join(entero.splitlines()[-40:])
         return True, "%s: vuelve (resetReason=%s, uptimeMs=%s)" % (
-            via, info.get("resetReason"), info.get("uptimeMs")), cola
+            via, info.get("resetReason"), info.get("uptimeMs")), cola, entero
 
     def limpiar_arranque(self, secs=10):
         """KILL al conectar y ESPERAR a que la placa este en reposo (hallazgo 3):
@@ -707,10 +746,19 @@ class Wire:
                         return res
                     else:
                         otros.add(typ or "?")
-            # timeout: KILL y esperar el EXITED (de ESTA sesion) 5 s
-            self.send("KILL")
-            ex, rz = self.esperar_exited(5, session, out)
-            res["rezagados"].extend(rz)
+            # timeout. #825 (18-nov): antes del KILL, el PING (ping_en_run): ¿el cable vive con el programa parado
+            # dentro, o se paró todo? Si el EXITED llega mientras (acabó justo después del plazo), no hay KILL. Con
+            # el KILL de #580 ya mandado, no: la placa ya no lee el cable, y un PING sin respuesta no diría nada.
+            ex = None
+            if t_kill is None:
+                res["ping"], ex = self.ping_en_run(3, session, out, res["rezagados"])
+            if ex is None:
+                # KILL y esperar el EXITED (de ESTA sesion) 5 s
+                self.send("KILL")
+                ex, rz = self.esperar_exited(5, session, out)
+                res["rezagados"].extend(rz)
+            else:
+                res["acabo_tras_plazo"] = True
             res["salida"] = "".join(out)
             res["exited"] = ex
             res["colgada"] = True
@@ -1457,8 +1505,18 @@ def veredicto_de(p, o, res, sin_oraculo):
     if res["error"]:
         return "ERROR", res["error"]
     if res["colgada"]:
-        return "COLGADA", "sin EXITED en %d s; tras KILL: %s" % (
-            p["timeout_s"], ("EXITED %s" % ex.get("status")) if ex else "tampoco EXITED en 5 s")
+        # #825 (18-nov): con el PING de antes del KILL (Wire.ping_en_run), si lo hubo (el ensayo no lo manda).
+        ping = res.get("ping")
+        txt_ping = ""
+        if ping is not None:
+            txt_ping = "; PING antes del KILL: " + (
+                ("%s en %d ms (el cable vive)" % (ping["respuesta"], ping["ms"])) if ping["contesto"]
+                else "sin respuesta en %d s (el cable tampoco contesta)" % ping["plazo_s"])
+        if res.get("acabo_tras_plazo"):
+            tras = "acabo sola despues del plazo, durante el PING: EXITED %s" % ex.get("status")
+        else:
+            tras = "tras KILL: " + (("EXITED %s" % ex.get("status")) if ex else "tampoco EXITED en 5 s")
+        return "COLGADA", "sin EXITED en %d s%s; %s" % (p["timeout_s"], txt_ping, tras)
     if p.get("kill_tras_ms") and ex is not None:
         # #580: la prueba es PARARLA. Verde sólo si sale KILLED después del KILL.
         est = "EXITED %s exit=%s%s" % (ex.get("status"), ex.get("exitCode"),
@@ -1640,6 +1698,8 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         log("    ENSAYO: se trata como COLGADA sin EXITED (--ensayo-colgada)")
         res["colgada"], res["exited"] = True, None
     r["exited"] = res["exited"]
+    if res.get("ping") is not None:
+        r["ping"] = res["ping"]                # #825: el PING de antes del KILL (Wire.ping_en_run)
     r["salida_placa"] = res["salida"]          # hallazgo 5: tambien si hubo error
     r["tipos_extra"] = res["tipos"]
     r["ms_wire"] = res["ms_wire"]
@@ -1663,11 +1723,21 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         # prueba (BUSY) y se abortaba; ahora se reinicia, se baja su log post-mortem y se sigue.
         log("    COLGADA sin EXITED tras el KILL: se recupera la placa")
         try:
-            ok, texto, cola = w.recuperar(sello)
+            ok, texto, cola, entero = w.recuperar(sello)
         except (EOFError, OSError) as e:
-            ok, texto, cola = False, "el transporte se cayo al recuperarla: %s" % e, ""
+            ok, texto, cola, entero = False, "el transporte se cayo al recuperarla: %s" % e, "", ""
         r["detalle"] += "; recuperacion: " + texto
         r["postmortem"] = cola
+        if entero:
+            # #825 (18-nov): el log ENTERO, a un fichero junto a lo que se bajó de esta prueba, y al .json; el .md
+            # enseña la cola y la línea `log:` del arranque (si la RAM sobrevivió al reinicio, o sólo la flash).
+            d = os.path.join(BUILD_TANDA, p["nombre"], etiqueta_placa(sello))
+            os.makedirs(d, exist_ok=True)
+            fich = os.path.join(d, "postmortem.log")
+            with open(fich, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(entero)
+            r["postmortem_entero"] = entero
+            r["postmortem_fichero"] = fich
         notas.append("%s: COLGADA; %s" % (p["nombre"], texto))
         log("    recuperacion: %s" % texto)
         if not ok:
@@ -1858,6 +1928,15 @@ def escribir_informe(ruta, tanda):
                 L.append(r["postmortem"])
                 L.append("```")
                 L.append("</details>")
+                L.append("")
+            if r.get("postmortem_fichero"):
+                # #825 (18-nov): el entero, en su fichero y en el .json; aquí, de dónde viene lo de antes del reinicio
+                ent = r["postmortem_entero"].splitlines()
+                origen = [l for l in ent if "log: RAM SUPERVIVIENTE" in l or "log: arranque en frio" in l]
+                L.append("- %s: el log post-mortem entero (%d lineas; arriba, las 40 ultimas), en `%s` y en el .json;"
+                         " su arranque dice: %s" % (
+                    r["prueba"], len(ent), os.path.relpath(r["postmortem_fichero"], RAIZ),
+                    ("«%s»" % origen[-1].strip()) if origen else "(sin la linea `log:` del arranque)"))
                 L.append("")
             if r["veredicto"] not in VERDES + ("SALTADA",):
                 # hallazgo 5: la salida que SI llego, aunque no hubiera EXITED
