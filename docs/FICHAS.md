@@ -7328,8 +7328,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > `#835` y `#836` a `#840`; dos veces: la segunda, con el tope de los avisos de UAF de `#837`); los packs de la P4 y la
 > GUI de la DK2, en su sitio y con rc=0. La tanda de 24 (`compat/informes/lote_v8_18nov.md`), con las dos imágenes y
 > como el 15-nov en las cuatro: sólo las dos líneas de `lastModified` (`RutaFueraFlash` y `ErroresConTipo`) y las dos de
-> la GUI saltadas en las RP2350. Lo de cada ficha, visto en placa (`#836` a `#840`); y `#841`, abierta. Falta la segunda
-> tanda: la S3, la C3, la C5, la C6 y la Nucleo.
+> la GUI saltadas en las RP2350. Lo de cada ficha, visto en placa (`#836` a `#840`); y `#841`, abierta. **La segunda
+> tanda, hecha** (*«S3, C5, C6 y Núcleo conectadas»*): las cuatro grabadas (los packs sellados de la C5 —la GUI y
+> `DriverSpi`— y de la C6 —`GuiMini` y `DriverSpi`—, en su sitio y con rc=0, como predijo el `nm`); la tanda, como en las
+> otras (las dos de `lastModified`; la GUI, saltada en la S3 y la Nucleo); `#836` en la S3, `#839` en la Nucleo y `#840`
+> en la S3 y la C6. Queda la C3, sola (con la C6, Windows les da el mismo COM3).
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7629,7 +7632,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   tenía al quitarse el puerto. Por medir.
 - **Lo que hace:** el IDE ve la placa irse y volver; la tanda, en la recuperación de una placa colgada, espera el
   `RESET_REPLY` y sin él da la Pico por perdida («no se reinicia sin manos»), aunque se haya reiniciado. La Metro, la
-  misma imagen: por ver.
+  misma imagen: por ver. **Es de la Pico:** la C6, que también tiene su USB propio (el USB-Serial-JTAG de la ESP32), sí
+  lo entrega (`#840`, la segunda tanda del lote: a los 0,42 s).
 - **Lo que se podría hacer** (pequeño): en la tanda, tras un `RESET` sin respuesta, intentar reabrir de todos modos (la
   placa puede haberse reiniciado); y en la Pico, vaciar el USB antes de reiniciar. Por decidir.
 
@@ -7659,7 +7663,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **18-nov, visto en placa** (el lote; los guiones, en `C:\tmp\v8_robustez_18nov\`): en la P4 y la Pico 2,
   dos KILL seguidos, un `EXITED KILLED` y dos `KILL_REPLY`; un RESET durante un RUN, en la P4, el `EXITED` y el
   `RESET_REPLY` a los 0,51 s y la placa vuelve con «software»; en la Pico 2 se reinicia («reinicio pedido»), pero la
-  respuesta no llega: también en reposo, así que no es de aquí (`#841`).
+  respuesta no llega: también en reposo, así que no es de aquí (`#841`). Y en la S3 y la C6 (la segunda tanda), lo mismo
+  que en la P4: dos `KILL_REPLY`, y el `RESET_REPLY` a los 0,41 y 0,42 s, con «software» al volver.
 
 #### ✅ `#839` — las STM32, tras un fallo fatal (un HardFault, el assert, la pila o el heap del RTOS), daban su informe y se quedaban paradas: en el campo, hasta que alguien las desenchufara (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#839`; preexistente; probada en la DK2, que Eduardo conectó para eso; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7681,7 +7686,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   siguiente, uno por software, decía «watchdog (IWDG)»; ahora, «software». El ENV y los ficheros de la DK2, como estaban;
   el pack de la GUI carga. La Nucleo, compilada (sus 4 avisos, los de siempre, de `builtins.c`).
 - **18-nov, con la imagen final** (el lote): la misma prueba en la DK2, igual (la placa vuelve a los 5,3 s, «fallo fatal»,
-  el autorun que no arranca con `log=0`, y tras un RESET, «software»).
+  el autorun que no arranca con `log=0`, y tras un RESET, «software»); y en la Nucleo, igual.
 
 #### ✅ `#838` — las ESP32 no apuntaban en el log por qué se reiniciaron, y la línea del autorun que no arranca tras un fallo fatal se perdía con el log apagado (también en la Pico) (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#838`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7748,8 +7753,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   placa**, al grabar: `bpgenvm-c/samples/WdtDosRuns.bp` no debe reiniciar la P4, y `samples/WdtDemo.bp`, que deja de
   alimentarlo, sí (el control); y en la S3.
 - **18-nov, visto en la P4** (el lote, la imagen final): `WdtDosRuns`, las 20 vueltas y los 3 s tras el `disable` sin
-  reiniciarse (el uptime siguió); y `WdtDemo`, el control, la reinicia al dejar de alimentarlo (`task-watchdog`). La S3,
-  en la segunda tanda del lote.
+  reiniciarse (el uptime siguió); y `WdtDemo`, el control, la reinicia al dejar de alimentarlo (`task-watchdog`). Y en la
+  S3, la otra con dos runs (la segunda tanda del lote), igual.
 
 #### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 
