@@ -213,7 +213,9 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     uint32_t exc_cls = bpvm_link_lookup(vm, "Core.Exception");
     int es_excepcion = (exc_cls == 0u) || (thrown_class != 0u && is_descendant_of(vm, thrown_class, exc_cls));
     if (!es_excepcion) {
-        bpvm_diag("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
+        /* V8 (la tabla de la robustez): urgente, como las dos de arriba —es el mismo informe, y con el log apagado
+         * (`log=0`) sólo queda lo urgente—. */
+        bpvm_diag_urgente("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
         if (clase[0]) primero = fija_runtime_error(vm, "throw de un objeto que no es una excepcion: %.140s", clase);
         else          primero = fija_runtime_error(vm, "throw de un objeto que no es una excepcion");
         informa_hilo_muerto(vm, tc, "throw de un objeto que no es una excepcion",
@@ -230,7 +232,7 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
                 buf[n++] = (char) vm->memory[msg_addr + 4 + i];
             }
             buf[n] = '\0';
-            bpvm_diag("[bpvm]   el mensaje que traia: \"%s\"", buf);
+            bpvm_diag_urgente("[bpvm]   el mensaje que traia: \"%s\"", buf);   /* V8: urgente, como «donde:» */
             /* #406 — Y AL SITIO DEL QUE LO SACA EL WIRE.
              *
              * Habia DOS formas de morir y solo una tenia voz: el detalle del

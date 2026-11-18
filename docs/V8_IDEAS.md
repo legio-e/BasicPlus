@@ -8065,3 +8065,7 @@ indican por donde buscar.»* Un error esporádico cae en las filas 12 a 15, seg�
 
 **Para V9:** contener el fallo en el run y el MPU; un perro del sistema que vigile a `io` (filas 12 y 14); el pánico de
 las ESP32 con su informe (hoy se pierde con la consola apagada); y, si no entra en V8, el contador.
+
+**Decidido** (Eduardo, 18-nov: *«Para ahora los arreglos sencillos, para V9 el resto.»*): las cinco pequeñas, en V8, cada
+una con su ficha (1, `#836`; 2, `#837`; 3, `#838`; 4, `#839`; 5, `#840`); a V9, el contador de reinicios, contener el
+fallo en el run, el MPU, el perro del sistema para `io` y el informe del pánico de las ESP32.

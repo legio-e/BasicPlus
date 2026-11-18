@@ -111,6 +111,24 @@ void log_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void bpvm_log_set_enabled(int on);
 int  bpvm_log_enabled(void);
 
+/*
+ * V8 (18-nov, la tabla de la robustez, `V8_IDEAS` §E15) — LO URGENTE, SIEMPRE.
+ * Con el log apagado (`log=0`, lo de serie), en el campo un programa que muere no
+ * dejaba nada: ni el aviso de la VM («EXCEPCION NO ATRAPADA», el interbloqueo, sin
+ * memoria) ni por qué no arrancó el autorun. Como los fallos fatales (#423), eso
+ * se apunta aunque el log esté apagado:
+ *   - `log_printf_siempre`: una línea que no mira el interruptor (el arranque, el
+ *     autorun que no arranca y por qué);
+ *   - `bpvm_log_urgente_entra/sale`: entre las dos, `log_printf` escribe aunque el
+ *     log esté apagado. Lo usa `bpvm_diag_urgente` alrededor de su sink (el de la
+ *     familia acaba en `log_printf`). Un contador atómico: con dos runs, dos avisos
+ *     a la vez no se apagan uno a otro (una línea normal de otro hilo que entre en
+ *     esa ventana también se apunta: es una línea de más, no una de menos).
+ */
+void log_printf_siempre(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+void bpvm_log_urgente_entra(void);
+void bpvm_log_urgente_sale(void);
+
 /* Persiste el buffer al sector de flash (momentos críticos: boot, antes de RESET). */
 void log_flush(void);
 

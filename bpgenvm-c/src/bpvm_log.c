@@ -136,19 +136,39 @@ static int s_enabled = 1;
 void bpvm_log_set_enabled(int on) { s_enabled = on ? 1 : 0; }
 int  bpvm_log_enabled(void)       { return s_enabled; }
 
+/* V8 (18-nov, la tabla de la robustez) — lo urgente, siempre (ver bpvm_log.h): mientras alguien está dentro de un
+ * aviso urgente, `log_printf` escribe aunque el log esté apagado. */
+static int s_urgentes = 0;
+void bpvm_log_urgente_entra(void) { __atomic_add_fetch(&s_urgentes, 1, __ATOMIC_SEQ_CST); }
+void bpvm_log_urgente_sale(void)  { __atomic_sub_fetch(&s_urgentes, 1, __ATOMIC_SEQ_CST); }
+
+static void log_vlinea(const char* fmt, va_list ap);
+
 void log_printf(const char* fmt, ...) {
     if (!s_init) return;
-    if (!s_enabled) return;   /* #423 — apagado: no añade. Lo escrito se queda. */
+    /* #423 — apagado: no añade. Lo escrito se queda. Salvo un aviso urgente (V8, la tabla de la robustez). */
+    if (!s_enabled && __atomic_load_n(&s_urgentes, __ATOMIC_SEQ_CST) == 0) return;
+    va_list ap;
+    va_start(ap, fmt);
+    log_vlinea(fmt, ap);
+    va_end(ap);
+}
 
+void log_printf_siempre(const char* fmt, ...) {
+    if (!s_init) return;
+    va_list ap;
+    va_start(ap, fmt);
+    log_vlinea(fmt, ap);
+    va_end(ap);
+}
+
+static void log_vlinea(const char* fmt, va_list ap) {
     char line[256];
     uint32_t ms = s_c.now_ms ? s_c.now_ms() : 0u;
     int n = snprintf(line, sizeof line, "[%5u] ", (unsigned) ms);
     if (n < 0 || n >= (int) sizeof line) n = 0;
 
-    va_list ap;
-    va_start(ap, fmt);
     int m = vsnprintf(line + n, sizeof line - (size_t) n, fmt, ap);
-    va_end(ap);
     if (m < 0) m = 0;
 
     int total = n + m;

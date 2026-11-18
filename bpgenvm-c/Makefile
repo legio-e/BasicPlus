@@ -1574,8 +1574,8 @@ test-fsfb: $(LIBOBJ)
 
 test-logsw:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c -o build/test_logsw.exe
-	@echo "--- #423 interruptor del log (esperado: solo 'ok', [status=OK]) ---"
+	$(CC) $(CFLAGS) test/test_log_switch.c src/bpvm_log.c src/bpvm_util.c -o build/test_logsw.exe
+	@echo "--- #423 interruptor del log, y lo urgente siempre (V8, la tabla de la robustez) (esperado: solo 'ok', [status=OK]) ---"
 	@cd build && ./test_logsw.exe
 
 test-env:
@@ -1764,7 +1764,7 @@ test-listdir: $(LIBOBJ)
 # (volcar wrote_slot) y el adaptador JSON del firmware llegan en la fase de placa.
 test-bmgr:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_bmgr.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_pack.c src/bpvm_npack.c src/bpvm_boot.c src/bpvm_util.c src/crc32.c -o build/test_bmgr.exe
+	$(CC) $(CFLAGS) test/test_bmgr.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_part.c src/bpvm_env.c src/bpvm_pack.c src/bpvm_npack.c src/bpvm_boot.c src/bpvm_util.c src/bpvm_log.c src/crc32.c -o build/test_bmgr.exe
 	@echo "--- H9 board manager (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_bmgr.exe
 

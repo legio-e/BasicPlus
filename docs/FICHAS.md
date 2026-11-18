@@ -7224,7 +7224,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > reinicia una placa sana). Lo que más pesa: en el campo, sin `log=1`, un error sin atrapar no deja nada en el log; las
 > STM32, tras un HardFault, se quedan paradas; y un hilo metido en C no lo paran ni el KILL ni el RESET. Lo propuesto:
 > cinco cosas pequeñas para V8 (`#836`, los avisos urgentes al log siempre, el motivo del reinicio en el log de las ESP32,
-> reiniciar las STM32 tras un fatal y el RESET servido aunque el programa no pare) y el resto a V9; **por decidir**.
+> reiniciar las STM32 tras un fatal y el RESET servido aunque el programa no pare) y el resto a V9. **Decidido el mismo
+> día** (Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*): las cinco, en V8 (`#836` a `#840`); a V9, el
+> contador de reinicios, contener el fallo en el run, el MPU, un perro del sistema para `io` y el informe del pánico de
+> las ESP32.
 >
 > 🏁 **15-nov, el lote final, hecho** (Eduardo: *«Tenemos varios pendientes para probar. Aprovechemos que tenemos mas
 > tiempo para hacer pruebas pendientes y vamos cerrando temas.»*; de 4 en 4: la P4, la C5, la S3 y la C6; la Pico 2, la
@@ -7606,6 +7609,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
+
+#### ✅ `#837` — con el log apagado (`log=0`, lo de serie), ni los avisos urgentes de la VM llegaban al log: en el campo, de un programa que muere no quedaba nada (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#837`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
+
+- **Lo que pasaba:** `bpvm_diag_urgente` (la excepción sin atrapar, el interbloqueo, sin memoria, la tabla de handles
+  agotada, los destructores que no acaban) acaba en `log_printf`, que con `log=0` no escribe; y el ENV apaga el log
+  justo antes del autorun (`bpvm_boot2.c`). Con el autorun nadie recibe el `EXITED`: de un programa que muere en el
+  campo no quedaba nada en la placa. Los fallos fatales sí se apuntaban (`#423`).
+- **Hecho:** `bpvm_log` tiene `log_printf_siempre` (una línea que no mira el interruptor) y `bpvm_log_urgente_entra` y
+  `_sale` (entre las dos, `log_printf` escribe aunque esté apagado; un contador atómico, por los dos runs), y
+  `bpvm_diag_urgente` envuelve su sink con ellas. El informe de una excepción sin atrapar, entero: «el mensaje que
+  traía» y «lo lanzado no es una excepción», urgentes como «EXCEPCION NO ATRAPADA» y «donde:» (`exceptions.c`). En el
+  PC el sink es stderr: no cambia nada.
+- **La prueba:** `test-logsw` (`#423`), ampliada: con el log apagado, `log_printf_siempre` y un aviso urgente se apuntan,
+  y lo normal de después no; con el `bpvm_util.c` de antes, «FAIL: apagado, un aviso urgente de la VM no se apunta». Y
+  a la red, donde no estaba. `test-bmgr`, con `bpvm_log.c` (enlaza `bpvm_util.c`). La red, VERDE (paridad 217; MOD8, 209
+  y 8 SKIP; dos workers, 217; cápsula, 59; las 116 pruebas de C; el sim, la sombra y el estrés). **Por ver en las
+  placas**, al grabarlas: un error sin atrapar con `log=0` deja su informe en el log.
 
 #### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12; **hecho el mismo día**, por ver en la P4 al grabar las placas)
 

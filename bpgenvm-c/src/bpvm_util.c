@@ -21,6 +21,7 @@
  */
 
 #include "bpvm.h"
+#include "bpvm_log.h"   /* V8 (la tabla de la robustez): lo urgente, al log aunque esté apagado */
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -68,7 +69,12 @@ void bpvm_diag_urgente(const char* fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(linea, sizeof linea, fmt, ap);
     va_end(ap);
+    /* V8 (18-nov, la tabla de la robustez, V8_IDEAS §E15) — Y AL LOG AUNQUE ESTÉ APAGADO (`log=0`, lo de serie): en el
+     * campo, con el autorun, nadie recibe el EXITED, y esto era lo único que podía quedar de un programa que muere. Como
+     * los fallos fatales (#423). El sink de la familia acaba en log_printf; en el PC, stderr (no cambia nada). */
+    bpvm_log_urgente_entra();
     g_diag(linea);
+    bpvm_log_urgente_sale();
     g_diag_flush();   /* que sobreviva a lo que venga detrás */
 }
 
