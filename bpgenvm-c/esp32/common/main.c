@@ -355,6 +355,9 @@ void app_main(void)
     log_printf(bpvm_log_origen_ram()
                ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
                : "log: arranque en frio (cargado de flash)");
+    /* V8 (18-nov, la tabla de la robustez) — Y POR QUÉ SE REINICIÓ, como la Pico: hasta hoy sólo lo decía el INFO, y sólo
+     * hasta el reinicio siguiente; tras un pánico, el log no decía nada de él (su informe va a la consola). */
+    log_printf("boot: causa del reset = %s", esp32_reset_cause());
 
     /* V7/H7 (Boot 2, fase 4) — AQUÍ ACABA EL BOOT 1 DE LA FAMILIA: el log, y el ENV a la
      * vista (las claves del reparto y la memoria lo leen; `pack_esp32_ram_init` lo cargaba

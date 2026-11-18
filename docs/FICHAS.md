@@ -7610,6 +7610,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### ✅ `#838` — las ESP32 no apuntaban en el log por qué se reiniciaron, y la línea del autorun que no arranca tras un fallo fatal se perdía con el log apagado (también en la Pico) (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#838`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
+
+- **Lo que pasaba:** el motivo del reinicio sólo lo decía el `INFO`, y sólo hasta el reinicio siguiente; tras un pánico, el
+  log no decía nada de él (su informe va a la consola, que en la P4 está apagada). Y «autorun: X NO arranca: el arranque
+  anterior acabó en un fallo fatal» se escribe cuando el ENV ya apagó el log (`log=0`, lo de serie): se perdía, en las
+  ESP32 y en la Pico.
+- **Hecho:** al arrancar, tras la línea `log:`, «boot: causa del reset = X» (`esp32/common/main.c`, para la S3, la C3, la
+  C5 y la C6, y `esp32p4/main/main.c`), como la Pico; y la línea del autorun, con `log_printf_siempre` (`#837`), en las
+  ESP32 (`repl_esp32.c`) y en la Pico (`repl_v1.c`). La STM32, en `#839`. Compiladas las cinco ESP32 y las tres imágenes
+  de la Pico; las cadenas, en los `.elf` de la P4 y la S3. **Por ver en placa**, al grabarlas: tras un RESET, «boot:
+  causa del reset = software»; tras un pánico con autorun y `log=0`, la línea «NO arranca».
+
 #### ✅ `#837` — con el log apagado (`log=0`, lo de serie), ni los avisos urgentes de la VM llegaban al log: en el campo, de un programa que muere no quedaba nada (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#837`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
 - **Lo que pasaba:** `bpvm_diag_urgente` (la excepción sin atrapar, el interbloqueo, sin memoria, la tabla de handles

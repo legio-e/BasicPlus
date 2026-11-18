@@ -602,7 +602,8 @@ void repl_v1_autorun(void) {
     char path[BPVM_FS_PATH_MAX];   /* #456 - este se CONSTRUYE (sale del fichero) */
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
     if (pico_arranque_tras_fatal()) {   /* V7/H12 3.1, paso 4: un programa que falla al arrancar, en bucle, no */
-        log_printf("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (ver el log)", path);
+        /* V8 (la tabla de la robustez): log_printf_siempre —aquí el ENV ya apagó el log (`log=0`), y esta línea se perdía— */
+        log_printf_siempre("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (ver el log)", path);
         return;
     }
     log_printf("autorun: %s", path);

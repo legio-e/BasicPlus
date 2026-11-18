@@ -521,8 +521,10 @@ void repl_esp32_autorun(void) {
      * programa —cuando ése salta, relanzar el autorun es justo lo que el usuario quiere—. El IDE lo arranca a mano. */
     esp_reset_reason_t motivo = esp_reset_reason();
     if (motivo == ESP_RST_PANIC || motivo == ESP_RST_INT_WDT) {
-        log_printf("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (%s; ver el log)",
-                   path, motivo == ESP_RST_PANIC ? "panic/exception" : "int-watchdog");
+        /* V8 (la tabla de la robustez): log_printf_siempre —aquí el ENV ya apagó el log (`log=0`, lo de serie), y esta
+         * línea se perdía: tras un pánico en el campo, ni el log decía por qué no arrancaba el programa—. */
+        log_printf_siempre("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (%s; ver el log)",
+                           path, motivo == ESP_RST_PANIC ? "panic/exception" : "int-watchdog");
         printf("[autorun] %s NO arranca: el arranque anterior acabo en un fallo fatal\n", path);
         return;
     }
