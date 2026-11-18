@@ -1947,6 +1947,7 @@ void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user) {
 
 void bpvm_request_kill(bpvm_t* vm) {
     if (!vm) return;
+    if (bpvm_la_cola.sabotaje_sinparar) return;   /* SÓLO PRUEBAS (V8 #840): el programa no para, como uno metido en C */
     /* V8 #695 — el poll «pegajoso» pide el KILL en cada vuelta (con `io`, cada 5 ms). La fase del final lo limpia para que
      * corran los destructores: repetido aquí, los cortaba a los pocos milisegundos. El que la abrió ya está apuntado
      * (d->matado manda en el resultado), y a la fase la vigila su tope. */

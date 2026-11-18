@@ -339,6 +339,14 @@ Con un programa en marcha (V6/E1, `#452`): el programa para —su `EXITED` sale 
 DESPUÉS van el `RESET_REPLY` y el reinicio. El micro simulado, que no tiene silicio que reiniciar, contesta y corta la
 conexión.
 
+**Si el programa no para** (V8 `#840`, 18-nov; un hilo metido en una función en C que no vuelve, `#825`): a los 2 s del
+`RESET`, la placa se reinicia igual —el `RESET_REPLY` y el reinicio, sin `EXITED`—, y lo apunta en su log («RESET: el
+programa no ha parado en 2000 ms; se reinicia sin esperarlo»). Es un reinicio por software: el log de la RAM se conserva
+(«log: RAM SUPERVIVIENTE»). Y después de un `KILL` el `RESET` también vale: durante un RUN, tras el `KILL` la placa sigue
+leyendo el cable como durante el resto del RUN —el `RESET` se apunta; `HELLO` y `PING` se contestan; lo demás, `BUSY`—,
+y un `KILL` de más (dos clics en Stop) lleva su `KILL_REPLY` con el primero, al parar el programa. Antes de `#840`, tras
+el `KILL` la placa ya no leía el cable hasta que el programa paraba.
+
 #### `BOOTSEL` (request, solo Pico)
 
 Entra en modo bootloader. Disponible solo si capability `BOOTSEL`.

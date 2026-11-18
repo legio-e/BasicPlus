@@ -8068,4 +8068,6 @@ las ESP32 con su informe (hoy se pierde con la consola apagada); y, si no entra 
 
 **Decidido** (Eduardo, 18-nov: *«Para ahora los arreglos sencillos, para V9 el resto.»*): las cinco pequeñas, en V8, cada
 una con su ficha (1, `#836`; 2, `#837`; 3, `#838`; 4, `#839`; 5, `#840`); a V9, el contador de reinicios, contener el
-fallo en el run, el MPU, el perro del sistema para `io` y el informe del pánico de las ESP32.
+fallo en el run, el MPU, el perro del sistema para `io` y el informe del pánico de las ESP32. **Las cinco, hechas el
+mismo día** (cada una con su prueba; la 4, en la DK2; las demás, en el PC y el micro simulado, y por ver en las placas al
+grabarlas).

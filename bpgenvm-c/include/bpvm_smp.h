@@ -199,6 +199,8 @@ typedef struct bpvm_cola {
     int     ensayo_tabla_ajena;      /* #829: la colecta de la marca de la tabla, «de otro» y sin colectar */
     uint32_t tablas_ajenas_fingidas; /* #829: cuántas veces (heap.c): la pasada buena tiene que pasar por ahí */
     int     sabotaje_mutex;          /* #831: las entradas de los Mutex que mueren no se reutilizan, como antes */
+    int     sabotaje_sinparar;       /* V8 #840 (al final, como los de #829): el KILL no llega a la VM (bpvm_request_kill):
+                                      * el programa no para, como uno metido en C que no vuelve (run_tarea_smoke, M) */
 } bpvm_cola_t;
 
 /* El nombre de antes: `vm->smp` es la cola, cuando el programa lo ejecuta más de un run. */

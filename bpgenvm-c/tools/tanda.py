@@ -103,9 +103,11 @@ UNA PLACA COLGADA (V7_IDEAS §4; V7/H9, 2-oct)
     #825 (18-nov) — dos cosas mas, para que un cuelgue deje rastro:
     - ANTES del KILL, un PING (la placa lo atiende durante un RUN): si contesta,
       el cable vive y el programa esta parado dentro (una funcion en C que no
-      vuelve: ni el KILL ni el RESET se sirven hasta que el programa para); si
-      no, se paro todo. Tiene que ir antes: tras el KILL la placa ya no lee el
-      cable hasta que el programa para. Lo dice el detalle del veredicto.
+      vuelve: el KILL no lo para); si no, se paro todo. Va antes porque en las
+      imagenes de antes de #840 la placa, tras el KILL, ya no leia el cable
+      hasta que el programa paraba. Lo dice el detalle del veredicto. (Desde
+      #840, el RESET de la recuperacion se sirve a los 2 s aunque el programa
+      no pare: la placa vuelve por el wire, con su log de la RAM.)
     - el log post-mortem ENTERO, a `build/tanda/<prueba>/<placa>/postmortem.log`
       y al .json; en el .md, las 40 ultimas lineas y la linea `log:` del
       arranque, que dice si la RAM sobrevivio al reinicio (en las ESP32, el del
@@ -557,8 +559,9 @@ class Wire:
 
     def ping_en_run(self, secs, session, out, rezagados):
         """#825 (18-nov) — un PING con el programa sin acabar, ANTES del KILL: la placa lo atiende durante un RUN
-        (bpvm_repl_atiende_en_run), y tras el KILL ya no lee el cable hasta que el programa para (el poll, «pegajoso»):
-        un PING después no contestaría aunque el cable viviera. Contestar es un PONG o un ERROR con su id (una imagen
+        (bpvm_repl_atiende_en_run), y en las imágenes de antes de #840, tras el KILL, ya no leía el cable hasta que el
+        programa paraba (el poll, «pegajoso»): un PING después no contestaba aunque el cable viviera. Antes del KILL vale
+        para las dos. Contestar es un PONG o un ERROR con su id (una imagen
         de antes de #803 contesta BUSY: también vive). Lo que llegue mientras, a su sitio: los OUTPUT de esta sesión, a
         `out`; un EXITED de esta sesión (acabó justo después del plazo), se devuelve. Devuelve (ping, exited)."""
         pid = self.send("PING")
@@ -621,7 +624,8 @@ class Wire:
         Devuelve (ok, texto, cola_del_log, log_entero) —#825: el log entero, además de su cola—."""
         via = "RESET por el wire"
         self.send("RESET")
-        if self.esperar("RESET_REPLY", 3) is None:
+        # V8 #840: con un programa que no para, la placa sirve el RESET a los 2 s del pedido (antes, nunca): 5 s de margen
+        if self.esperar("RESET_REPLY", 5) is None:
             placa = sello.get("boardName") or "?"
             if self.t.nombre != "serie" or not placa.startswith("esp32"):
                 return False, ("no contesta al RESET por el wire, y %s no se reinicia sin manos: %s" % (

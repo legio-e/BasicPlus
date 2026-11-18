@@ -339,6 +339,9 @@ void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje);
 /** SÓLO PRUEBAS (V8 #812): `espera_ms` > 0 hace que `io` tarde en ponerse a esperar, con el programa ya colgado en la
  *  cola: uno que no imprime acaba y avisa antes. El aviso no se tiene que perder (bpvm_oq_despertar deja su marca). */
 void bpvm_repl_run_tarea_ensayo_io(int espera_ms);
+/** SÓLO PRUEBAS (V8 #840, run_tarea_smoke M): distinto de 0, un RESET durante un RUN espera a que el programa pare, como
+ *  antes de #840 (sin el plazo): con un programa que no para, no se sirve nunca, y la prueba tiene que cazarlo. */
+extern int bpvm_repl_sabotaje_sinplazo;
 
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia

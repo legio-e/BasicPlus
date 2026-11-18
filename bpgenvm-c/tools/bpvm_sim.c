@@ -50,6 +50,9 @@
  *   de #812: se pierde, y `io` espera su plazo entero (la prueba tiene que cazarlo).
  *   --sabotaje-raices: SÓLO PRUEBAS (raices_smoke, V8 #799): en la pila de un hilo BP, un entero que
  *   cae justo en un objeto vuelve a retenerlo, como antes de #799 (la prueba tiene que cazarlo).
+ *   --sabotaje-sinparar y --sabotaje-sinplazo: SÓLO PRUEBAS (run_tarea_smoke, M, V8 #840): el KILL no llega a la
+ *   VM (el programa no para, como uno metido en C que no vuelve); y el RESET espera a que el programa pare, sin el
+ *   plazo, como antes de #840 (la prueba tiene que cazarlo).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -1057,6 +1060,8 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--ensayo-io=", 12)) ensayo_io_ms = atoi(a + 12);   /* V8 #812: SÓLO PRUEBAS */
         else if (!strcmp(a, "--sabotaje-aviso"))  bpvm_oq_sabotaje_aviso = 1;    /* V8 #812: SÓLO PRUEBAS */
         else if (!strcmp(a, "--sabotaje-raices")) bpvm_sabotaje_raices = 1;      /* V8 #799: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--sabotaje-sinparar")) bpvm_la_cola.sabotaje_sinparar = 1;   /* V8 #840: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--sabotaje-sinplazo")) bpvm_repl_sabotaje_sinplazo = 1;     /* V8 #840: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */

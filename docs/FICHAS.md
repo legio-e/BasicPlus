@@ -7610,6 +7610,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### ✅ `#840` — un RESET pedido durante un RUN no se servía si el programa no paraba, y tras un KILL la placa ya no leía el cable: con un hilo metido en C (`#825`), la placa sólo volvía con las manos (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#840`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
+
+- **Lo que pasaba:** el poll de `io` (`bpvm_repl.c`, `run_poll`) apuntaba el KILL y el RESET y los servía al acabar el
+  programa (`#452`); y desde el KILL, «pegajoso», ya no leía el cable. Con un programa que no para (un hilo metido en una
+  función en C que no vuelve, `#825`), ni el `EXITED`, ni el `KILL_REPLY`, ni el `RESET_REPLY`: la Pico y las STM32, con
+  las manos; las ESP32, por el cable (el RTS), que se lleva el log de la RAM.
+- **Hecho:** si a los 2 s del RESET el programa sigue, la placa se reinicia igual (`r->reiniciar`, desde `io`: un
+  reinicio por software, que conserva el log de la RAM), y lo apunta («RESET: el programa no ha parado en 2000 ms; se
+  reinicia sin esperarlo», con `log_printf_siempre`); sin volcar el log a la flash antes: si lo que no vuelve tiene la
+  flash, el volcado tampoco volvería. Tras el KILL, el cable se sigue leyendo como durante el RUN (el RESET se apunta;
+  `HELLO` y `PING` se contestan; lo demás, `BUSY`), y un KILL de más (hasta cuatro) lleva su `KILL_REPLY` con el primero.
+  El protocolo (`BPVM_WIRE_PROTOCOL.md` §`RESET`) y la tanda (espera el `RESET_REPLY` 5 s, eran 3; y sus notas del PING),
+  al día.
+- **La prueba:** `run_tarea_smoke`, el caso M, en el micro simulado, con dos modos de prueba nuevos (`--sabotaje-sinparar`:
+  el KILL no llega a la VM, y el programa no para, como uno metido en C; y `--sabotaje-sinplazo`: el RESET espera al
+  programa, como antes de `#840`): dos KILL seguidos, cada uno con su `KILL_REPLY`; un RESET a un programa dormido,
+  `EXITED KILLED` y el `RESET_REPLY` a los 0,01 s (el plazo no retrasa lo de siempre); con el programa que no para, el KILL
+  no lo para y un RESET después se sirve a los 2,00 s; y sin el plazo, no se sirve en 5 s (la prueba caza lo de antes).
+  Los casos de antes, de la A a la L, igual. La red, VERDE (paridad 217; MOD8, 209 y 8 SKIP; dos workers, 217; cápsula,
+  59; las 117 pruebas de C, con `test-logsw`; el sim —`run_tarea_smoke`, 49 comprobaciones—, la sombra y el estrés).
+  Compiladas las tres imágenes de la Pico, las cinco ESP32 y las dos STM32 (la Nucleo, con sus 4 avisos de siempre); la
+  línea del RESET, en todas. **Por ver en placa**, al grabarlas: un RESET durante un RUN y tras un KILL; el camino del
+  programa que no para sólo se provoca en el micro simulado.
+
 #### ✅ `#839` — las STM32, tras un fallo fatal (un HardFault, el assert, la pila o el heap del RTOS), daban su informe y se quedaban paradas: en el campo, hasta que alguien las desenchufara (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#839`; preexistente; probada en la DK2, que Eduardo conectó para eso; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
 - **Lo que pasaba:** el informe del HardFault (`bpvm_fallo_cm33.c`) y los ganchos del RTOS (`stm32_rtos_parar`) acababan en

@@ -38,6 +38,14 @@ Y desde V8 (#812, 13-nov), el aviso que llega antes de que `io` espere:
      marca y `io` no espera su plazo. Saboteado (`--sabotaje-aviso`: sin la marca, como antes), lo espera en cada RUN,
      y la prueba lo caza comparando los dos.
 
+Y desde V8 (#840, 18-nov; la tabla de la robustez), el RESET aunque el programa no pare:
+
+  M. dos KILL seguidos (dos clics en Stop): un EXITED y una respuesta por KILL (tras el primero, la placa sigue leyendo);
+     un RESET a un programa dormido, sin más: se para (EXITED KILLED) y el RESET_REPLY llega enseguida, como siempre;
+     con `--sabotaje-sinparar` (el KILL no llega a la VM: el programa no para, como uno metido en C que no vuelve), un
+     KILL no lo para y un RESET después se sirve igual, a los ~2 s (el plazo); y saboteado el plazo
+     (`--sabotaje-sinplazo`: el RESET espera al programa, como antes de #840), no se sirve nunca, y la prueba lo caza.
+
     python tools/run_tarea_smoke.py [--vueltas=N]      (desde bpgenvm-c; BPVM_SIM= para otro simulador)
 """
 import os, shutil, sys, tempfile, time
@@ -302,6 +310,94 @@ def caso_h(c, etiqueta, se_espera_bien=True):
     return bien, ms
 
 
+def espera_durmiendo(c):
+    t0 = time.time()
+    while time.time() - t0 < 10:
+        m = c.linea()
+        if m.get("type") == "OUTPUT" and "durmiendo" in m.get("data", ""):
+            return True
+    return False
+
+
+def manda(c, tipo):
+    c.id += 1
+    c.s.sendall(('{"type":"%s","id":%d}\n' % (tipo, c.id)).encode())
+    return c.id
+
+
+def lo_que_llegue(c, segs, hasta):
+    """Las líneas que lleguen en `segs` (o hasta que `hasta(m)` diga basta). La conexión puede cerrarse (el RESET del
+    simulado la corta): lo recibido vale."""
+    vistos, t0 = [], time.time()
+    c.s.settimeout(0.5)
+    try:
+        while time.time() - t0 < segs:
+            try:
+                m = c.linea()
+            except socket.timeout:
+                continue
+            vistos.append((time.time() - t0, m))
+            if hasta(m):
+                break
+    except (OSError, EOFError):                   # la conexión, cortada (el RESET del simulado): lo recibido vale
+        pass
+    finally:
+        c.s.settimeout(30.0)
+    return vistos
+
+
+def caso_m_dos_kill(c):
+    """V8 #840: dos KILL seguidos (dos clics en Stop): tras el primero la placa sigue leyendo el cable, y el segundo
+    también tiene su respuesta (su KILL_REPLY con el primero, o NO_SESSION si llega con el programa ya parado)."""
+    if c.call("RUN", path="/app/RunDormido.mod").get("type") != "RUN_REPLY" or not espera_durmiendo(c):
+        return check(False, "M. RUN de RunDormido (dos KILL)")
+    time.sleep(0.2)
+    k1 = manda(c, "KILL")
+    k2 = manda(c, "KILL")
+    resp = {}
+    vistos = lo_que_llegue(c, 3.0, lambda m: False)
+    for _, m in vistos:
+        if m.get("id") in (k1, k2):
+            resp.setdefault(m.get("id"), []).append(m.get("type") if m.get("type") != "ERROR" else m.get("code"))
+    ex = [m for _, m in vistos if m.get("type") == "EXITED"]
+    hello = c.call("HELLO", protoVersion=1, clientName="run_tarea_smoke")
+    bien = len(ex) == 1 and ex[0].get("status") == "KILLED" and len(resp.get(k1, [])) == 1 \
+        and len(resp.get(k2, [])) == 1 and resp[k1][0] == "KILL_REPLY" \
+        and resp[k2][0] in ("KILL_REPLY", "NO_SESSION") and hello.get("type") == "HELLO_REPLY"
+    return check(bien, "M. dos KILL seguidos: un EXITED KILLED y una respuesta por KILL (%s y %s), y el micro sigue "
+                       "contestando" % (resp.get(k1), resp.get(k2)))
+
+
+def caso_m0(c):
+    """V8 #840: un RESET a un programa dormido, sin sabotaje: el EXITED KILLED y el RESET_REPLY, enseguida y en orden."""
+    if c.call("RUN", path="/app/RunDormido.mod").get("type") != "RUN_REPLY" or not espera_durmiendo(c):
+        return check(False, "M. RUN de RunDormido")
+    time.sleep(0.2)
+    rid = manda(c, "RESET")
+    vistos = lo_que_llegue(c, 3.0, lambda m: m.get("type") == "RESET_REPLY")
+    ex = [(t, m) for t, m in vistos if m.get("type") == "EXITED"]
+    rr = [(t, m) for t, m in vistos if m.get("type") == "RESET_REPLY" and m.get("id") == rid]
+    return check(len(ex) == 1 and ex[0][1].get("status") == "KILLED" and len(rr) == 1 and rr[0][0] < 1.0
+                 and ex[0][0] <= rr[0][0],
+                 "M. un RESET a un programa dormido: EXITED KILLED y el RESET_REPLY a los %s s, detrás (como siempre: el "
+                 "plazo no lo retrasa)" % ("%.2f" % rr[0][0] if rr else "—"))
+
+
+def caso_m(c):
+    """V8 #840: con el programa que no para (--sabotaje-sinparar), un KILL y un RESET. (sin EXITED tras el KILL,
+    segundos hasta el RESET_REPLY o None)."""
+    if c.call("RUN", path="/app/RunDormido.mod").get("type") != "RUN_REPLY" or not espera_durmiendo(c):
+        check(False, "M. RUN de RunDormido")
+        return False, None
+    manda(c, "KILL")
+    tras_kill = lo_que_llegue(c, 1.0, lambda m: m.get("type") == "EXITED")
+    sin_exited = not any(m.get("type") == "EXITED" for _, m in tras_kill)
+    rid = manda(c, "RESET")
+    vistos = lo_que_llegue(c, 5.0, lambda m: m.get("type") == "RESET_REPLY")
+    rr = [t for t, m in vistos if m.get("type") == "RESET_REPLY" and m.get("id") == rid]
+    return sin_exited, (rr[0] if rr else None)
+
+
 def cuanto_vacio(c, vueltas=200):
     """Segundos de `vueltas` RUN de RunVacio (y cuántos acabaron mal)."""
     t0, malos = time.time(), 0
@@ -434,6 +530,34 @@ def main():
           "L. con `io` tarde a su espera (20 ms), el aviso de `run` no se pierde: 30 RUN, %.1f ms cada uno con la marca "
           "y %.1f saboteado (el aviso sin marca): %.1f ms de más, la espera de `io` (tiene que ser 3 o más)"
           % (t_l["con la marca"][0] * 1000.0 / 30, t_l["saboteado"][0] * 1000.0 / 30, de_mas))
+
+    # M (V8 #840): el RESET aunque el programa no pare. Cada sim acaba con su RESET (el del simulado corta la conexión).
+    proc, sock, c = arranca(os.path.join(tmp, "m0.flash"), [])
+    try:
+        check(subir(c, mods), "M. PUT")
+        caso_m_dos_kill(c)
+        caso_m0(c)
+    finally:
+        para(proc, sock)
+    proc, sock, c = arranca(os.path.join(tmp, "m.flash"), ["--sabotaje-sinparar"])
+    try:
+        check(subir(c, mods), "M. PUT (con --sabotaje-sinparar)")
+        sin_exited, seg = caso_m(c)
+        check(sin_exited, "M. con --sabotaje-sinparar, el KILL no para al programa (sin EXITED en 1 s): el caso que se prueba")
+        check(seg is not None and 1.8 <= seg <= 3.0,
+              "M. y un RESET después se sirve igual, a los %s s (el plazo, 2): la placa vuelve sin manos"
+              % ("%.2f" % seg if seg is not None else "—"))
+    finally:
+        para(proc, sock)
+    proc, sock, c = arranca(os.path.join(tmp, "m2.flash"), ["--sabotaje-sinparar", "--sabotaje-sinplazo"])
+    try:
+        check(subir(c, mods), "M. PUT (con --sabotaje-sinplazo)")
+        sin_exited, seg = caso_m(c)
+        check(sin_exited and seg is None,
+              "M. el sabotaje (el RESET espera al programa, como antes de #840) SE CAZA: sin RESET_REPLY en 5 s (%s)"
+              % ("llegó a los %.2f s" % seg if seg is not None else "no llegó"))
+    finally:
+        para(proc, sock)
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("[status=OK]" if fails == 0 else "[status=FAIL: %d]" % fails)

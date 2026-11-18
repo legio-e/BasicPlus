@@ -1879,6 +1879,19 @@ static long             s_run_sesion    = 0;      /* la sesión en curso; 0 = ni
 static long             s_run_siguiente = 1;
 static long             s_run_kill      = -1;     /* el id del KILL recibido durante el RUN */
 static long             s_run_reset     = -1;     /* el del RESET */
+/* V8 #840 (18-nov, la tabla de la robustez) — EL RESET, AUNQUE EL PROGRAMA NO PARE. Un RESET pedido durante un RUN se
+ * servía al acabar el programa (#452), y con un hilo metido en una función en C que no vuelve (#825), nunca: la placa
+ * sólo volvía con las manos (o, en una ESP32, por el cable, que se lleva el log de la RAM). Ahora, si a los
+ * BPVM_RUN_RESET_PLAZO_MS el programa sigue, se reinicia igual: un reinicio por software, que conserva el log de la RAM.
+ * Y tras un KILL el cable se sigue leyendo (antes, «pegajoso», ya no se leía): un RESET después de un Stop del IDE, o el
+ * de la tanda tras su KILL, ni se veía. Lo que llega entonces se trata como durante el RUN (HELLO y PING se contestan;
+ * lo demás, BUSY), y un KILL de más lleva su KILL_REPLY con el primero, al parar el programa. */
+#define BPVM_RUN_RESET_PLAZO_MS 2000
+#define BPVM_RUN_KILLS_DE_MAS   4
+static int64_t          s_run_reset_ms  = 0;      /* cuándo llegó el RESET */
+static long             s_run_kills_mas[BPVM_RUN_KILLS_DE_MAS];   /* los KILL de más (dos clics en Stop) */
+static int              s_run_kills_mas_n = 0;
+int bpvm_repl_sabotaje_sinplazo = 0;              /* SÓLO PRUEBAS (run_tarea_smoke, M): el RESET espera, como antes */
 static int              s_run_latido    = 0;
 static bpvm_t*          s_run_vm        = NULL;   /* la VM del RUN: la ven el poll y el depurador */
 static wire_v1_salida_t s_run_salida;
@@ -2039,30 +2052,48 @@ static int run_poll(void* user) {
     (void) user;
     if (s_run_latido && s_run_vm) run_latido(s_run_vm);
     (void) bpvm_repl_paso();                    /* #495 (paso 4): un trozo de lo que se esté mandando */
-    if (s_run_kill >= 0 || s_run_reset >= 0) return 1;
-    if (!r || !r->leer_linea) return 0;
+    if (s_run_reset >= 0) {
+        /* V8 #840: el plazo del RESET. Sin volcar el log a la flash antes: si lo que no vuelve tiene la flash, el
+         * volcado tampoco volvería; el reinicio por software conserva la RAM. */
+        if (!bpvm_repl_sabotaje_sinplazo && r && r->reiniciar
+                && bpvm_platform_now_ms() - s_run_reset_ms >= BPVM_RUN_RESET_PLAZO_MS) {
+            long rid = s_run_reset;
+            s_run_reset = -1;                   /* servido: el final del RUN no lo repite (el simulado vuelve de aquí) */
+            log_printf_siempre("RESET: el programa no ha parado en %d ms; se reinicia sin esperarlo",
+                               BPVM_RUN_RESET_PLAZO_MS);
+            r->reiniciar(rid);                  /* en una placa, no vuelve */
+        }
+        return 1;
+    }
+    const int pegajoso = (s_run_kill >= 0);     /* tras el KILL, 1 en cada vuelta: el programa tiene que parar */
+    if (!r || !r->leer_linea) return pegajoso;
     int n = r->leer_linea(r->linea, r->linea_cap);
-    if (n == 0) return 0;
+    if (n == 0) return pegajoso;
     if (n < 0) return 1;                        /* el cable se ha ido: el programa se para */
     json_obj_t obj;
-    if (json_parse(r->linea, (size_t) n, &obj) != 0) return 0;
+    if (json_parse(r->linea, (size_t) n, &obj) != 0) return pegajoso;
     char type[24] = {0};
     json_get_str(&obj, "type", type, sizeof type);
     long rid = json_get_long(&obj, "id", 0);
-    if (strcmp(type, "KILL") == 0)  { s_run_kill = rid;  return 1; }
-    if (strcmp(type, "RESET") == 0) { s_run_reset = rid; return 1; }
+    if (strcmp(type, "RESET") == 0) { s_run_reset = rid; s_run_reset_ms = bpvm_platform_now_ms(); return 1; }
+    if (strcmp(type, "KILL") == 0) {
+        if (!pegajoso) s_run_kill = rid;
+        else if (s_run_kills_mas_n < BPVM_RUN_KILLS_DE_MAS) s_run_kills_mas[s_run_kills_mas_n++] = rid;
+        else wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
+        return 1;
+    }
     if (strcmp(type, "HELLO") == 0) {
         bpvm_repl_antes_de_despachar(type);     /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
         (void) bpvm_repl_dispatch(type, rid, &obj);
-        return 0;
+        return pegajoso;
     }
-    if (bpvm_repl_atiende_en_run(type, &obj)) { (void) bpvm_repl_dispatch(type, rid, &obj); return 0; }
+    if (bpvm_repl_atiende_en_run(type, &obj)) { (void) bpvm_repl_dispatch(type, rid, &obj); return pegajoso; }
     if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && s_run_vm && bpvm_io_running(s_run_vm)) {
-        if (bpvm_io_ctrl_push(s_run_vm, r->linea, (size_t) n) == 0) return 0;
+        if (bpvm_io_ctrl_push(s_run_vm, r->linea, (size_t) n) == 0) return pegajoso;
         /* no cupo: se contesta como siempre, que es mejor que el silencio */
     }
     wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
-    return 0;
+    return pegajoso;
 }
 static int run_poll_vm(bpvm_t* vm, void* user) { (void) vm; return run_poll(user); }
 
@@ -2320,6 +2351,7 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
     }
     s_run_kill  = -1;
     s_run_reset = -1;
+    s_run_kills_mas_n = 0;                     /* V8 #840 */
     bpvm_set_poll(vm, run_poll_vm, NULL);      /* sólo si `io` no arranca: con `io`, el cable es suyo */
     bpvm_io_ops_t io_ops = { run_poll, run_salida, &s_run_salida };
     bpvm_status_t rs;
@@ -2383,8 +2415,11 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
 
     log_printf("run: %s acabó: %s", path,
                (rs == BPVM_KILLED && s_run_reset >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs));
-    /* P-run-stop — el ack del KILL, diferido: KILL_REPLY y después EXITED (orden estable para el cliente). */
+    /* P-run-stop — el ack del KILL, diferido: KILL_REPLY y después EXITED (orden estable para el cliente). V8 #840: y los
+     * KILL de más que llegaron mientras paraba, cada uno con el suyo. */
     if (s_run_kill >= 0) { wire_v1_send_reply_empty("KILL_REPLY", s_run_kill); s_run_kill = -1; }
+    for (int k = 0; k < s_run_kills_mas_n; k++) wire_v1_send_reply_empty("KILL_REPLY", s_run_kills_mas[k]);
+    s_run_kills_mas_n = 0;
 
     /* EL EXITED, UNA REGLA (2-oct): OK, sin mensaje; KILLED, el del RESET o el del KILL —NUNCA el de una excepción
      * vieja: `rt_err` se escribe en cada throw, también en los atrapados—; LINK_ERROR, el de enlace; el resto, el
