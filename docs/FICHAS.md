@@ -7310,9 +7310,9 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > esa tarde (en V8: el GC verifica el contador de cada referencia), falta verlo en las placas.
 >
 > 🏁 **18-nov, `#825`, la prueba larga, hecha: no sale** (Eduardo: *«OK, adelante»*): en la P4, 200 parejas
-> `GuiWinJson`–`GuiShot` y 500 capturas en un RUN, sin colgarse. Queda para las pruebas finales, con la tanda que ahora
-> deja rastro (el PING antes del KILL y el log entero); y para la tabla de la robustez, que el log de la RAM sobreviva a
-> un cuelgue.
+> `GuiWinJson`–`GuiShot` y 500 capturas en un RUN, sin colgarse. Apuntada por si vuelve, sin buscar más (Eduardo: *«lo
+> intentamos reproducir de una forma razonable y si no podemos lo apuntamos por si vuelve a ocurrir»*): si vuelve, la
+> tanda deja rastro (el PING antes del KILL y el log entero). Lo general, a la tabla de la robustez.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -8030,7 +8030,7 @@ ve sin analizar:
   de la P4, la C5 y la C6 cargan con la imagen nueva (el texto y el rodata en sus páginas; el bloque de RAM de la C6,
   que está en la SRAM, en su sitio pese a los 720 B más de la imagen).
 
-#### 🔵 `#825` — la P4 se colgó una vez en `GuiShot`, en la tanda del lote final: ni EXITED en 60 s ni tras el KILL, y sin respuesta al RESET (abierta el 15-nov, en el lote final; **V8: una prueba específica**; **18-nov**, releída, la tanda deja rastro y la prueba larga, 200 parejas y 500 capturas, no lo repite: **a las pruebas finales**)
+#### 🔵 `#825` — la P4 se colgó una vez en `GuiShot`, en la tanda del lote final: ni EXITED en 60 s ni tras el KILL, y sin respuesta al RESET (abierta el 15-nov, en el lote final; **V8: una prueba específica**; **18-nov**, releída, la tanda deja rastro y la prueba larga, 200 parejas y 500 capturas, no lo repite: **apuntada por si vuelve, sin buscar más**)
 
 - **Lo que pasó** (15-nov, la tanda del lote, `compat/informes/lote_v8_15nov.md`): la P4, con la imagen del día y la
   GUI recién grabada (`#817`), con la WiFi conectada y el Bluetooth esperando al teclado y al ratón (`bt=1`). `GuiShot`
@@ -8081,10 +8081,13 @@ ve sin analizar:
   500». Con las del 15-nov, 224 `GuiShot` sin colgarse tras el que se colgó: si fuera 1 de cada 25, como parecía, saldría
   así una vez de cada 9000; si fuera 1 de cada 50, una de cada 90. Lo bajado, las listas y los programas, en
   `C:\tmp\v8_825_18nov\`.
-- **Lo que queda:** a las pruebas finales, con la tanda nueva. Y para la tabla de la robustez: que el log de la RAM
-  sobreviva a un cuelgue (el RESET servido aunque el programa no pare, o el `LOG_DUMP` durante un RUN), con `latido=1` en
-  la P4 (apunta el último hilo elegido y su pc); y `Wdt` con dos runs, por comprobar (`enable` y `feed` van a la tarea que
-  ejecuta el hilo en ese momento, y tras un `sleep` puede ser la otra).
+- **18-nov, decidido: apuntada por si vuelve, sin buscar más** (Eduardo: *«si no ha vuelto a salir puede ser un error de
+  comunicaciones o algún factor desconocido ( alimentación, falso contacto, etc ). Nosotros lo intentamos reproducir de una
+  forma razonable y si no podemos lo apuntamos por si vuelve a ocurrir pero no deberiamos rompernos la cabeza buscando un
+  error extraño.»*). Se queda abierta y sin trabajo propio: si vuelve en alguna tanda, el veredicto dice si el cable vivía
+  y el log entero queda guardado. Lo general que enseñó (un cuelgue de este tipo no lo para ni el KILL ni el RESET, y el
+  reinicio por el cable se lleva el log de la RAM), a la tabla de la robustez; y allí también `Wdt` con dos runs, por
+  comprobar (`enable` y `feed` van a la tarea que ejecuta el hilo en ese momento, y tras un `sleep` puede ser la otra).
 
 #### ✅ `#824` — en la VM-Java, `IO.rmdir` borra también un fichero, y `IO.removeFile` una carpeta vacía; en la VM-C y en la placa, las dos fallan (abierta el 14-nov, al cerrar `#810` · **V8, pendiente** · **CERRADA el 14-nov**, el commit de `#824`; la SD de una placa, en las pruebas finales: **vista el 15-nov**, en la P4 y la C5)
 
