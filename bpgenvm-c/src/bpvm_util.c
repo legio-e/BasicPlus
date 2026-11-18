@@ -191,6 +191,14 @@ void bpvm_scratch_give(const char* quien) {
  * caducada» y lo era (test-ownerhondo: sus testigos miran el primer nodo de la cadena). Ahora dice las dos. */
 void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
                      uint32_t handle_next) {
+    /* V8 #837 (18-nov, en el lote): LAS TRES PRIMERAS, como bpvm_ref_rota_report y bpvm_str_mal_nacida —lo que se busca
+     * es el porqué, no la cuenta—. Un programa que atrapa el error y repite (RefCaducadaBuiltin, a propósito) daba dos
+     * avisos urgentes por cada referencia caducada; con #837 llegan al log aunque esté apagado, y lo llenaban (en la
+     * Metro, el log entero de UAF y fuera el arranque); y en la Pico cada urgente vuelca el log a la flash. Las tres,
+     * urgentes. (Con dos runs, una carrera puede dejar decir una de más: da igual.) */
+    static unsigned dichos = 0;
+    if (dichos >= 3u) return;
+    dichos++;
     bpvm_diag_urgente("[bpvm] UAF: idx=%lu  gen del handle=%lu  gen del slot=%lu"
                       "  (slots en uso=%lu)",
                       (unsigned long) idx, (unsigned long) gen_handle,

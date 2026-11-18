@@ -7610,6 +7610,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
+#### 🔵 `#841` — en la Pico 2, el `RESET_REPLY` no llega al PC: el puerto USB se va con el reinicio antes de entregarlo; la placa sí se reinicia (abierta el 18-nov, en el lote; preexistente; V8 o V9, por decidir)
+
+- **Lo medido** (18-nov, la Pico 2 con la imagen de hoy): un `RESET` con la placa en reposo, y dos durante un RUN: en
+  los tres, a los ~0,19 s el puerto da error (el USB de la Pico desaparece al reiniciarse) y no ha llegado el
+  `RESET_REPLY` —ni, durante el RUN, el `EXITED`—; la placa vuelve, con «reinicio pedido» de causa. En la P4 (su
+  puente serie, CH343, se queda) llegan los dos (`#840`). Lo de en reposo no lo toca `#840`: ya pasaba.
+- **Por qué, lo probable:** `handle_reset` (`pico/repl_v1.c`) vuelca el log, manda el `RESET_REPLY`, espera 100 ms y
+  reinicia; el USB CDC de la Pico no llega a entregarlo antes de que el dispositivo desaparezca, o Windows tira lo que
+  tenía al quitarse el puerto. Por medir.
+- **Lo que hace:** el IDE ve la placa irse y volver; la tanda, en la recuperación de una placa colgada, espera el
+  `RESET_REPLY` y sin él da la Pico por perdida («no se reinicia sin manos»), aunque se haya reiniciado. La Metro, la
+  misma imagen: por ver.
+- **Lo que se podría hacer** (pequeño): en la tanda, tras un `RESET` sin respuesta, intentar reabrir de todos modos (la
+  placa puede haberse reiniciado); y en la Pico, vaciar el USB antes de reiniciar. Por decidir.
+
 #### ✅ `#840` — un RESET pedido durante un RUN no se servía si el programa no paraba, y tras un KILL la placa ya no leía el cable: con un hilo metido en C (`#825`), la placa sólo volvía con las manos (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#840`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
 - **Lo que pasaba:** el poll de `io` (`bpvm_repl.c`, `run_poll`) apuntaba el KILL y el RESET y los servía al acabar el
@@ -7682,6 +7697,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   a la red, donde no estaba. `test-bmgr`, con `bpvm_log.c` (enlaza `bpvm_util.c`). La red, VERDE (paridad 217; MOD8, 209
   y 8 SKIP; dos workers, 217; cápsula, 59; las 116 pruebas de C; el sim, la sombra y el estrés). **Por ver en las
   placas**, al grabarlas: un error sin atrapar con `log=0` deja su informe en el log.
+- **18-nov, en el lote: el tope de los avisos de UAF.** En la Metro (`log=0`), tras la tanda, el log entero eran avisos
+  «[bpvm] UAF: …», dos por cada referencia caducada de `RefCaducadaBuiltin` (que las usa a propósito y atrapa el error):
+  con `#837` llegaban al log aunque estuviera apagado, y lo llenaban, fuera el arranque; y en la Pico cada aviso urgente
+  vuelca el log a la flash. `bpvm_uaf_report` (`bpvm_util.c`), ahora, las tres primeras, como sus vecinas
+  (`bpvm_ref_rota_report`, `bpvm_str_mal_nacida`: lo que se busca es el porqué, no la cuenta); urgentes las tres. En el
+  PC, `RefCaducadaBuiltin`, 3 avisos (eran decenas) y la salida, la misma.
 
 #### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12; **hecho el mismo día**, por ver en la P4 al grabar las placas)
 
