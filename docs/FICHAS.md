@@ -7640,6 +7640,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   las portadas. **Por decidir con Eduardo:** `#842`–`#845`, V8 o V9; la P4 del kit, que no está en ninguna prueba de V8;
   cómo le llega al usuario el ESP-Hosted de la C6 de la P4; si `samplesJC/` va en el ZIP; y, del volumen de JC, su
   numeración propia y que «Nuevo proyecto» deje elegir el lenguaje (para V9).
+  **Decidido el mismo día** (Eduardo): `#842`, `#843` y `#844`, se arreglan en V8, el 19-nov (*«OK, los 3 bugs del
+  compilador los arreglamos»*; `#845` no entra en los tres); la P4 del kit, *«le pasamos alguna prueba manual en las
+  pruebas finales. La imagen es la misma pero la pantalla y la Flash son diferentes»*; y la WiFi de la P4 de Waveshare,
+  a explicarla en la documentación (*«La placa tenía los agujeros de los pines pero hubo que soldarlos. Y luego su
+  firmware propio. Habrá que explicarlo.»*: los pines de la C6, soldados, y su firmware, el ESP-Hosted; lo hecho, en
+  `V8_IDEAS` §E3, «Paso 1»).
 
 #### 🔵 `#845` — los mensajes del compilador de JC: los errores de sintaxis acaban en «(punto N)», el número del cuaderno de diseño, y `(Perro) g` entre clases sin parentesco da antes un error que no viene a cuento (abierta el 18-nov, en el `D1`, del volumen de JC; cosmético; V8 o V9, por decidir)
 
@@ -7652,11 +7658,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 
 - **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\NombresJc.jc`): `int step = 2;` compila en JC; su traducción, `var step: integer := 2`, da «'step' es
   una palabra reservada del lenguaje; elige otro nombre». El volumen de JC lo dice en «Lo que choca».
+- **18-nov, decidido: se arregla en V8**, el 19-nov (con `#842` y `#843`).
 
 #### 🔵 `#843` — en JC, un `do` sin llaves no compila: `do i++; while (c);` da «en JC, ++ y -- van detrás»: desde los bucles con nombre, el parser toma la primera palabra por el nombre del bucle (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente, desde los bucles con nombre; V8 o V9, por decidir)
 
 - **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\DoSinLlaves.jc`): no compila. La gramática de JC (`V8_IDEAS` §E2,
   el punto 9) admite una sentencia sin llaves. El volumen de JC enseña el `do` con sus llaves.
+- **18-nov, decidido: se arregla en V8**, el 19-nov (con `#842` y `#844`).
 
 #### 🔵 `#842` — una clase `final` se puede extender: el compilador no lo impide (ni en BP ni en JC), y el manual §9.6 dice «`final` en clase: no extensible» (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente; V8 o V9, por decidir)
 
@@ -7666,6 +7674,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que haría falta** (pequeño, sólo el compilador): al resolver la base de una clase, si es `final`, un error
   («la clase 'Base' es final: no se puede extender»). Antes, contar en el corpus y en la stdlib las clases que extienden
   una `final`: dejarían de compilar.
+- **18-nov, decidido: se arregla en V8** (Eduardo: *«OK, los 3 bugs del compilador los arreglamos»* —`#842`, `#843` y
+  `#844`—; *«los arreglamos mañana»*). Lo leído antes de parar: el parser acepta `final` delante de `class` y lo tira
+  (`Parser.parseClassDef` sólo recibe `isPublic`; el `isFinal` de los modificadores es el de los métodos y las
+  properties), así que la clase ni lo sabe; la base se resuelve en `SemanticAnalyzer`, en el bloque de
+  `resolveBaseClassName` (donde ya se rechaza extender una interfaz). Por mirar: una base `final` de OTRO módulo, que
+  llega por su interfaz (`.bpi`): si la marca no viaja en ella, hace falta.
 
 #### ✅ `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; y los dos lectores, arreglados: **CERRADA el 18-nov**, el commit de `#841`, Eduardo: *«1) si 2) OK»*)
 
