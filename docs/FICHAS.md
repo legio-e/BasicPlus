@@ -7335,7 +7335,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > en la S3 y la C6. **La tercera, la C3, sola** (*«C3 conectada»*; con la C6, Windows les da el mismo COM3): grabada,
 > sólo con la stdlib; la tanda, como en las otras ocho (24 pruebas en 24 s: las dos de `lastModified`; la GUI, saltada);
 > y `#836`, `#837` (con `log=0`, el informe de `ThrowSinAtrapar` y tres avisos de UAF), `#838` y `#840`, vistos.
-> **El lote, completo: las nueve placas con la imagen final.** Queda `#841` (la Pico 2), por decidir.
+> **El lote, completo: las nueve placas con la imagen final.** Y `#841` (la Pico 2), decidida (Eduardo: *«La 1»*): la
+> tanda, tras un RESET sin respuesta, reabre de todos modos; lo de la Pico, a V9.
 >
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
@@ -7624,7 +7625,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#841` — en la Pico 2, el `RESET_REPLY` no llega al PC: el puerto USB se va con el reinicio antes de entregarlo; la placa sí se reinicia (abierta el 18-nov, en el lote; preexistente; V8 o V9, por decidir)
+#### 🧬 `#841` — en la Pico 2, el `RESET_REPLY` no llega al PC: el puerto USB se va con el reinicio antes de entregarlo; la placa sí se reinicia (abierta el 18-nov, en el lote; preexistente; **la tanda, arreglada el mismo día** —Eduardo: *«La 1»*—: tras un RESET sin respuesta, reabre de todos modos; lo de la Pico, **a V9**)
 
 - **Lo medido** (18-nov, la Pico 2 con la imagen de hoy): un `RESET` con la placa en reposo, y dos durante un RUN: en
   los tres, a los ~0,19 s el puerto da error (el USB de la Pico desaparece al reiniciarse) y no ha llegado el
@@ -7639,6 +7640,25 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   lo entrega (`#840`, la segunda tanda del lote: a los 0,42 s).
 - **Lo que se podría hacer** (pequeño): en la tanda, tras un `RESET` sin respuesta, intentar reabrir de todos modos (la
   placa puede haberse reiniciado); y en la Pico, vaciar el USB antes de reiniciar. Por decidir.
+- **18-nov, la 1** (Eduardo: *«La 1»*, de tres: arreglarlo en la tanda, en V8; mirar también la Pico, cuyo arreglo tocaría
+  su firmware; todo a V9). Leída la tanda, era peor de lo que decía la ficha: en la Pico, el puerto se cae mientras se
+  espera la respuesta, y la excepción abortaba la placa («el transporte se cayó al recuperarla»), sin llegar siquiera al
+  «no se reinicia sin manos». **Hecho:** `Wire.recuperar` (`bpgenvm-c/tools/tanda.py`), sin el `RESET_REPLY` en 5 s —o
+  con el puerto caído mientras lo espera—, reabre de todos modos (25 s, como con la respuesta); si la placa saluda y el
+  `INFO` contesta (no corre nada), está recuperada, y el texto dice si se reinició (su uptime, contado desde el RESET).
+  Si no vuelve en reposo, lo de antes: en las ESP32, el reinicio por el cable (ahora por un puerto abierto otra vez: el
+  de antes puede haberse ido), y en la Pico y las STM32, las manos, con el porqué («no vuelve a saludar» o «saluda,
+  pero el INFO da BUSY»). Lo que cuesta: en una ESP32 colgada de verdad, hasta 25 s más antes del cable; a cambio, si
+  se reinició sin que llegara la respuesta, no se la reinicia otra vez por el cable, que se lleva el log de la RAM.
+- **La prueba**, con la clase de la tanda tal cual y lo mínimo cambiado para provocar cada caso (`placa_841.py` y
+  `sim_841.py`, en `C:\tmp\v8_robustez_18nov\`): con la respuesta tirada, la C3 y la Nucleo, «sin RESET_REPLY, y se
+  reinicio igual» (uptime de 6,7 s, «software»; antes, la C3 se habría reiniciado otra vez, por el cable, que se lleva
+  el log de la RAM, y la Nucleo se daba por perdida); con el RESET sin mandar y un programa en marcha, la S3 «saluda, pero el INFO da BUSY» y vuelve
+  por el cable en 10 s, y la Nucleo se rinde y lo dice (después, un KILL lo para); sin cambiar nada, el camino de
+  siempre, igual (la C3 y la S3, en 1,8 y 2,8 s). En el micro simulado, con los sabotajes de `#840`: el RESET que se
+  sirve, como con la tanda de antes; el que no se sirve, sin dar la placa por recuperada. **Por ver en la Pico 2**, la
+  próxima vez que esté conectada: su caso, el del puerto que se cae. Que la Pico entregue la respuesta (su firmware),
+  **a V9**.
 
 #### ✅ `#840` — un RESET pedido durante un RUN no se servía si el programa no paraba, y tras un KILL la placa ya no leía el cable: con un hilo metido en C (`#825`), la placa sólo volvía con las manos (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#840`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 

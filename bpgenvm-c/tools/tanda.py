@@ -100,6 +100,11 @@ UNA PLACA COLGADA (V7_IDEAS §4; V7/H9, 2-oct)
     como evidencia; y se sigue con las demas pruebas. Si el wire no contesta
     al RESET, en las ESP32 el reinicio por el cable (RTS, como esptool); en la
     Pico y la STM32 no lo hay sin manos: se aborta la placa y se dice que hacer.
+    #841 (18-nov): antes de eso, se reabre DE TODOS MODOS: la placa puede
+    haberse reiniciado sin que llegara la respuesta (la Pico 2: su USB se va
+    con el reinicio antes de entregarla, y el puerto se cae mientras se
+    espera). Si saluda y el INFO contesta, esta recuperada (el texto dice si
+    se reinicio, por su uptime); si no, el cable o las manos, como antes.
     #825 (18-nov) — dos cosas mas, para que un cuelgue deje rastro:
     - ANTES del KILL, un PING (la placa lo atiende durante un RUN): si contesta,
       el cable vive y el programa esta parado dentro (una funcion en C que no
@@ -619,30 +624,67 @@ class Wire:
 
     def recuperar(self, sello):
         """V7/H9 (V7_IDEAS §4) — una placa COLGADA (el KILL no dio EXITED): RESET por el wire (se atiende aunque corra
-        un programa, #452), reabrir, HELLO y el log post-mortem. Si el wire no contesta al RESET, en las ESP32 el
-        reinicio POR EL CABLE (RTS 200 ms con DTR apagado, como esptool); en la Pico y la STM32 no lo hay sin manos.
+        un programa, #452), reabrir, HELLO y el log post-mortem.
+        #841 (18-nov): sin el RESET_REPLY, la placa pudo reiniciarse igual —en la Pico 2 el USB se va con el reinicio
+        antes de entregarlo, y el puerto se cae mientras se espera—: se reabre DE TODOS MODOS y, si saluda y el INFO
+        contesta (no corre nada), está recuperada; el texto dice si se reinició (su uptime, contado desde el RESET). Si no
+        vuelve en reposo, lo de antes: en las ESP32 el reinicio POR EL CABLE (RTS 200 ms con DTR apagado, como esptool),
+        por un puerto abierto otra vez; en la Pico y la STM32 no lo hay sin manos.
         Devuelve (ok, texto, cola_del_log, log_entero) —#825: el log entero, además de su cola—."""
         via = "RESET por el wire"
+        t_reset = time.time()
         self.send("RESET")
         # V8 #840: con un programa que no para, la placa sirve el RESET a los 2 s del pedido (antes, nunca): 5 s de margen
-        if self.esperar("RESET_REPLY", 5) is None:
-            placa = sello.get("boardName") or "?"
-            if self.t.nombre != "serie" or not placa.startswith("esp32"):
-                return False, ("no contesta al RESET por el wire, y %s no se reinicia sin manos: %s" % (
-                    placa, "desenchufa y enchufa la placa" if placa.startswith("rp2350")
-                    else "reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton")), "", ""
-            via = "reinicio por el cable (RTS; el wire no contesto al RESET)"
-            s = self.t.s
-            s.dtr = False
-            s.rts = True
-            s.dtr = s.dtr        # usbser.sys no manda el RTS nuevo sin tocar DTR (esptool)
-            time.sleep(0.2)
-            s.rts = False
-            s.dtr = s.dtr
-            time.sleep(0.2)
-        if not self.reabrir():
+        se_fue = False
+        try:
+            respuesta = self.esperar("RESET_REPLY", 5)
+        except (EOFError, OSError):
+            respuesta, se_fue = None, True      # #841: el puerto, caído antes de la respuesta (el USB de la Pico)
+        info = None
+        if respuesta is None:
+            sin = "sin RESET_REPLY" + (" (el puerto se fue antes de entregarlo, #841)" if se_fue else "")
+            if self.reabrir():
+                info = self.info(6)
+                cod = self.codigo_error()
+                no_vuelve = ("saluda, pero el INFO da %s (sigue corriendo algo)" % cod if cod == "BUSY"
+                             else "saluda, pero el INFO no contesta%s" % ((": " + cod) if cod else ""))
+            else:
+                no_vuelve = "no vuelve a saludar en 25 s"
+            if info is not None:
+                up = info.get("uptimeMs")
+                reiniciada = isinstance(up, int) and up <= (time.time() - t_reset) * 1000 + 2000
+                via = "RESET por el wire, %s, y %s" % (sin, "se reinicio igual" if reiniciada
+                                                       else "no se reinicio, pero esta en reposo")
+            else:
+                placa = sello.get("boardName") or "?"
+                if self.t.nombre != "serie" or not placa.startswith("esp32"):
+                    return False, ("RESET por el wire, %s, y %s; %s no se reinicia sin manos: %s" % (
+                        sin, no_vuelve, placa, "desenchufa y enchufa la placa" if placa.startswith("rp2350")
+                        else "reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton")), "", ""
+                via = "reinicio por el cable (RTS; tras el RESET por el wire, %s, %s)" % (sin, no_vuelve)
+                puerto = self.t.puerto
+                try:
+                    self.t.close()
+                except Exception:
+                    pass
+                try:
+                    self.t = TransSerie(puerto)
+                except Exception as e:
+                    return False, "%s: el puerto no se abre: %s" % (via, e), "", ""
+                s = self.t.s
+                s.dtr = False
+                s.rts = True
+                s.dtr = s.dtr        # usbser.sys no manda el RTS nuevo sin tocar DTR (esptool)
+                time.sleep(0.2)
+                s.rts = False
+                s.dtr = s.dtr
+                time.sleep(0.2)
+                if not self.reabrir():
+                    return False, "%s: la placa no vuelve a contestar en 25 s" % via, "", ""
+        elif not self.reabrir():
             return False, "%s: la placa no vuelve a contestar en 25 s" % via, "", ""
-        info = self.info(6) or {}
+        if info is None:
+            info = self.info(6) or {}
         self.send("LOG_DUMP")
         lg = self.esperar("LOG_DUMP_REPLY", 10) or {}
         entero = lg.get("text") or ""
