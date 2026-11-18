@@ -7323,6 +7323,14 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > ocurrir»*); si vuelve, hay un problema real, y la tanda deja rastro (el PING antes del KILL y el log entero). Lo
 > general, a la tabla de la robustez.
 >
+> 🏁 **18-nov, el lote final, la primera tanda** (Eduardo: *«OK»*, a grabar; *«He conectado la Discovery…»*, *«También
+> está conectada la Metro»*): la P4, la DK2, la Metro y la Pico 2, grabadas con la imagen de hoy (con `#833`, `#828`,
+> `#835` y `#836` a `#840`; dos veces: la segunda, con el tope de los avisos de UAF de `#837`); los packs de la P4 y la
+> GUI de la DK2, en su sitio y con rc=0. La tanda de 24 (`compat/informes/lote_v8_18nov.md`), con las dos imágenes y
+> como el 15-nov en las cuatro: sólo las dos líneas de `lastModified` (`RutaFueraFlash` y `ErroresConTipo`) y las dos de
+> la GUI saltadas en las RP2350. Lo de cada ficha, visto en placa (`#836` a `#840`); y `#841`, abierta. Falta la segunda
+> tanda: la S3, la C3, la C5, la C6 y la Nucleo.
+>
 > 📋 **El repaso de los pendientes del 14-nov** (Eduardo: *«Vete diciendome pendientes por orden de mas antigua a mas
 > moderna. Me las dices de 1 en 1 y vamos decidiendo lo que hacemos.»*): las 26 fichas abiertas y los 8 pendientes sin
 > número (los de la lista «Lo que ya es de V8» que seguían sin decidir, y los sets), uno a uno. Lo decidido, en cada uno;
@@ -7648,6 +7656,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Compiladas las tres imágenes de la Pico, las cinco ESP32 y las dos STM32 (la Nucleo, con sus 4 avisos de siempre); la
   línea del RESET, en todas. **Por ver en placa**, al grabarlas: un RESET durante un RUN y tras un KILL; el camino del
   programa que no para sólo se provoca en el micro simulado.
+- **18-nov, visto en placa** (el lote; los guiones, en `C:\tmp\v8_robustez_18nov\`): en la P4 y la Pico 2,
+  dos KILL seguidos, un `EXITED KILLED` y dos `KILL_REPLY`; un RESET durante un RUN, en la P4, el `EXITED` y el
+  `RESET_REPLY` a los 0,51 s y la placa vuelve con «software»; en la Pico 2 se reinicia («reinicio pedido»), pero la
+  respuesta no llega: también en reposo, así que no es de aquí (`#841`).
 
 #### ✅ `#839` — las STM32, tras un fallo fatal (un HardFault, el assert, la pila o el heap del RTOS), daban su informe y se quedaban paradas: en el campo, hasta que alguien las desenchufara (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#839`; preexistente; probada en la DK2, que Eduardo conectó para eso; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7668,6 +7680,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   arreglo, corregido en el acto: «fallo fatal» se devolvía sin leer ni limpiar los flags de `RCC->CSR`, y el reinicio
   siguiente, uno por software, decía «watchdog (IWDG)»; ahora, «software». El ENV y los ficheros de la DK2, como estaban;
   el pack de la GUI carga. La Nucleo, compilada (sus 4 avisos, los de siempre, de `builtins.c`).
+- **18-nov, con la imagen final** (el lote): la misma prueba en la DK2, igual (la placa vuelve a los 5,3 s, «fallo fatal»,
+  el autorun que no arranca con `log=0`, y tras un RESET, «software»).
 
 #### ✅ `#838` — las ESP32 no apuntaban en el log por qué se reiniciaron, y la línea del autorun que no arranca tras un fallo fatal se perdía con el log apagado (también en la Pico) (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#838`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7680,6 +7694,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   ESP32 (`repl_esp32.c`) y en la Pico (`repl_v1.c`). La STM32, en `#839`. Compiladas las cinco ESP32 y las tres imágenes
   de la Pico; las cadenas, en los `.elf` de la P4 y la S3. **Por ver en placa**, al grabarlas: tras un RESET, «boot:
   causa del reset = software»; tras un pánico con autorun y `log=0`, la línea «NO arranca».
+- **18-nov, visto en placa** (el lote): «boot: causa del reset = X» en el log de la P4 (power-on, tras grabarla; software,
+  tras un RESET), y en la Metro, la Pico 2 y la DK2 (`#839`); y en la P4, con `prueba.fallo=1` (`#681`), el pánico la
+  reinicia («panic/exception») y, con `log=0` y un autorun, el arranque siguiente lo dice: «autorun: /app/Bucle825.mod NO
+  arranca: el arranque anterior acabo en un fallo fatal (panic/exception; ver el log)».
 
 #### ✅ `#837` — con el log apagado (`log=0`, lo de serie), ni los avisos urgentes de la VM llegaban al log: en el campo, de un programa que muere no quedaba nada (abierta y **CERRADA el 18-nov**, de la tabla de la robustez, el commit de `#837`; preexistente; Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*)
 
@@ -7696,7 +7714,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   y lo normal de después no; con el `bpvm_util.c` de antes, «FAIL: apagado, un aviso urgente de la VM no se apunta». Y
   a la red, donde no estaba. `test-bmgr`, con `bpvm_log.c` (enlaza `bpvm_util.c`). La red, VERDE (paridad 217; MOD8, 209
   y 8 SKIP; dos workers, 217; cápsula, 59; las 116 pruebas de C; el sim, la sombra y el estrés). **Por ver en las
-  placas**, al grabarlas: un error sin atrapar con `log=0` deja su informe en el log.
+  placas**, al grabarlas: un error sin atrapar con `log=0` deja su informe en el log. **Visto el 18-nov en la Metro**
+  (`log=0`; el log vaciado antes de la tanda): el de `ThrowSinAtrapar` entero («EXCEPCION NO ATRAPADA en el thread 0»,
+  «donde: ThrowSinAtrapar+91 ThrowSinAtrapar+39» y «el mensaje que traia: "ALOAD: índice fuera de rango 99 (length=3)"»)
+  y, con el tope de abajo, tres avisos de UAF: 11 líneas.
 - **18-nov, en el lote: el tope de los avisos de UAF.** En la Metro (`log=0`), tras la tanda, el log entero eran avisos
   «[bpvm] UAF: …», dos por cada referencia caducada de `RefCaducadaBuiltin` (que las usa a propósito y atrapa el error):
   con `#837` llegaban al log aunque estuviera apagado, y lo llenaban, fuera el arranque; y en la Pico cada aviso urgente
@@ -7726,6 +7747,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   estaba (el plazo, el pánico que reinicia, el destructor del `Timer` que lo desactiva). La P4, compilada. **Por ver en
   placa**, al grabar: `bpgenvm-c/samples/WdtDosRuns.bp` no debe reiniciar la P4, y `samples/WdtDemo.bp`, que deja de
   alimentarlo, sí (el control); y en la S3.
+- **18-nov, visto en la P4** (el lote, la imagen final): `WdtDosRuns`, las 20 vueltas y los 3 s tras el `disable` sin
+  reiniciarse (el uptime siguió); y `WdtDemo`, el control, la reinicia al dejar de alimentarlo (`task-watchdog`). La S3,
+  en la segunda tanda del lote.
 
 #### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 
