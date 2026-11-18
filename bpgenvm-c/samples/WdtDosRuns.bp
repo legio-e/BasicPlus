@@ -1,0 +1,26 @@
+// V8 #836 (18-nov, la tabla de la robustez) — Wdt con dos runs: ¿cuenta un feed desde la otra tarea?
+// En la ESP32, Wdt suscribía al perro de tareas del IDF la tarea que llamaba a enable, y feed alimentaba la que
+// llamaba; con dos runs, un hilo que duerme puede seguir en la otra. 20 vueltas de 300 ms con un perro de 2 s: si la
+// placa se reinicia en el bucle, un feed desde la otra tarea no cuenta; si se reinicia tras el disable, el disable no
+// soltó lo vigilado. Antes de #836, en la P4, se reiniciaba entre la vuelta 10 y la 15 (task-watchdog). Es una prueba
+// de placa (en el PC no hay perro: Wdt lanza «no implementado»): subirla, correrla y mirar en el INFO que no se
+// reinició. El control, samples/WdtDemo.bp (deja de alimentarlo: tiene que reiniciarse).
+module WdtDosRuns
+import Wdt
+import Machine
+
+  function main(arg: string)
+    var w: Wdt.Timer := Wdt.Timer(2000)
+    var i: integer := 0
+    while i < 20 do
+      i := i + 1
+      sleep(300)
+      w.feed()
+      if i mod 5 == 0 then print "vuelta " + intToString(i) + " (" + intToString(Machine.uptimeMs()) + " ms)"
+    endwh
+    w.disable()
+    print "acabado sin reiniciarse"
+    sleep(3000)
+    print "y 3 s despues del disable, tampoco"
+  end main
+end WdtDosRuns

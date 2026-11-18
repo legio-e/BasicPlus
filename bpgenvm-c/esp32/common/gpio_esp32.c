@@ -1078,53 +1078,63 @@ static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
  */
 
 /* ============================ Wdt (cierre V3) =======================
- * Watchdog del ESP32 vía el Task Watchdog Timer (TWDT) de ESP-IDF. Vigila la
- * task que ejecuta el código BP (la que llama a Wdt.enable): si deja de
- * "alimentarlo" (feed) dentro del timeout, el TWDT dispara un panic que —con la
- * config de panic por defecto (print+reboot)— RESETEA el chip, igual que el
- * watchdog del Pico (HW) y del STM32 (IWDG). Paridad de comportamiento.
+ * Watchdog del ESP32 vía el Task Watchdog Timer (TWDT) de ESP-IDF: si el
+ * programa BP deja de "alimentarlo" (feed) dentro del timeout, el TWDT dispara
+ * un panic que —con la config de panic por defecto (print+reboot)— RESETEA el
+ * chip, igual que el watchdog del Pico (HW). Paridad de comportamiento.
  *
- * Semántica (= Pico/STM32):
- *   enable(timeoutMs): arranca/reconfigura el TWDT con ese timeout y suscribe la
- *                      task actual; trigger_panic=true → timeout = reset.
- *   feed():            esp_task_wdt_reset() (resetea el contador de la task).
- *   disable():         des-suscribe la task (mejor esfuerzo; el TWDT global del
- *                      IDF puede seguir vigilando otras tasks, lo deseable).
- *   Si el programa BP termina SIN disable, la task deja de alimentar y el chip se
- *   resetea — MISMO aviso de seguridad que en Pico/STM32.
+ * V8 #836 (18-nov) — LO VIGILADO ES UN «USUARIO» DEL TWDT, NO UNA TAREA. Antes
+ * se suscribía la tarea que llamaba a enable (esp_task_wdt_add(NULL)) y feed
+ * alimentaba la que llamaba (esp_task_wdt_reset()). Con dos runs (V7/H12, los de
+ * serie en la P4 y la S3), a un hilo BP que duerme lo puede despertar el otro run,
+ * que es otra tarea de FreeRTOS: desde ahí sus feed no alimentaban a la suscrita,
+ * y la placa se reiniciaba con un programa sano (medido en la P4: un perro de 2 s
+ * alimentado cada 300 ms, reiniciado a los ~4 s, task-watchdog); y un disable
+ * desde la otra tarea no la soltaba. Un usuario (esp_task_wdt_add_user) lo
+ * alimenta cualquier tarea: es del programa, no de quien lo ejecute.
+ *
+ * Semántica (= Pico):
+ *   enable(timeoutMs): arranca/reconfigura el TWDT con ese timeout y da de alta
+ *                      el usuario; trigger_panic=true → timeout = reset.
+ *   feed():            esp_task_wdt_reset_user (resetea el contador del usuario).
+ *   disable():         da de baja el usuario (el TWDT global del IDF puede seguir
+ *                      vigilando otras tasks, lo deseable).
+ *   Si el programa BP termina SIN disable (sin que su Timer muera: su destructor lo
+ *   desactiva, #667), nadie alimenta y el chip se resetea — MISMO aviso de
+ *   seguridad que en la Pico.
  *
  * El IDF puede haber iniciado ya el TWDT (CONFIG_ESP_TASK_WDT_INIT): en ese caso
  * esp_task_wdt_init devuelve ESP_ERR_INVALID_STATE y reconfiguramos.
  * (Nota: si el sdkconfig usa un panic-handler que NO reinicia —HALT/GDBSTUB— el
  * timeout pararía en vez de resetear; el default PRINT_REBOOT sí resetea.)
  */
-static bool s_esp32_wdt_subscribed = false;
+static esp_task_wdt_user_handle_t s_esp32_wdt_usuario = NULL;
 
 static void esp32_wdt_enable_impl(int timeoutMs) {
     if (timeoutMs < 1) timeoutMs = 1;
     esp_task_wdt_config_t cfg = {
         .timeout_ms     = (uint32_t) timeoutMs,
-        .idle_core_mask = 0,        /* solo vigilamos la task BP suscrita, no los idle */
-        .trigger_panic  = true,     /* timeout → panic → reboot (= reset Pico/STM32) */
+        .idle_core_mask = 0,        /* solo vigilamos el usuario del programa, no los idle */
+        .trigger_panic  = true,     /* timeout → panic → reboot (= reset Pico) */
     };
     esp_err_t err = esp_task_wdt_init(&cfg);
     if (err == ESP_ERR_INVALID_STATE) {
         esp_task_wdt_reconfigure(&cfg);     /* el IDF ya lo había iniciado al boot */
     }
-    if (!s_esp32_wdt_subscribed && esp_task_wdt_add(NULL) == ESP_OK) {
-        s_esp32_wdt_subscribed = true;
+    if (s_esp32_wdt_usuario == NULL && esp_task_wdt_add_user("bpvm-wdt", &s_esp32_wdt_usuario) != ESP_OK) {
+        s_esp32_wdt_usuario = NULL;
     }
-    esp_task_wdt_reset();
+    if (s_esp32_wdt_usuario != NULL) esp_task_wdt_reset_user(s_esp32_wdt_usuario);
 }
 
 static void esp32_wdt_feed_impl(void) {
-    if (s_esp32_wdt_subscribed) esp_task_wdt_reset();
+    if (s_esp32_wdt_usuario != NULL) esp_task_wdt_reset_user(s_esp32_wdt_usuario);
 }
 
 static void esp32_wdt_disable_impl(void) {
-    if (s_esp32_wdt_subscribed) {
-        esp_task_wdt_delete(NULL);
-        s_esp32_wdt_subscribed = false;
+    if (s_esp32_wdt_usuario != NULL) {
+        esp_task_wdt_delete_user(s_esp32_wdt_usuario);
+        s_esp32_wdt_usuario = NULL;
     }
 }
 

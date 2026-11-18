@@ -7607,7 +7607,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
 
-#### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12)
+#### 🔵 `#836` — con dos runs, `Wdt` reinicia una placa sana en la P4 (y la S3): `enable` suscribe al perro de tareas del IDF la tarea que lo llama, y un `feed` desde la otra no cuenta (abierta el 18-nov, al preparar la tabla de la robustez; preexistente, desde los dos runs de H12; **hecho el mismo día**, por ver en la P4 al grabar las placas)
 
 - **Lo medido** (18-nov, la P4 con la imagen de la resistencia, `runs: 2`): un perro de 2 s alimentado cada 300 ms, tras
   un `sleep(300)`, 20 vueltas (`WdtDosRuns`, con su guion, en `C:\tmp\v8_robustez_18nov\`): la placa se reinició entre
@@ -7623,6 +7623,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **El arreglo propuesto** (pequeño, en la familia ESP32): un «usuario» del perro en vez de una tarea
   (`esp_task_wdt_add_user`, `esp_task_wdt_reset_user` y `esp_task_wdt_delete_user`, del IDF 6.1): lo alimenta cualquier
   tarea. Y la prueba en placa, `WdtDosRuns` (hoy reinicia). V8 o V9, por decidir; en la tabla de la robustez.
+- **18-nov, a V8 y hecho** (Eduardo: *«Para ahora los arreglos sencillos, para V9 el resto.»*): el backend de `Wdt` de la
+  familia ESP32 (`gpio_esp32.c`) vigila un usuario del perro, `bpvm-wdt` (`esp_task_wdt_add_user` al activarlo,
+  `esp_task_wdt_reset_user` al alimentarlo y `esp_task_wdt_delete_user` al desactivarlo), y no la tarea; lo demás, como
+  estaba (el plazo, el pánico que reinicia, el destructor del `Timer` que lo desactiva). La P4, compilada. **Por ver en
+  placa**, al grabar: `bpgenvm-c/samples/WdtDosRuns.bp` no debe reiniciar la P4, y `samples/WdtDemo.bp`, que deja de
+  alimentarlo, sí (el control); y en la S3.
 
 #### ✅ `#835` — una carga que falla a medias no suelta las tablas que el módulo ya pidió al sistema: en una placa, unos KB de `malloc` perdidos por cada intento, hasta reiniciar (abierta el 17-nov, con la prueba de `#828`; preexistente; **CERRADA el mismo día**, el commit de `#835`: la carga que falla suelta lo suyo; Eduardo: *«Lo arreglamos ahora»*)
 
