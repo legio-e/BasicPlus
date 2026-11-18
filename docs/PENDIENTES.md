@@ -18,11 +18,11 @@
 >
 > **Mapa de docs:**
 > - **`docs/FICHAS.md`** — el registro de fichas. **La fuente de verdad.** Lo que viene
->   después de V7 —la WiFi, el Bluetooth y el bajo consumo, y lo que V7 dejó para
->   entonces— está en su bloque de V8.
+>   después de V8 —el bajo consumo, los streams y los dispositivos, y lo que V8 dejó para
+>   entonces— está apuntado en su bloque de V8 («A V9»).
 > - **`docs/ESTADO.md`** — el traspaso entre sesiones (diario, por fechas).
-> - **`V7_BACKLOG.md`** / **`V7_IDEAS.md`** — el plan de V7 y su diseño (el porqué de
->   cada decisión).
+> - **`V8_IDEAS.md`** — el cuaderno de V8: el diseño de cada hito y el porqué de cada
+>   decisión. **`V7_BACKLOG.md`** / **`V7_IDEAS.md`** — los de V7.
 > - **`V6_BACKLOG.md`** / **`V5_BACKLOG.md`** / **`V4_BACKLOG.md`** / **`HECHO_V*.md`** —
 >   snapshots inmutables de versiones cerradas.
 >
@@ -79,8 +79,8 @@
   | | conserva el log | lo pierde |
   |---|---|---|
   | **ESP32-S3 / P4** | reset por software (el `reset` del IDE), panic/excepción, watchdog | **el botón RST de la placa** y desenchufar |
-  | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) y, con la imagen de dos núcleos (la de V7), un fallo fatal: la reinicia el perro guardián (ver «Para V8») | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
-  | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) | desenchufar |
+  | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) y, con la imagen de dos núcleos (la de V7), un fallo fatal: la reinicia el perro guardián (ver «Para V9») | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
+  | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) y, desde V8, un fallo fatal: la reinicia el IWDG (`#839`; visto en la DK2: «RAM SUPERVIVIENTE») | desenchufar |
 
   La C3, la C5 y la C6 no están en la tabla porque no se ha medido: llevan el mismo log que la
   S3 y la P4 —el mismo código, la misma región que el arranque no borra—, y lo esperable es
@@ -367,20 +367,23 @@ a objeto eliminado (use-after-free)» al usarla: en los opcodes, a la entrada de
 y desde el 13-nov también los arrays y los objetos, `#807`) y a la entrada de una native (`#805`). Lo que todavía no:
 dentro de una native, una referencia que no venga de sus argumentos (un campo leído allí: circula sin su generación).
 
-## ⏭️ Para V8 — lo que conviene saber al programar hoy
+## ⏭️ Para V9 — lo que conviene saber al programar hoy
 
-Lo que V7 deja para V8: el tema de V8 —la WiFi, el Bluetooth y el bajo consumo— y lo que
-se aplazó al cerrar V7. No son bugs: son piezas que no están, o que están a medias. El
-estado de cada una vive en su ficha (el bloque de V8 de `docs/FICHAS.md`); aquí, lo que
-cambia al escribir un programa.
+Lo que V8 deja para V9: el bajo consumo, los streams y los dispositivos, y lo que se aplazó
+al cerrar V8. No son bugs: son piezas que no están, o que están a medias. El estado de cada
+una vive en su ficha (el bloque de V8 de `docs/FICHAS.md`, «A V9»); aquí, lo que cambia al
+escribir un programa.
 
-- **No hay bajo consumo** (`#490`). El micro nunca duerme: sin nada que hacer sigue
+- **No hay bajo consumo** (`#490`, a V9). El micro nunca duerme: sin nada que hacer sigue
   girando (y en el STM32 la tarea ociosa ni siquiera llega a correr). No existe un
   `sleep` de placa ni fuentes de despertar en BP: un programa a batería no puede
   ahorrar hoy.
-- **No hay red en la placa.** `Net` (el cliente TCP) sólo tiene el backend del PC; en una
-  placa lanza `RuntimeError` («Net: sin red en esta plataforma»). La WiFi y el Bluetooth
-  son el tema de V8.
+- **La WiFi, en la P4, la S3 y la C5; el Bluetooth (el teclado y el ratón), también** (V8:
+  H3 y H2). La C3 y la C6 (sin PSRAM) y las STM32 no tienen WiFi, y en ellas `Net` lanza
+  `RuntimeError`; la Pico 2 W, aplazada. De la red, un programa enciende y apaga la WiFi
+  (`Air.Wifi`) y abre conexiones TCP como cliente (`Net`); lo que no hay todavía: servir
+  conexiones (`listen`/`accept`), UDP, TLS, la placa como punto de acceso y la hora por
+  NTP.
 - **En la RP2350, la imagen de dos núcleos —la de V7— hace más lento un programa de un
   solo hilo** (`#665`). En la Metro, `fib(26)` tarda 3 908 ms frente a 2 892 con la imagen
   de un núcleo (+35 %), y con `vm.cores=1` lo mismo (3 951): es la imagen, no el otro
@@ -390,26 +393,28 @@ cambia al escribir un programa.
   PrintBench, 1 270 ms frente a 817. Y dos hilos que trabajan con cadenas no ganan con el
   segundo núcleo (×0,83 en la Pico 2, ×0,75 en la Metro). `vm.runs=1` quita lo que cuesta el
   segundo run; lo de la imagen sólo se recupera con la de un núcleo, que se compila aparte
-  (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Se investiga en V8; lo que se gana con dos hilos, en
-  el manual §14.6.
-- **Un fallo fatal tumba la placa entera** (que el fallo de un run no la tumbe es de V8). Un
-  error del programa es una excepción y, como mucho, acaba su hilo; un fallo *fatal* —un
-  HardFault, la memoria del sistema agotada, una comprobación interna que falla— es del
-  sistema. En la Pico 2 y la Metro, con la imagen de dos núcleos, la placa deja el informe en
-  el log —en una RAM que sobrevive al reinicio—, el perro guardián la reinicia a los 250 ms,
-  lo dice al arrancar («fallo fatal» en `Machine.resetCause()` y en el INFO del IDE) y **no
-  lanza el autorun**: un programa que fallara nada más arrancar sería un bucle de reinicios;
-  desde el IDE se arranca a mano (manual §14.6). **En las ESP32, lo mismo**: un fallo así es
-  un *panic* del IDF —o su perro de interrupciones—, la placa se reinicia y **no lanza el
-  autorun**; lo dicen el log («autorun: … NO arranca: el arranque anterior acabo en un fallo
-  fatal (panic/exception; ver el log)») y la consola, y la causa del reinicio es la del chip
-  («panic/exception» o «int-watchdog»). El perro de tareas del módulo `Wdt` no es un fallo
-  fatal: tras él, el autorun sí se lanza (y si el programa vuelve a caer, la salida es la
-  ventana del autorun: con el IDE conectado, al arrancar da unos segundos para pararlo con
-  *Stop*). **En las STM32** (la Nucleo y la DK2), un HardFault deja su informe en el log y la
-  placa **parada**: no se reinicia sola. Terminar sólo el run que falla y que `io` siga, el
-  MPU protegiendo la memoria del sistema y un contador de reinicios contra el bucle del
-  autorun se deciden con la prueba de resistencia de las pruebas finales de V8 (14-nov).
+  (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Se investiga en V9 (`#665`); lo que se gana con dos
+  hilos, en el manual §14.6.
+- **Un fallo fatal reinicia la placa entera, y el autorun no se lanza** (que el fallo de un
+  run no la tumbe es de V9). Un error del programa es una excepción y, como mucho, acaba su
+  hilo; un fallo *fatal* —un HardFault, la memoria del sistema agotada, una comprobación
+  interna que falla— es del sistema. La placa deja el informe en el log —en una RAM que
+  sobrevive al reinicio—, se reinicia sola, lo dice al arrancar («fallo fatal» en
+  `Machine.resetCause()` y en el INFO del IDE) y **no lanza el autorun**: un programa que
+  fallara nada más arrancar sería un bucle de reinicios; desde el IDE se arranca a mano
+  (manual §14.6). En la Pico 2 y la Metro, con la imagen de dos núcleos, la reinicia el
+  perro guardián a los 250 ms; **en las ESP32**, el fallo es un *panic* del IDF —o su perro
+  de interrupciones—, y la causa del reinicio es la del chip («panic/exception» o
+  «int-watchdog»); **en las STM32** (la Nucleo y la DK2), desde V8, el IWDG, a los ~2 s
+  (`#839`; antes se quedaban paradas). La línea del autorun que no arranca («autorun: … NO
+  arranca: el arranque anterior acabo en un fallo fatal…») y la causa de cada reinicio
+  («boot: causa del reset = …») quedan en el log aunque esté apagado (`#837`, `#838`). El
+  perro de tareas del módulo `Wdt` no es un fallo fatal: tras él, el autorun sí se lanza (y
+  si el programa vuelve a caer, la salida es la ventana del autorun: con el IDE conectado,
+  al arrancar da unos segundos para pararlo con *Stop*). Para V9 (la tabla de la robustez,
+  18-nov): terminar sólo el run que falla y que `io` siga, el MPU protegiendo la memoria
+  del sistema, un contador de reinicios contra el bucle del autorun, un perro del sistema
+  para `io` y el informe del *panic* de las ESP32 en el log.
 - **Dentro de una `native`, un error no dice su línea** (`#582`; una limitación conocida,
   Eduardo, 14-nov). Desde V8, un error sin atrapar en la placa trae su cadena de llamadas y
   el IDE la traduce a fichero y línea (la placa da direcciones y el PC pone los nombres,
@@ -421,30 +426,39 @@ cambia al escribir un programa.
   interpretadas (la placa tolera el bloque ajeno). El `.mod` multifamilia —el mismo fichero
   para varias familias— es de V9, y sólo dentro de un proyecto que diga qué familias lleva.
 - **El depurador no despliega los objetos** (`M5`). Un local que es un objeto sale como
-  `@<valor>`, sin sus campos ni sus properties (heredadas o no). Pide el layout de cada clase
-  en el `.dbg` y una vista en árbol en el IDE: V8.
+  `@<valor>`, sin sus campos ni sus properties (heredadas o no). La información ya está en
+  la interfaz de cada clase, en el módulo; usarla y una vista en árbol en el IDE: V9.
 - **Con un run, un `read` de `Uart` que espera para a los demás hilos.**
   `Uart.Port.read(datos, n, timeoutMs)` espera a nivel del sistema —el run duerme de
   milisegundo en milisegundo hasta que llegan los bytes o vence el plazo—: con UN run (las
   placas de un núcleo, o `vm.runs=1`), mientras un hilo espera ahí, los demás hilos BP no
   avanzan. `sleep` no lo hace (duerme sólo su hilo), y con dos runs la espera retiene sólo
   el suyo. Lo que funciona con un run: mirar `available()` y, si no hay nada, `sleep`. En
-  V8, esas esperas cederán el hilo, como `sleep`.
-- **La C3 va justa de memoria.** Su VM se queda en 112 KB —48 de heap de BP, medido el
-  6-oct— y lo que no
-  quepa ahí no corre en ella (`docs/MEMORIA.md`). Optimizarla —coser sus dos regiones de
-  memoria y devolverle los 128 KB de VM— es de V8.
+  V9, con los streams (`#723`), esas esperas cederán el hilo, como `sleep`.
+- **La C3 va justa de memoria.** Su heap de BP es de 96 KB desde V8 —eran 48: las pilas de
+  los hilos BP salen ahora del heap (`#740`)—, y lo que no quepa ahí no corre en ella
+  (`docs/MEMORIA.md`). Optimizarla —coser sus dos regiones de memoria, o controlar la
+  reserva de memoria del IDF para evitar el hueco— es de V9.
 - **Lo que el silicio tiene y la HAL aún no da**: la PIO del RP2350, programable desde BP, y
   más UART en las ESP32 (hoy un programa tiene, como mucho, la 1 y la 2: las de más de la
-  P4 y la de bajo consumo de la C5, la C6 y la P4, todavía no). Las dos, para V8.
+  P4 y la de bajo consumo de la C5, la C6 y la P4, todavía no). Las dos, con los streams y
+  los dispositivos, en V9.
 
-## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago; para V8)
+## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago; hecha en V8)
 
 Dejar una placa corriendo **días** y ver hasta dónde aguanta. No entró en V4 (en plena
 campaña de publicación no era razonable, y una prueba así no se improvisa); decidido el
-2-oct, se hace en V8, con calma.
+2-oct, se hizo en las pruebas finales de V8. **Del 15 al 17 de noviembre, 48 horas** con el
+autorun en cuatro placas a la vez —la Pico 2 y la Metro (la misma imagen; la diferencia, la
+PSRAM), la P4 y la C6—: **las cuatro, sin un error ni un reinicio**, 61 360 vueltas entre
+todas. Encontró dos fallos de verdad: en el primer intento, un `Mutex` que no se soltaba
+hasta el final del RUN (`#831`: la Pico 2 empezó a fallar a las ~257 vueltas; arreglado, se
+volvió a empezar); y en las 48 horas, sin un error, un bloque de memoria que se quedaba
+retenido horas en las placas con poco heap (`#833`: un número en una global retenía el
+objeto que empezaba en esa dirección), arreglado al acabar. El programa y su guion, en
+`compat/resistencia/`, para repetirla.
 
-Lo que la haría útil, y no sólo larga:
+Lo que la hacía útil, y no sólo larga:
 
 - **Que la muerte deje rastro.** Si se cuelga a las 30 horas y no queda registro, se
   han perdido 30 horas. El log post-mortem en flash ya es un anillo que sobrevive al

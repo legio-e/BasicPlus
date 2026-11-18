@@ -1,4 +1,4 @@
-# Checklist de publicación — BasicPlus v7.0
+# Checklist de publicación — BasicPlus v8.0
 
 Doc de mantenedor (no enlazado desde la portada). El repo público
 `legio-e/BasicPlus` **ya existe**; publicar es un `push` + una release.
@@ -7,7 +7,9 @@ Doc de mantenedor (no enlazado desde la portada). El repo público
 > dice *qué* se hace, *quién* lo hace y **cómo saber que salió bien**. Si un paso
 > no tiene forma de comprobarse, es que está mal escrito.
 
-**Lo que se publica en V7 es UN artefacto**: `BasicPlus-7.0-win.zip` — el paquete
+**Lo que se publica en V8 es UN artefacto, como en V7**: `BasicPlus-8.0-win.zip`. Lo que
+dice abajo de V7 vale igual (las ocho imágenes, los cinco packs, el IDE, el simulado); el
+de V7 era `BasicPlus-7.0-win.zip` — el paquete
 completo (IDE + compilador + stdlib + **los cinco packs** + samples + docs + micro
 simulado + **las 8 imágenes de firmware dentro**, en `firmware/`: Pico/Metro,
 ESP32-S3, ESP32-C3, ESP32-C5, ESP32-C6, ESP32-P4, Nucleo-U575, Discovery U5G9J —
@@ -29,6 +31,28 @@ una suma, una cosa que verificar.**
 decisión.
 
 ---
+
+## ⏳ PRE-FLIGHT DE V8 — F1 (en curso desde el 18-nov)
+
+La tabla de V7, para rellenar con el resultado MEDIDO de cada casilla. Lo nuevo de V8: el volumen de JC
+(`jc.html`, cuyos módulos JC compila también `doc_frags`: `data-bp="jc"`) y la página de las pruebas (`pruebas.html`,
+cuyos números se ponen al día con los de esta tabla).
+
+| comprobación | resultado |
+|---|---|
+| Suite `lexer-java` · suite `miVM` | |
+| `samples_sweep.py` (corpus entero) | |
+| `doc_frags.py` (todos los fragmentos de docs/, BP y JC) | |
+| `h13-errores.sh` | |
+| `compat/compat.sh check` | |
+| Guarda de las 4 portadas (tamaño + encabezados) | |
+| Las **8** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | |
+| Los **5** packs | |
+| `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. Queda comprobar que las del ZIP son esas mismas |
+| Micro simulado con LVGL y SQLite | |
+| ZIP montado y verificado por dentro | |
+| `pruebas.html`, con los números de esta tabla (ES y EN) | |
+| Desplegado en carpeta limpia y probado allí | |
 
 ## ✅ PRE-FLIGHT DE V7 — F1 (pasado el 12 y el 13-oct; V7 publicada el 13-oct)
 
@@ -178,6 +202,14 @@ vez**.
       para uno; `-v` enseña el andamio y los errores de cada trozo. 12-sep: 152 OK,
       119 trozo, 2 error-esperado, 0 FALLO; y con tres roturas inyectadas, tres FALLO.
       12-oct: 0 FALLO en 25 documentos (314 compilados), y los enlaces internos.
+      Desde V8 compila también los módulos de JC de `jc.html` (`<pre data-bp="jc">`, un
+      módulo entero, como `X.jc`; un fragmento, `data-bp="jc-trozo"`, no se compila): la
+      línea `JC:` del final, **0 FALLO**.
+- [ ] **`pruebas.html` con los números de ESTE pre-flight** (desde V8; idea de Eduardo,
+      15-nov: *«que los usuarios vean que se está probando a fondo todo el sistema»*): las
+      suites de Maven, la red (sus casos y sus pruebas de C), el barrido de samples, los
+      errores, los fragmentos, las placas de la tanda. En los dos idiomas, y antes de montar
+      el ZIP (viaja dentro).
 - [ ] **Stdlib canónica**: si tocaste `bpstdlib/*.bp`, recompílala y luego
       `bash bpgenvm-c/scripts/regen_all_mods.sh` para resincronizar los blobs
       embebidos de las familias.
@@ -347,18 +379,19 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       Se relanza con `gh api -X POST repos/legio-e/BasicPlus/pages/builds`.
 - [ ] Abrir la URL y comprobar: portada, que **carga la captura**
       (`img/guicolordemo.png`), y que los volúmenes (`manual`, `referencia`,
-      `guia-ide`, `gui`, `basedatos`, `creditos`) abren en ES y EN; y
+      `guia-ide`, `gui`, `basedatos`, `creditos` y, desde V8, `jc` y `pruebas`) abren
+      en ES y EN; y
       `bp-desde-dentro`, que sólo está en español (la portada inglesa enlaza ése:
       `/en/bp-desde-dentro.html` da 404 y no es un fallo).
 - [ ] ℹ️ `web/cheatsheet.html` **no** se publica automáticamente: vive fuera de
       `docs/` a propósito (para que no viaje en el ZIP). Si lo quieres en la web,
       hay que copiarlo o enlazarlo a mano.
 
-## 4 · Release v7.0
+## 4 · Release v8.0
 
-- [ ] Tag `v7.0` sobre el commit publicado, y `git push origin v7.0`.
+- [ ] Tag `v8.0` sobre el commit publicado, y `git push origin v8.0`.
 - [ ] Cuerpo de la release: **bilingüe, español y luego inglés**, con el molde de la
-      anterior (`dist/release-v6.0.md`; el de V7, `dist/release-v7.0.md`): intro ·
+      anterior (`dist/release-v7.0.md`; el de V8, `dist/release-v8.0.md`): intro ·
       Lo nuevo · **Al actualizar** · Descarga (tabla de las **ocho** imágenes +
       `sha256` del ZIP) · Documentación · Limitaciones. El título, «BasicPlus v7.0»:
       sin lema (Eduardo, 13-oct; las anteriores lo llevaban).
@@ -367,8 +400,8 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       22-ago comparando con lo que V4 publicó de verdad.
       ℹ️ El enlace «English below ↓» de la primera línea no salta: GitHub no pone
       anclas a los encabezados de una release (visto en v7.0; en v6.0, igual).
-- [ ] `gh release create v7.0 dist/BasicPlus-7.0-win.zip --repo legio-e/BasicPlus
-      --title "BasicPlus v7.0" --notes-file dist/release-v7.0.md` — **el ZIP y nada
+- [ ] `gh release create v8.0 dist/BasicPlus-8.0-win.zip --repo legio-e/BasicPlus
+      --title "BasicPlus v8.0" --notes-file dist/release-v8.0.md` — **el ZIP y nada
       más** (ver arriba: las imágenes van dentro).
 - [ ] Comprobar desde la propia release: descargar el ZIP y verificar el
       `sha256` contra el que anotaste al montarlo.

@@ -180,6 +180,7 @@ de Java y no se llena.)
 | 2 | `TYPE_ARRAY_I32` | array de int32 / float (4 bytes — strings también) |
 | 3 | `TYPE_ARRAY_REF` | array de refs (8 bytes: la ref plana de V4 — el GC traza cada slot) |
 | 4 | `TYPE_OBJECT`    | instancia de clase; `payload[0]` = class_ptr |
+| 5 | `TYPE_ARRAY_I64` | array de `long` o de `double` (8 bytes opacos por elemento: el GC no los traza; V2/H1.2) |
 
 ### 2.3 Tamaño total
 
@@ -467,10 +468,13 @@ encode` en `bpvm_internal.h` para el lado C) para que bytecode y AOT, y Java
 y C, coincidan byte a byte. El `print` emite los bytes UTF-8 directamente (la
 VM C ya **no** trunca no-ASCII a `'?'`).
 
-Concat (`__strconcat`) y comparación (`__strequals`) son funciones inyectadas
-por el emisor (`s1 + s2`, `s1 == s2`); operan a nivel de **byte** (concatenar
-o comparar dos secuencias UTF-8 válidas es correcto byte a byte) usando los
-opcodes `NEWARRAY_I8`/`ALOAD_U8`/`ASTORE_I8`.
+Concat (`__strconcat`, y `__strconcatN` para N piezas seguidas: `a + b + c`) y
+comparación (`__strequals`) son funciones inyectadas por el emisor (`s1 + s2`,
+`s1 == s2`); operan a nivel de **byte** (concatenar o comparar dos secuencias
+UTF-8 válidas es correcto byte a byte). La concatenación, desde V7 (`#554`):
+la longitud total, **una** reserva (`NEWARRAY_I8`) y una copia por pieza con
+`__strCopy` (de `Core`, el builtin 263: copia en C, de golpe), cada una donde
+acabó la anterior.
 
 ---
 
@@ -503,17 +507,22 @@ que BP pueda usar se queda fuera. Las **pilas de C de las natives** (VM-C) sigue
 directas son legítimas y no llevan contador. Las pruebas: `make test-raices`, `RaicesTest` (miVM) y `raices_smoke`
 (en el micro simulado, con el sabotaje `--sabotaje-raices`).
 
-Tras marcar, `sweep()` recorre el heap, libera los no marcados
-(setea `TAG_FREE_BIT`) y los enlaza en `freeListHead`.
+**Lo que cuelga de un bloque se sigue al MARCAR**, no al barrer: cada bloque
+recién marcado va a una pila de marcado (`#648`; si se llena, un repaso
+termina lo pendiente), y de él se marcan sus hijos (VM-C, `gc_hijos` en
+`heap.c`):
+- de un array `TYPE_ARRAY_REF`, cada slot (8 bytes; la dirección, en la
+  palabra baja);
+- de un objeto `TYPE_OBJECT`, los fields que su descriptor marca como ref:
+  lee `class_ptr` del payload y el `field_bitmap` del descriptor, y para cada
+  bit 1 marca el field. Los heredados ya están en el bitmap del propio
+  descriptor (el compilador los copia al heredar).
 
-Para arrays `TYPE_ARRAY_REF`, el sweep traza cada slot también.
+Un `TYPE_ARRAY_I64` (los `long` y los `double`) no se traza.
 
-Para objetos `TYPE_OBJECT`, el sweep:
-- Lee `class_ptr` del payload.
-- Lee `field_bitmap` del descriptor.
-- Para cada bit 1, traza el field como ref.
-- Sube por `parent_offset` para incluir fields heredados (cuyo bitmap
-  también puede tener refs en posiciones inferiores).
+Tras marcar, el barrido (`gc_sweep_phase`) recorre el heap, libera los no
+marcados (setea `TAG_FREE_BIT`) y rehace las listas de huecos (§2.4): cada
+tramo seguido de bloques libres es un hueco, y el del final vuelve al bump.
 
 ---
 
