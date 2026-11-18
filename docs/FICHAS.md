@@ -7625,6 +7625,47 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   portadas, la línea en los dos README, `pruebas` en la lista de volúmenes de `PUBLICAR` §3 y un paso en §1: poner al
   día sus números con los del pre-flight de cada versión. La línea de después de la nota («Si encuentras un fallo,
   cuéntanoslo»), mía: se queda si Eduardo la quiere.
+- **18-nov, el `D1` en marcha** (Eduardo: *«Podemos empezar la documentación pero si se alarga mucho paramos y
+  continuamos mañana»*; de JC, *«Un volumen propio del lenguaje. Las librerías y el resto de temas se comparte con
+  BP»*). **Hecho:** el volumen de JC en español (`docs/jc.html`, 19 secciones; sus 38 módulos JC y 7 de BP, compilados
+  por `doc_frags`, que ahora entiende `data-bp="jc"`; los 37 con `main`, con la salida que dice el texto en las dos
+  VMs); la guía del IDE, en los dos idiomas, con lo de V8; el manual y la referencia ingleses, al día; `PENDIENTES` (de
+  «Para V8» a «Para V9»), `HEAP_LAYOUT`, `PUBLICAR` y `pruebas.html`, con los números del pre-flight; el borrador de las
+  notas de v8.0 en `RELEASES.md` (la introducción, para Eduardo); y el IDE en 8.0. Del volumen de JC salieron
+  `#842`–`#845`. **Lo que queda**, para el 19-nov: que Eduardo lea las notas; el volumen de JC y `pruebas.html` en
+  inglés; las cuatro portadas (el «Nuevo en V8», de la introducción) y el cuerpo de la release; `INSTALAR_FIRMWARE`
+  (borrar entera la S3 y la C5 una vez; la C6 de la P4 de Waveshare y su ESP-Hosted, para la WiFi; `radio=c6` y
+  `audio=`); `MEMORIA.md` (los heaps de después de `#740`); `BUILTINS.md` (`EncodingError` es hija de `IOError`); el
+  manual §17 («en V8» → V9; con él, rehacer el jar del IDE, que lleva su copia); y el último `doc_frags` y la guarda de
+  las portadas. **Por decidir con Eduardo:** `#842`–`#845`, V8 o V9; la P4 del kit, que no está en ninguna prueba de V8;
+  cómo le llega al usuario el ESP-Hosted de la C6 de la P4; si `samplesJC/` va en el ZIP; y, del volumen de JC, su
+  numeración propia y que «Nuevo proyecto» deje elegir el lenguaje (para V9).
+
+#### 🔵 `#845` — los mensajes del compilador de JC: los errores de sintaxis acaban en «(punto N)», el número del cuaderno de diseño, y `(Perro) g` entre clases sin parentesco da antes un error que no viene a cuento (abierta el 18-nov, en el `D1`, del volumen de JC; cosmético; V8 o V9, por decidir)
+
+- **Lo medido** (el editor del volumen de JC, y a mano): `do i++; while (i < 3);` da «en JC, ++ y -- van detrás: v++;
+  (punto 12)»; el «(punto 12)» es el de `V8_IDEAS` §E2, que el usuario no tiene. Y un `(Perro) g` entre dos clases sin
+  parentesco da primero «no define constructor» y después el error bueno. El volumen cita los mensajes sin el «(punto
+  N)».
+
+#### 🔵 `#844` — traducir JC → BP (`--escribir-bp`, «Traducir a BP») escribe sin avisar un nombre que en BP es reservado (`step`, `Next`…), y el BP que sale no compila; al revés, BP → JC, sí avisa (abierta el 18-nov, en el `D1`, del volumen de JC; V8 o V9, por decidir)
+
+- **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\NombresJc.jc`): `int step = 2;` compila en JC; su traducción, `var step: integer := 2`, da «'step' es
+  una palabra reservada del lenguaje; elige otro nombre». El volumen de JC lo dice en «Lo que choca».
+
+#### 🔵 `#843` — en JC, un `do` sin llaves no compila: `do i++; while (c);` da «en JC, ++ y -- van detrás»: desde los bucles con nombre, el parser toma la primera palabra por el nombre del bucle (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente, desde los bucles con nombre; V8 o V9, por decidir)
+
+- **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\DoSinLlaves.jc`): no compila. La gramática de JC (`V8_IDEAS` §E2,
+  el punto 9) admite una sentencia sin llaves. El volumen de JC enseña el `do` con sus llaves.
+
+#### 🔵 `#842` — una clase `final` se puede extender: el compilador no lo impide (ni en BP ni en JC), y el manual §9.6 dice «`final` en clase: no extensible» (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente; V8 o V9, por decidir)
+
+- **Lo medido** (18-nov, a mano, en `C:\tmp\v8_d1_18nov\`): `FinalClase.bp` —`public final class Base` y `class Hija extends Base`— compila y
+  corre en las dos VMs («base hija»). Un método `final` redefinido, en cambio, sí da error (`FinalMetodo.bp`: «compilación
+  abortada»). El volumen de JC no documenta `final class`.
+- **Lo que haría falta** (pequeño, sólo el compilador): al resolver la base de una clase, si es `final`, un error
+  («la clase 'Base' es final: no se puede extender»). Antes, contar en el corpus y en la stdlib las clases que extienden
+  una `final`: dejarían de compilar.
 
 #### ✅ `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; y los dos lectores, arreglados: **CERRADA el 18-nov**, el commit de `#841`, Eduardo: *«1) si 2) OK»*)
 

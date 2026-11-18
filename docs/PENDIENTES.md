@@ -384,17 +384,16 @@ escribir un programa.
   (`Air.Wifi`) y abre conexiones TCP como cliente (`Net`); lo que no hay todavía: servir
   conexiones (`listen`/`accept`), UDP, TLS, la placa como punto de acceso y la hora por
   NTP.
-- **En la RP2350, la imagen de dos núcleos —la de V7— hace más lento un programa de un
-  solo hilo** (`#665`). En la Metro, `fib(26)` tarda 3 908 ms frente a 2 892 con la imagen
-  de un núcleo (+35 %), y con `vm.cores=1` lo mismo (3 951): es la imagen, no el otro
-  núcleo, y pega cuando los datos de la VM están en la PSRAM (que sea por la PSRAM es la
-  sospecha, sin medir: falta probar la Metro con `psram=0`). En la Pico 2 el cálculo
-  apenas lo nota (+1,8 % con un run, +8,4 % con dos), pero lo que imprime mucho sí:
-  PrintBench, 1 270 ms frente a 817. Y dos hilos que trabajan con cadenas no ganan con el
-  segundo núcleo (×0,83 en la Pico 2, ×0,75 en la Metro). `vm.runs=1` quita lo que cuesta el
-  segundo run; lo de la imagen sólo se recupera con la de un núcleo, que se compila aparte
-  (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Se investiga en V9 (`#665`); lo que se gana con dos
-  hilos, en el manual §14.6.
+- **En la RP2350, la imagen de dos núcleos hace algo más lento un programa de un solo hilo,
+  y en la Pico 2 lo que imprime mucho, bastante más** (`#665`; medido el 15-nov, la imagen de
+  dos núcleos frente a la de uno). En la Metro casi no cuesta: `fib(26)`, +3,5 % (en V7
+  era +35 %: desde V8 su firmware lleva a la SRAM el intérprete y lo que más se usa). En la
+  Pico 2, `fib(26)` +7,7 % y `PrintBench` (2 000 líneas) **+77 %**: 1 321 ms frente a 745.
+  Con dos hilos, la de dos núcleos gana en las dos (×1,68 en la Pico 2, ×1,75 en la Metro).
+  `vm.runs=1` quita lo que cuesta el segundo run; lo de la imagen sólo se recupera con la de
+  un núcleo, que se compila aparte (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Por qué imprimir va
+  tan lento en la Pico 2 se investiga en V9; lo que se gana con dos hilos, en el manual
+  §14.6.
 - **Un fallo fatal reinicia la placa entera, y el autorun no se lanza** (que el fallo de un
   run no la tumbe es de V9). Un error del programa es una excepción y, como mucho, acaba su
   hilo; un fallo *fatal* —un HardFault, la memoria del sistema agotada, una comprobación

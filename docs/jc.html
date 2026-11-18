@@ -1,0 +1,2707 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>BasicPlus — El lenguaje JC</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --bg-code: #f0f2f4;
+    --fg: #222;
+    --fg-muted: #666;
+    --accent: #2a6fbf;
+    --accent-bg: #e8f1fb;
+    --border: #ddd;
+    --warn: #b86e00;
+    --warn-bg: #fff4e0;
+    --kw: #8000ff;
+    --type: #267f99;
+    --str: #a31515;
+    --num: #098658;
+    --comment: #6a994e;
+    --fn: #795e26;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 0;
+    padding: 0;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    font-size: 0.92rem;
+  }
+  nav.toc h2 {
+    margin: 0 0 .5rem 0;
+    font-size: 0.95rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ul { list-style: none; padding-left: 0; margin: 0 0 1rem 0; }
+  nav.toc li { margin: 0.1rem 0; }
+  nav.toc a {
+    color: var(--fg);
+    text-decoration: none;
+    display: block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
+  nav.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+  nav.toc .group { margin-top: 0.8rem; }
+  nav.toc .sub { padding-left: 0.8rem; font-size: 0.85rem; color: var(--fg-muted); }
+
+  main {
+    padding: 2rem 3rem 6rem;
+    max-width: 960px;
+  }
+  h1 {
+    color: var(--accent);
+    margin-top: 0;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 0.4rem;
+  }
+  h2 {
+    color: var(--accent);
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.8rem; color: #333; }
+  h4 { margin-top: 1.2rem; color: var(--fg-muted); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, "Fira Code", "Courier New", monospace;
+    background: var(--bg-code);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--bg-code);
+    padding: 0.9rem 1.1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    border-left: 3px solid var(--accent);
+    line-height: 1.4;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.88em;
+  }
+  pre.salida { border-left-color: var(--fg-muted); background: white; border: 1px solid var(--border); border-left: 3px solid var(--fg-muted); }
+  .kw { color: var(--kw); font-weight: 600; }
+  .type { color: var(--type); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+  .fn { color: var(--fn); }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  td code { font-size: 0.86em; }
+
+  .note {
+    background: var(--accent-bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 3px solid var(--warn);
+    padding: 0.8rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  .note p:first-child, .warn p:first-child { margin-top: 0; }
+  .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .grid2 > div { min-width: 0; }
+  .grid2 pre { margin-top: 0.3rem; }
+  .etq {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 1.5rem; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Contenido</h2>
+  <ul>
+    <li class="group"><a href="#que-es">1. Qué es JC</a></li>
+    <li class="sub"><a href="#otra-ropa">1.1 El mismo lenguaje, otra ropa</a></li>
+    <li class="sub"><a href="#bp-o-jc">1.2 ¿BP o JC?</a></li>
+
+    <li class="group"><a href="#primero">2. Un primer programa</a></li>
+    <li class="sub"><a href="#hola">2.1 Hola, en los dos</a></li>
+    <li class="sub"><a href="#ejecutar">2.2 Compilar y ejecutar</a></li>
+    <li class="sub"><a href="#print">2.3 print y println</a></li>
+
+    <li class="group"><a href="#ejemplo">3. Un programa entero, en BP y en JC</a></li>
+
+    <li class="group"><a href="#basico">4. Lo básico</a></li>
+    <li class="sub"><a href="#reservadas">4.1 Las palabras reservadas</a></li>
+
+    <li class="group"><a href="#modulos">5. Módulos e import</a></li>
+    <li class="sub"><a href="#modulo">5.1 El módulo</a></li>
+    <li class="sub"><a href="#main">5.2 main y la función de arranque</a></li>
+    <li class="sub"><a href="#import">5.3 import</a></li>
+    <li class="sub"><a href="#import-propios">5.4 Importar tus módulos</a></li>
+
+    <li class="group"><a href="#tipos">6. Tipos, variables y literales</a></li>
+    <li class="sub"><a href="#tipos-basicos">6.1 Los tipos</a></li>
+    <li class="sub"><a href="#variables">6.2 Variables y constantes</a></li>
+    <li class="sub"><a href="#literales">6.3 Literales</a></li>
+    <li class="sub"><a href="#arrays">6.4 Arrays</a></li>
+    <li class="sub"><a href="#cadenas">6.5 Cadenas y null</a></li>
+    <li class="sub"><a href="#tuplas">6.6 Tuplas</a></li>
+    <li class="sub"><a href="#enums">6.7 Enums</a></li>
+
+    <li class="group"><a href="#expresiones">7. Expresiones y operadores</a></li>
+    <li class="sub"><a href="#operadores">7.1 Los operadores</a></li>
+    <li class="sub"><a href="#precedencia">7.2 La precedencia, la de C#</a></li>
+    <li class="sub"><a href="#asignaciones">7.3 Asignaciones</a></li>
+    <li class="sub"><a href="#conversiones">7.4 Conversiones e is</a></li>
+    <li class="sub"><a href="#ternario">7.5 El ternario</a></li>
+
+    <li class="group"><a href="#control">8. Control de flujo</a></li>
+    <li class="sub"><a href="#if">8.1 if, while y do</a></li>
+    <li class="sub"><a href="#for">8.2 for</a></li>
+    <li class="sub"><a href="#foreach">8.3 foreach</a></li>
+    <li class="sub"><a href="#switch">8.4 switch</a></li>
+    <li class="sub"><a href="#break">8.5 break y continue, con nombre</a></li>
+
+    <li class="group"><a href="#funciones">9. Funciones</a></li>
+    <li class="sub"><a href="#declarar">9.1 Declarar y llamar</a></li>
+    <li class="sub"><a href="#param-var">9.2 Parámetros var</a></li>
+    <li class="sub"><a href="#native">9.3 native e inline</a></li>
+
+    <li class="group"><a href="#clases">10. Clases</a></li>
+    <li class="sub"><a href="#herencia">10.1 Constructores, herencia y base</a></li>
+    <li class="sub"><a href="#visibilidad">10.2 La visibilidad</a></li>
+    <li class="sub"><a href="#properties">10.3 Properties</a></li>
+    <li class="sub"><a href="#static">10.4 static, const y sync</a></li>
+    <li class="sub"><a href="#destructor">10.5 El destructor y owner</a></li>
+
+    <li class="group"><a href="#interfaces">11. Interfaces</a></li>
+    <li class="group"><a href="#genericos">12. Genéricos</a></li>
+    <li class="group"><a href="#eventos">13. Eventos</a></li>
+    <li class="group"><a href="#excepciones">14. Excepciones</a></li>
+    <li class="group"><a href="#hilos">15. Hilos y parallel</a></li>
+    <li class="group"><a href="#anotaciones">16. Anotaciones</a></li>
+
+    <li class="group"><a href="#diferencias">17. Lo que JC no tiene, y lo que choca</a></li>
+    <li class="sub"><a href="#no-tiene">17.1 Lo que JC no tiene</a></li>
+    <li class="sub"><a href="#desde-java">17.2 Si vienes de Java o de C#</a></li>
+    <li class="sub"><a href="#choca">17.3 Lo que choca con BP</a></li>
+
+    <li class="group"><a href="#compilar">18. Compilar, traducir y el IDE</a></li>
+    <li class="sub"><a href="#compilar-jc">18.1 Compilar un .jc</a></li>
+    <li class="sub"><a href="#proyecto">18.2 Un proyecto</a></li>
+    <li class="sub"><a href="#traducir">18.3 Traducir entre BP y JC</a></li>
+    <li class="sub"><a href="#ide">18.4 En el IDE</a></li>
+    <li class="sub"><a href="#errores">18.5 Los mensajes de error</a></li>
+
+    <li class="group"><a href="#librerias">19. Las librerías</a></li>
+  </ul>
+
+  <h2>Otros volúmenes</h2>
+  <ul>
+    <li><a href="manual.html#intro">Manual del lenguaje (BP)</a></li>
+    <li><a href="referencia.html#stdlib">Referencia / librería estándar</a></li>
+    <li><a href="gui.html">Interfaz gráfica</a></li>
+    <li><a href="basedatos.html">Bases de datos</a></li>
+    <li><a href="guia-ide.html">Guía del IDE</a></li>
+    <li><a href="creditos.html">Créditos y agradecimientos</a></li>
+    <li><a href="index.html">Índice de documentación</a></li>
+    <li><a href="en/jc.html">🇬🇧 English</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<h1>BasicPlus — El lenguaje JC</h1>
+<p style="color:var(--fg-muted)">
+  JC es BasicPlus escrito con la sintaxis de Java y C#. Este volumen cuenta el lenguaje: cómo se escribe cada
+  cosa en JC, qué es en BP y en qué se diferencian. Lo demás se comparte con BP —la biblioteca estándar, la
+  interfaz gráfica, las bases de datos, el IDE y las placas— y sus volúmenes valen tal cual para un programa
+  en JC (<a href="#librerias">§19</a>).
+</p>
+
+<!-- ============================================================ -->
+<h2 id="que-es">1. Qué es JC</h2>
+
+<h3 id="otra-ropa">1.1 El mismo lenguaje, otra ropa</h3>
+<p>
+  JC (de <strong>J</strong>ava y <strong>C</strong>#) es BasicPlus con llaves, punto y coma y el tipo delante del
+  nombre. No es otro lenguaje: es el mismo con otra sintaxis.
+</p>
+<ul>
+  <li><strong>El compilador es el mismo.</strong> <code>basicplus-frontend.jar</code> lee los <code>.bp</code> y
+      los <code>.jc</code>, elige el lector por la extensión y los lleva al mismo árbol; de ahí en adelante, todo
+      es común.</li>
+  <li><strong>El bytecode es el mismo.</strong> El mismo programa, escrito en BP o en JC, da el mismo
+      <code>.mod</code>, byte a byte. Sólo cambia el <code>.dbg</code>, que cita su fuente y sus líneas.</li>
+  <li><strong>Las VMs no se enteran.</strong> Un programa en JC corre igual en el PC y en las placas, se depura
+      igual y usa las mismas librerías.</li>
+</ul>
+<p>
+  Y por eso JC no es Java ni C#: lo que BP no tiene —las lambdas, los <code>struct</code>, los genéricos
+  propios con <code>&lt;T&gt;</code>…— JC tampoco lo tiene, y algunas cosas se comportan como en BP aunque se
+  escriban como en C#. Están juntas en <a href="#diferencias">§17</a>.
+</p>
+
+<h3 id="bp-o-jc">1.2 ¿BP o JC?</h3>
+<p>
+  Es cuestión de gusto: el resultado es el mismo, con la misma velocidad y las mismas librerías. JC, si vienes
+  de Java, de C# o de C; BP, si prefieres bloques que se cierran con <code>end</code> y sentencias sin
+  <code>;</code>.
+</p>
+<ul>
+  <li><strong>Se mezclan.</strong> Un módulo en JC importa módulos en BP, y la biblioteca estándar está escrita
+      en BP (<a href="#import-propios">§5.4</a>).</li>
+  <li><strong>Se traducen.</strong> El compilador lleva un fuente de un lenguaje al otro, y el IDE también, con
+      una orden del menú (<a href="#traducir">§18.3</a>).</li>
+  <li><strong>Los otros volúmenes están en BP.</strong> Sus ejemplos se leen en JC con las tablas de este
+      volumen, o se traducen; <a href="#librerias">§19</a> cuenta cómo leer una firma de BP.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="primero">2. Un primer programa</h2>
+
+<h3 id="hola">2.1 Hola, en los dos</h3>
+<div class="grid2">
+<div>
+<p class="etq">BP</p>
+<pre><code><span class="kw">module</span> Hola
+  <span class="kw">function</span> main(arg: <span class="type">string</span> := <span class="str">"mundo"</span>)
+    <span class="kw">print</span> <span class="str">"hola, "</span>; arg
+  <span class="kw">end</span> main
+<span class="kw">end</span> Hola</code></pre>
+</div>
+<div>
+<p class="etq">JC</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Hola
+{
+   <span class="kw">function</span> <span class="type">void</span> main(<span class="type">string</span> arg = <span class="str">"mundo"</span>)
+   {
+      <span class="kw">println</span>(<span class="str">"hola, "</span>, arg);
+   }
+}</code></pre>
+</div>
+</div>
+<p>
+  El módulo va entre llaves, y cada sentencia acaba en <code>;</code>. El tipo va delante del nombre
+  (<code>string arg</code>), y una función que no devuelve nada es <code>void</code>. El valor por defecto de un
+  parámetro se escribe con <code>=</code>. Y <code>println</code> escribe sus piezas, una tras otra, y salta de
+  línea.
+</p>
+
+<h3 id="ejecutar">2.2 Compilar y ejecutar</h3>
+<p>Las mismas órdenes que para un <code>.bp</code> (<a href="referencia.html#cli">referencia §16</a>):</p>
+<pre><code>java -jar basicplus-frontend.jar Hola.jc --compile out --backend=mivm
+java -jar bpgenvm.jar out/Hola.mod
+bpgenvm-c out/Hola.mod "a todos"</code></pre>
+<pre class="salida" data-bp="skip"><code>hola, mundo
+hola, a todos</code></pre>
+<p>
+  El segundo argumento de la VM es el de <code>main</code>; sin él, vale su valor por defecto. En el IDE, se abre
+  el <code>.jc</code> y se ejecuta como cualquier fuente (<a href="#ide">§18.4</a>).
+</p>
+
+<h3 id="print">2.3 <code>print</code> y <code>println</code></h3>
+<p>
+  Es lo primero que se nota al pasar de BP a JC. El <code>print</code> de BP salta de línea al final, y la coma
+  pone un espacio entre las piezas. El de JC, no:
+</p>
+<ul>
+  <li><code>print(a, b);</code> escribe las piezas una tras otra, <strong>sin nada entre ellas y sin saltar de
+      línea</strong>. Es el <code>print a; b;</code> de BP.</li>
+  <li><code>println(a, b);</code> hace lo mismo y <strong>salta de línea</strong> al final. Es el
+      <code>print a; b</code> de BP.</li>
+  <li><code>println();</code> es sólo el salto, el <code>print</code> vacío de BP.</li>
+</ul>
+<div class="grid2">
+<div>
+<p class="etq">BP</p>
+<pre><code><span class="kw">module</span> Piezas
+  <span class="kw">function</span> main()
+    <span class="kw">var</span> n: <span class="type">integer</span> := <span class="num">3</span>
+    <span class="kw">print</span> <span class="str">"n = "</span>;
+    <span class="kw">print</span> n;
+    <span class="kw">print</span> <span class="str">", y sigue en la misma línea"</span>
+    <span class="kw">print</span> <span class="str">"a"</span>; <span class="str">"b"</span>; <span class="num">1</span> + <span class="num">2</span>
+    <span class="kw">print</span> <span class="str">"a"</span>, <span class="str">"b"</span>
+    <span class="kw">print</span>
+    <span class="kw">print</span> <span class="str">"fin"</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> Piezas</code></pre>
+</div>
+<div>
+<p class="etq">JC</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Piezas
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> n = <span class="num">3</span>;
+      <span class="kw">print</span>(<span class="str">"n = "</span>);
+      <span class="kw">print</span>(n);
+      <span class="kw">println</span>(<span class="str">", y sigue en la misma línea"</span>);
+      <span class="kw">println</span>(<span class="str">"a"</span>, <span class="str">"b"</span>, <span class="num">1</span> + <span class="num">2</span>);
+      <span class="kw">println</span>(<span class="str">"a"</span>, <span class="str">" "</span>, <span class="str">"b"</span>);
+      <span class="kw">println</span>();
+      <span class="kw">println</span>(<span class="str">"fin"</span>);
+   }
+}</code></pre>
+</div>
+</div>
+<p>Los dos escriben lo mismo:</p>
+<pre class="salida" data-bp="skip"><code>n = 3, y sigue en la misma línea
+ab3
+a b
+
+fin</code></pre>
+<ul>
+  <li><strong>Un <code>"\n"</code> dentro de una cadena es un carácter más:</strong> no cierra la línea. La línea
+      sale entera —también con varios hilos escribiendo a la vez— cuando la cierra un <code>println</code>, o al
+      acabar el hilo. Para que cada línea salga en su momento, <code>println</code>.</li>
+  <li><strong>Las piezas se calculan en orden, y van entrando en la línea.</strong> Si una lanza una excepción,
+      lo de antes ya está escrito y sale con lo siguiente que se escriba: para no mezclarlo, calcula antes lo que
+      puede fallar.</li>
+  <li><code>print</code> y <code>println</code> son palabras reservadas de JC, no funciones de una librería.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="ejemplo">3. Un programa entero, en BP y en JC</h2>
+<p>
+  El mismo programa en los dos lenguajes. Es el ejemplo con el que se decidió la sintaxis de JC, y toca casi
+  todo lo básico: constantes, una variable y una property del módulo, un enum, una tupla, un parámetro con valor
+  por defecto, una función <code>inline</code>, <code>if</code>, <code>for</code>, <code>foreach</code>,
+  <code>do</code>, <code>try</code> y <code>print</code>. Primero en BP:
+</p>
+<pre><code><span class="kw">module</span> Ejemplo
+  <span class="kw">import</span> Collections
+
+  <span class="kw">public const</span> MAX: <span class="type">integer</span> := <span class="num">10</span>
+  <span class="kw">const</span> PI := <span class="num">3.5</span>
+  <span class="kw">var</span> cuenta: <span class="type">integer</span> := <span class="num">0</span>
+  <span class="kw">public property</span> nivel: <span class="type">integer</span> := <span class="num">1</span>
+
+  <span class="kw">public enum</span> Color
+    Rojo
+    Verde := <span class="num">5</span>
+  <span class="kw">end</span> Color
+
+  <span class="kw">function</span> par(): (<span class="type">integer</span>, <span class="type">string</span>)
+    <span class="kw">return</span> (<span class="num">1</span>, <span class="str">"uno"</span>)
+  <span class="kw">end</span> par
+
+  <span class="kw">public function</span> sumar(a: <span class="type">integer</span>, b: <span class="type">integer</span> := <span class="num">1</span>): <span class="type">integer</span>
+    <span class="kw">return</span> a + b
+  <span class="kw">end</span> sumar
+
+  <span class="kw">public function</span> codigo(s: <span class="type">string</span>, i: <span class="type">integer</span>): <span class="type">integer</span>
+    <span class="kw">inline</span> CALL_BUILTIN <span class="num">48</span>
+  <span class="kw">end</span> codigo
+
+  <span class="kw">public function</span> main()
+    <span class="kw">var</span> n: <span class="type">integer</span>
+    <span class="kw">var</span> s: <span class="type">string</span>
+    <span class="kw">var</span> l: List := List()
+    { n, s } := par()
+    <span class="kw">if</span> n &gt; <span class="num">0</span> <span class="kw">and not</span> (s == <span class="str">""</span>) <span class="kw">then print</span> <span class="str">"si"</span>
+    <span class="kw">for</span> i := <span class="num">1</span> <span class="kw">to</span> MAX <span class="kw">step</span> <span class="num">2</span> <span class="kw">do</span>
+      cuenta += i
+    <span class="kw">next</span>
+    <span class="kw">for</span> x <span class="kw">in</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>] <span class="kw">do print</span> x
+    <span class="kw">do</span>
+      n -= <span class="num">1</span>
+    <span class="kw">loop</span> n &gt; <span class="num">0</span>
+    <span class="kw">try</span>
+      <span class="kw">throw</span> RuntimeError(<span class="str">"fallo"</span>)
+    <span class="kw">catch</span> e: RuntimeError
+      <span class="kw">print</span> e.msg
+    <span class="kw">endtry</span>
+    <span class="kw">print</span> <span class="str">"cuenta: "</span>; cuenta; <span class="str">" pi: "</span>; PI
+  <span class="kw">end</span> main
+<span class="kw">end</span> Ejemplo</code></pre>
+<p>Y en JC:</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Ejemplo
+{
+   <span class="kw">import</span> Collections;
+
+   <span class="kw">public const</span> <span class="type">int</span> MAX = <span class="num">10</span>;
+   <span class="kw">const</span> <span class="type">float</span> PI = <span class="num">3.5f</span>;
+   <span class="type">int</span> cuenta = <span class="num">0</span>;
+   <span class="kw">public</span> <span class="type">int</span> nivel { get; set; } = <span class="num">1</span>;
+
+   <span class="kw">public enum</span> Color { Rojo, Verde = <span class="num">5</span> }
+
+   <span class="kw">function</span> (<span class="type">int</span>, <span class="type">string</span>) par()
+   {
+      <span class="kw">return</span> (<span class="num">1</span>, <span class="str">"uno"</span>);
+   }
+
+   <span class="kw">public function</span> <span class="type">int</span> sumar(<span class="type">int</span> a, <span class="type">int</span> b = <span class="num">1</span>)
+   {
+      <span class="kw">return</span> a + b;
+   }
+
+   <span class="kw">public function</span> <span class="type">int</span> codigo(<span class="type">string</span> s, <span class="type">int</span> i) <span class="kw">inline</span> CALL_BUILTIN <span class="num">48</span>;
+
+   <span class="kw">public function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> n;
+      <span class="type">string</span> s;
+      List l = <span class="kw">new</span> List();
+      (n, s) = par();
+      <span class="kw">if</span> (n &gt; <span class="num">0</span> &amp;&amp; !(s == <span class="str">""</span>)) <span class="kw">println</span>(<span class="str">"si"</span>);
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= MAX; i += <span class="num">2</span>)
+      {
+         cuenta += i;
+      }
+      <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]) <span class="kw">println</span>(x);
+      <span class="kw">do</span>
+      {
+         n -= <span class="num">1</span>;
+      } <span class="kw">while</span> (n &gt; <span class="num">0</span>);
+      <span class="kw">try</span>
+      {
+         <span class="kw">throw new</span> RuntimeError(<span class="str">"fallo"</span>);
+      }
+      <span class="kw">catch</span> (RuntimeError e)
+      {
+         <span class="kw">println</span>(e.msg);
+      }
+      <span class="kw">println</span>(<span class="str">"cuenta: "</span>, cuenta, <span class="str">" pi: "</span>, PI);
+   }
+}</code></pre>
+<p>Los dos escriben lo mismo, y dan el mismo <code>.mod</code>:</p>
+<pre class="salida" data-bp="skip"><code>si
+1
+2
+3
+fallo
+cuenta: 25 pi: 3.5</code></pre>
+<p>Lo que enseña la comparación:</p>
+<ul>
+  <li><strong>El tipo, siempre delante</strong>: en las variables, los parámetros, las constantes y el retorno
+      (<code>function int sumar(…)</code>). Una constante de BP puede no llevarlo (<code>const PI := 3.5</code>);
+      en JC, sí.</li>
+  <li><strong>Los reales, como en C#</strong>: en JC, <code>3.5</code> es un <code>double</code>, y el
+      <code>float</code> lleva su <code>f</code>, <code>3.5f</code>. En BP es al revés: <code>3.5</code> es un
+      <code>float</code>, y <code>3.5d</code>, un <code>double</code>.</li>
+  <li><strong>Lo que construye lleva <code>new</code></strong>: el <code>List()</code> de BP es
+      <code>new List()</code>.</li>
+  <li><strong>La property corta</strong> de BP es la automática de C#, <code>{ get; set; }</code>.</li>
+  <li><strong>El desempaquetado</strong> <code>{ n, s } := par()</code> es <code>(n, s) = par();</code>.</li>
+  <li><strong>Los operadores de palabra</strong> son los de C: <code>and</code>, <code>or</code> y
+      <code>not</code> son <code>&amp;&amp;</code>, <code>||</code> y <code>!</code>.</li>
+  <li><strong>El <code>for</code>, el <code>do</code> y el <code>catch</code></strong>, con la ropa de C#:
+      <code>for (int i = 1; i &lt;= MAX; i += 2)</code>, <code>do { … } while (n &gt; 0);</code> y
+      <code>catch (RuntimeError e)</code>.</li>
+  <li><strong>El salto de línea</strong> que el <code>print</code> de BP pone solo es el <code>println</code> de
+      JC.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="basico">4. Lo básico</h2>
+<ul>
+  <li><strong>Las palabras reservadas distinguen mayúsculas</strong>: <code>if</code>, no <code>If</code>. En BP
+      es al revés: <code>IF</code> y <code>if</code> son la misma palabra. Los nombres distinguen mayúsculas en
+      los dos: <code>total</code> y <code>Total</code> son dos nombres.</li>
+  <li><strong>Cada sentencia y cada declaración acaba en <code>;</code></strong>, y los saltos de línea no
+      cuentan: una sentencia puede ocupar varias líneas.</li>
+  <li><strong>Los bloques van entre llaves.</strong> Una llave suelta, sin el <code>if</code>, el bucle o la
+      función a la que pertenece, es un error: «un bloque suelto». Con una sola sentencia, las llaves de un
+      <code>if</code>, un <code>while</code>, un <code>for</code> o un <code>foreach</code> se pueden omitir; las del
+      <code>do</code>, mejor no (§8.1).</li>
+  <li><strong>Los comentarios</strong>: <code>//</code> hasta el final de la línea, como en BP, y además
+      <code>/* … */</code>, que puede ocupar varias líneas.</li>
+  <li><strong>Los nombres</strong>, como en BP: una letra o <code>_</code>, y después letras, dígitos o
+      <code>_</code>, hasta 63 caracteres. Los que empiezan por <code>__</code> son del sistema.</li>
+</ul>
+<pre data-bp="jc-trozo"><code><span class="comment">/* Un comentario
+   de varias líneas */</span>
+<span class="type">int</span> total = <span class="num">0</span>;            <span class="comment">// y uno de línea</span>
+total = total
+      + <span class="num">1</span>;                  <span class="comment">// una sentencia en dos líneas</span></code></pre>
+
+<h3 id="reservadas">4.1 Las palabras reservadas</h3>
+<table>
+  <tr><th>Para qué</th><th>Palabras</th></tr>
+  <tr><td>Módulos</td><td><code>module</code> <code>library</code> <code>import</code> <code>from</code></td></tr>
+  <tr><td>Declaraciones</td>
+      <td><code>const</code> <code>function</code> <code>class</code> <code>interface</code> <code>enum</code>
+          <code>event</code> <code>var</code> <code>inline</code> <code>implements</code> <code>extends</code></td></tr>
+  <tr><td>Modificadores</td>
+      <td><code>public</code> <code>protected</code> <code>private</code> <code>static</code> <code>final</code>
+          <code>native</code> <code>sync</code> <code>owner</code></td></tr>
+  <tr><td>Tipos</td>
+      <td><code>void</code> <code>int</code> <code>long</code> <code>float</code> <code>double</code> <code>bool</code>
+          <code>string</code> <code>byte</code> <code>sbyte</code> <code>short</code> <code>ushort</code></td></tr>
+  <tr><td>Objetos</td><td><code>new</code> <code>this</code> <code>base</code> <code>field</code> <code>is</code>
+          <code>super</code></td></tr>
+  <tr><td>Control</td>
+      <td><code>if</code> <code>else</code> <code>while</code> <code>do</code> <code>for</code> <code>foreach</code>
+          <code>in</code> <code>switch</code> <code>case</code> <code>default</code> <code>break</code>
+          <code>continue</code> <code>return</code> <code>parallel</code></td></tr>
+  <tr><td>Excepciones y eventos</td>
+      <td><code>try</code> <code>catch</code> <code>finally</code> <code>throw</code> <code>raise</code></td></tr>
+  <tr><td>Valores</td><td><code>true</code> <code>false</code> <code>null</code></td></tr>
+  <tr><td>Salida</td><td><code>print</code> <code>println</code></td></tr>
+</table>
+<p>
+  <code>super</code> está reservada para decir que en JC se escribe <code>base</code>; y <code>implements</code> y
+  <code>extends</code>, para las cabeceras de módulo heredadas de BP. Unas pocas palabras sólo son especiales en su
+  sitio y valen como nombre fuera de él: <code>get</code> y <code>set</code> dentro de una property,
+  <code>value</code> en su <code>set</code>, <code>pack</code> en un <code>import</code> y <code>Thread</code> en un
+  <code>case</code> de <code>parallel</code>.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="modulos">5. Módulos e import</h2>
+
+<h3 id="modulo">5.1 El módulo</h3>
+<p>
+  Un fichero es un módulo, como en BP: <code>module Nombre { … }</code>. Dentro van, primero, los
+  <code>import</code>, y después las definiciones —constantes, variables, properties, funciones, clases,
+  interfaces y enums— en cualquier orden. Lo que no es <code>public</code> es privado del módulo.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Medidor
+{
+   <span class="kw">public const</span> <span class="type">int</span> MAXIMO = <span class="num">100</span>;
+   <span class="type">int</span> lecturas = <span class="num">0</span>;                     <span class="comment">// privada del módulo</span>
+   <span class="kw">public</span> <span class="type">int</span> ultima { get; set; }          <span class="comment">// la ven los que importan Medidor</span>
+
+   <span class="kw">public function</span> <span class="type">void</span> apunta(<span class="type">int</span> v)
+   {
+      lecturas++;
+      ultima = v;
+      <span class="kw">if</span> (ultima &gt; MAXIMO) <span class="kw">println</span>(<span class="str">"¡pasa de "</span>, MAXIMO, <span class="str">"!"</span>);
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      apunta(<span class="num">42</span>);
+      apunta(<span class="num">120</span>);
+      <span class="kw">println</span>(lecturas, <span class="str">" lecturas, la última "</span>, ultima);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>¡pasa de 100!
+2 lecturas, la última 120</code></pre>
+<p>
+  Una variable del módulo no puede ser <code>public</code> (es un error): lo que se comparte con otros módulos es una
+  property, como <code>ultima</code> (<a href="manual.html#props">manual §9.5</a>). Con <code>library "com.ejemplo";</code>
+  delante de <code>module</code>, el <code>.mod</code> se llama <code>com.ejemplo.Medidor.mod</code>
+  (<a href="manual.html#library">manual §10.1</a>).
+</p>
+
+<h3 id="main">5.2 <code>main</code> y la función de arranque</h3>
+<p>
+  El programa empieza en <code>function void main()</code> del módulo raíz, o en
+  <code>main(string arg)</code> si recibe un argumento (<code>Main</code> también vale). Y una función
+  <code>void</code> sin parámetros que se llama como el módulo es su <strong>función de arranque</strong>: corre al
+  cargarlo, tras las de los módulos que importa y antes de <code>main</code>.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Arranque
+{
+   <span class="type">int</span> veces = <span class="num">0</span>;
+
+   <span class="kw">function</span> <span class="type">void</span> Arranque()
+   {
+      veces = <span class="num">1</span>;
+      <span class="kw">println</span>(<span class="str">"[init] cargado"</span>);
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main(<span class="type">string</span> arg = <span class="str">"defecto"</span>)
+   {
+      <span class="kw">println</span>(<span class="str">"main con '"</span>, arg, <span class="str">"', veces = "</span>, veces);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>[init] cargado
+main con 'defecto', veces = 1</code></pre>
+<p>
+  Con <code>bpgenvm-c Arranque.mod hola</code>, la segunda línea dice <code>main con 'hola'</code>. Lo demás del
+  argumento —su tope de 127 bytes, el <em>autorun</em>, la consola del IDE— es lo de BP
+  (<a href="manual.html#main">manual §10.2</a>).
+</p>
+
+<h3 id="import">5.3 <code>import</code></h3>
+<p>Los de BP, con su <code>;</code>, y siempre lo primero del módulo:</p>
+<table>
+  <tr><th>JC</th><th>BP</th><th>Para qué</th></tr>
+  <tr><td><code>import Gpio;</code></td><td><code>import Gpio</code></td><td>un módulo, por su nombre</td></tr>
+  <tr><td><code>import com.ejemplo.Util;</code></td><td><code>import com.ejemplo.Util</code></td>
+      <td>con su <code>library</code>; se usa como <code>Util.f()</code></td></tr>
+  <tr><td><code>import Helper from "plugins/helper.mod";</code></td><td><code>import Helper from "plugins/helper.mod"</code></td>
+      <td>dónde encuentra el compilador su <code>.mod</code> o su <code>.bp</code></td></tr>
+  <tr><td><code>import Graficas from pack MisLibs;</code></td><td><code>import Graficas from pack MisLibs</code></td>
+      <td>su interfaz, de ese pack (<a href="guia-ide.html#packs-usar">guía del IDE §10.2</a>)</td></tr>
+  <tr><td><code>import v1 from pack "SQLI";</code></td><td><code>import v1 from pack "SQLI"</code></td>
+      <td>las funciones nativas de un pack, para quien escribe la librería</td></tr>
+</table>
+<p>
+  Lo demás, como en BP (<a href="manual.html#imports">manual §10.3</a>): <code>import Core</code> no hace falta,
+  porque el compilador lo pone siempre —así se usan sin más <code>List</code>, <code>RuntimeError</code> o
+  <code>len</code>—, y los <code>import</code> no son transitivos: para nombrar un tipo de otro módulo hay que
+  importar ese módulo.
+</p>
+
+<h3 id="import-propios">5.4 Importar tus módulos</h3>
+<p>
+  Un módulo en JC importa los de BP como cualquier otro: si el <code>.bp</code> está junto a él, el compilador lo
+  compila también. Para importar otro módulo en JC, hoy hay una condición: <strong>el compilador busca el fuente
+  de un <code>import</code> como <code>.bp</code></strong>, así que un <code>.jc</code> importado se compila antes,
+  y su <code>.mod</code>, junto al que importa o en la carpeta de salida, es lo que se encuentra. En un proyecto,
+  se listan en <code>sources</code>, el importado primero (<a href="#proyecto">§18.2</a>).
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Utiles
+{
+   <span class="kw">public const</span> <span class="type">int</span> VECES = <span class="num">3</span>;
+
+   <span class="kw">public function</span> <span class="type">string</span> repite(<span class="type">string</span> s, <span class="type">int</span> n = <span class="num">3</span>)
+   {
+      <span class="type">string</span> r = <span class="str">""</span>;
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= n; i++) r += s;
+      <span class="kw">return</span> r;
+   }
+}</code></pre>
+<pre><code><span class="kw">module</span> Viejo
+  <span class="kw">public function</span> doble(n: <span class="type">integer</span>): <span class="type">integer</span>
+    <span class="kw">return</span> n * <span class="num">2</span>
+  <span class="kw">end</span> doble
+<span class="kw">end</span> Viejo</code></pre>
+<pre data-bp="jc"><code><span class="kw">module</span> Programa
+{
+   <span class="kw">import</span> Utiles;        <span class="comment">// en JC: compilado antes</span>
+   <span class="kw">import</span> Viejo;         <span class="comment">// en BP: el compilador encuentra Viejo.bp</span>
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">println</span>(Utiles.repite(<span class="str">"ja"</span>));
+      <span class="kw">println</span>(Viejo.doble(<span class="num">21</span>));
+   }
+}</code></pre>
+<pre><code>java -jar basicplus-frontend.jar Utiles.jc --compile out --backend=mivm
+java -jar basicplus-frontend.jar Programa.jc --compile out --backend=mivm
+java -jar bpgenvm.jar out/Programa.mod</code></pre>
+<pre class="salida" data-bp="skip"><code>jajaja
+42</code></pre>
+<p>
+  Sin compilar antes <code>Utiles.jc</code>, el compilador lo dice: «no se localizó .bp ni .bpi para import
+  'Utiles'», y después, que <code>Utiles</code> no se conoce. Un valor por defecto es un literal, como en BP:
+  <code>int n = VECES</code> no vale, aunque <code>VECES</code> sea una constante.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="tipos">6. Tipos, variables y literales</h2>
+
+<h3 id="tipos-basicos">6.1 Los tipos</h3>
+<p>Los de C#, también los estrechos. Un nombre por tipo:</p>
+<table>
+  <tr><th>JC</th><th>BP</th><th>Qué es</th></tr>
+  <tr><td><code>int</code></td><td><code>integer</code></td><td>entero de 32 bits con signo</td></tr>
+  <tr><td><code>long</code></td><td><code>long</code></td><td>entero de 64 bits con signo</td></tr>
+  <tr><td><code>float</code></td><td><code>float</code></td><td>real de 32 bits</td></tr>
+  <tr><td><code>double</code></td><td><code>double</code></td><td>real de 64 bits</td></tr>
+  <tr><td><code>bool</code></td><td><code>boolean</code></td><td><code>true</code> o <code>false</code></td></tr>
+  <tr><td><code>string</code></td><td><code>string</code></td><td>cadena de texto, UTF-8 e inmutable</td></tr>
+  <tr><td><code>byte</code></td><td><code>byte</code></td><td>entero de 8 bits sin signo, 0..255</td></tr>
+  <tr><td><code>sbyte</code></td><td><code>int8</code></td><td>entero de 8 bits con signo, -128..127</td></tr>
+  <tr><td><code>short</code></td><td><code>int16</code> (o <code>short</code>)</td><td>entero de 16 bits con signo</td></tr>
+  <tr><td><code>ushort</code></td><td><code>word</code></td><td>entero de 16 bits sin signo, 0..65535</td></tr>
+  <tr><td><code>int[]</code>, <code>Punto[]</code></td><td><code>integer[]</code>, <code>Punto[]</code></td><td>un array (§6.4)</td></tr>
+  <tr><td><code>(int, string)</code></td><td><code>(integer, string)</code></td><td>una tupla (§6.6)</td></tr>
+  <tr><td><code>Punto</code>, <code>Object</code>, <code>List</code></td><td>igual</td><td>una clase, por su nombre; de otro módulo, <code>Json.JsonObject</code></td></tr>
+</table>
+<p>
+  No hay <code>char</code>: un carácter entre comillas simples es un <code>int</code> (§6.3). Ni
+  <code>uint</code>, <code>ulong</code> o <code>decimal</code>: BP no los tiene. Los estrechos (<code>byte</code>,
+  <code>sbyte</code>, <code>short</code>, <code>ushort</code>) son para guardar —en un array o en un campo ocupan 1
+  o 2 bytes— y en las cuentas operan como <code>int</code> (<a href="manual.html#primitivos">manual §4.1</a>).
+</p>
+
+<h3 id="variables">6.2 Variables y constantes</h3>
+<p>El tipo delante, como en Java y en C#, y el valor con <code>=</code>:</p>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>int x = 5;</code></td><td><code>var x: integer := 5</code></td></tr>
+  <tr><td><code>int a, b;</code></td><td><code>var a, b: integer</code></td></tr>
+  <tr><td><code>int a = 1, b = 2;</code></td><td><code>var a: integer := 1, b: integer := 2</code></td></tr>
+  <tr><td><code>int a, b = 3;</code> — sólo <code>b</code> vale 3</td><td><code>var a: integer, b: integer := 3</code></td></tr>
+  <tr><td><code>int a = 3, b = 3;</code></td><td><code>var a, b: integer := 3</code> — las dos valen 3</td></tr>
+  <tr><td><code>owner Recurso r = new Recurso("db");</code></td><td><code>var owner r: Recurso := Recurso("db")</code></td></tr>
+  <tr><td><code>const int MAX = 10;</code></td><td><code>const MAX: integer := 10</code></td></tr>
+</table>
+<ul>
+  <li><strong>Ojo con <code>int a, b = 3;</code></strong>: como en C#, el valor es sólo de <code>b</code>. En BP,
+      <code>var a, b: integer := 3</code> se lo da a las dos.</li>
+  <li><strong>El tipo se escribe siempre.</strong> No hay <code>var x = 5;</code> como en C#: <code>var</code> sólo
+      va en un <code>foreach</code> (§8.3) y en un parámetro <code>var</code> (§9.2). Y una constante lleva su tipo,
+      aunque en BP se pueda omitir.</li>
+  <li><strong>Una local sin valor no se lee</strong> antes de dárselo: es un error de compilación, como en BP. Una
+      variable del módulo, un campo o una property sin valor valen 0, <code>false</code> o <code>null</code>, y una
+      <code>string</code>, <code>""</code>.</li>
+  <li><strong>Una constante de módulo es un literal</strong> (un número, un <code>bool</code> o una cadena), y no
+      ocupa sitio: su valor se pone en cada uso.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Variables
+{
+   <span class="kw">const</span> <span class="type">int</span> MAX = <span class="num">3</span>;
+   <span class="type">int</span> total;                     <span class="comment">// del módulo, sin valor: 0</span>
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> a = <span class="num">1</span>, b = <span class="num">2</span>;
+      <span class="type">int</span> c;                       <span class="comment">// sin valor: hay que dárselo antes de leerla</span>
+      c = a + b;
+      <span class="type">double</span> media = c / <span class="num">2.0</span>;
+      <span class="type">float</span> f = <span class="num">1.5f</span>;
+      <span class="type">long</span> grande = <span class="num">4000000000L</span>;
+      <span class="type">bool</span> listo = c &gt; MAX;
+      <span class="type">string</span> nombre = <span class="str">"Ana"</span>;
+      total += c;
+      <span class="kw">println</span>(a, <span class="str">" "</span>, b, <span class="str">" "</span>, c, <span class="str">" "</span>, media, <span class="str">" "</span>, f, <span class="str">" "</span>, grande);
+      <span class="kw">println</span>(listo, <span class="str">" "</span>, nombre, <span class="str">" "</span>, total);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>1 2 3 1.5 1.5 4000000000
+false Ana 3</code></pre>
+
+<h3 id="literales">6.3 Literales</h3>
+<p>Los de C#. Lo que cambia respecto a BP son los reales y los caracteres:</p>
+<table>
+  <tr><th>JC</th><th>Qué es</th><th>En BP</th></tr>
+  <tr><td><code>42</code> · <code>0xFF</code> · <code>0b1010</code> · <code>1_000_000</code></td>
+      <td>un <code>int</code> (un <code>long</code>, si no cabe en 32 bits)</td><td>igual</td></tr>
+  <tr><td><code>10L</code></td><td>un <code>long</code></td><td>igual</td></tr>
+  <tr><td><code>1.5</code> · <code>1.5d</code> · <code>2e3</code></td><td>un <code>double</code></td><td><code>1.5d</code> · <code>2e3d</code></td></tr>
+  <tr><td><code>1.5f</code></td><td>un <code>float</code></td><td><code>1.5</code></td></tr>
+  <tr><td><code>'a'</code> · <code>'é'</code> · <code>'\n'</code></td>
+      <td>un <code>int</code>: el código del carácter (97, 233, 10)</td><td>el número (BP no los tiene)</td></tr>
+  <tr><td><code>"hola"</code></td><td>una <code>string</code></td><td>igual</td></tr>
+  <tr><td><code>true</code> · <code>false</code> · <code>null</code></td><td></td><td>igual</td></tr>
+</table>
+<ul>
+  <li><strong>Un real sin letra es un <code>double</code></strong>, como en C#, y no se guarda en un
+      <code>float</code>: <code>float x = 1.5;</code> es un error («valor de tipo 'double' no asignable a variable de
+      tipo 'float'»). Se escribe <code>1.5f</code>. En las placas conviene el <code>float</code>: casi todas tienen
+      unidad de coma flotante de precisión simple, o ninguna.</li>
+  <li><strong>Las secuencias de escape</strong>, las de C#: <code>\n</code> <code>\t</code> <code>\r</code>
+      <code>\0</code> <code>\\</code> <code>\"</code> <code>\'</code>, y también <code>\a</code> <code>\b</code>
+      <code>\f</code> <code>\v</code>, <code>&#92;u00e9</code> (cuatro cifras hexadecimales), <code>\U0001F600</code>
+      (ocho) y <code>\x41</code>. BP sólo tiene las seis primeras.</li>
+  <li><strong>Un carácter es uno</strong>: <code>'ab'</code> es un error. Su valor es el punto de código, el
+      mismo que da <code>charCodeAt</code>.</li>
+  <li><strong>Lo que JC no tiene</strong>: los sufijos <code>u</code> y <code>m</code>, y las cadenas
+      <code>@"…"</code> y <code>$"…"</code> de C#. Cada uno da un error que lo dice.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Literales
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> c = <span class="num">'a'</span>;
+      <span class="kw">println</span>(c, <span class="str">" "</span>, <span class="num">'A'</span> + <span class="num">1</span>, <span class="str">" "</span>, <span class="num">'é'</span>, <span class="str">" "</span>, <span class="num">0xFF</span>, <span class="str">" "</span>, <span class="num">0b1010</span>, <span class="str">" "</span>, <span class="num">1_000_000</span>);
+      <span class="kw">println</span>(<span class="str">"caf&#92;u00e9 con le"</span>, <span class="num">'c'</span> == <span class="num">99</span> ? <span class="str">"che"</span> : <span class="str">"?"</span>);
+      <span class="kw">println</span>(<span class="str">"dijo \"hola\" y se fue"</span>);
+      <span class="type">double</span> d = <span class="num">1.5</span>;
+      <span class="type">float</span> f = <span class="num">1.5f</span>;
+      <span class="kw">println</span>(d * <span class="num">2</span>, <span class="str">" "</span>, f * <span class="num">2</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>97 66 233 255 10 1000000
+café con leche
+dijo "hola" y se fue
+3 3</code></pre>
+<p>Un real con valor entero se escribe sin decimales: <code>3</code>, no <code>3.0</code>, como en BP.</p>
+
+<h3 id="arrays">6.4 Arrays</h3>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>int[] v = [1, 2, 3];</code></td><td><code>var v: integer[] := [1, 2, 3]</code></td></tr>
+  <tr><td><code>int[] v = new int[n];</code></td><td><code>var v: integer[] := integer[n]</code></td></tr>
+  <tr><td><code>Punto[] ps = new Punto[10];</code></td><td><code>var ps: Punto[] := Punto[10]</code></td></tr>
+  <tr><td><code>int buf[64];</code></td><td><code>var buf: integer[64]</code></td></tr>
+  <tr><td><code>byte m[4] = [1, 2, 250];</code></td><td><code>var m: byte[4] := [1, 2, 250]</code></td></tr>
+  <tr><td><code>len(v)</code></td><td><code>len(v)</code></td></tr>
+</table>
+<ul>
+  <li><strong>El literal, con corchetes</strong>, los de BP: <code>[1, 2, 3]</code>, no <code>{ 1, 2, 3 }</code>.</li>
+  <li><strong><code>new T[n]</code></strong> crea un array de <code>n</code> casillas, a cero o a <code>null</code>, de
+      cualquier tipo. No hay arrays de arrays.</li>
+  <li><strong><code>int buf[64]</code> es un array de tamaño fijo, como en C</strong>: no es una referencia, sino
+      sitio en el marco de la función o dentro del objeto (un campo <code>private</code>). Sólo se indexa, se recorre y
+      se mide; no se pasa ni se devuelve, y no va en el módulo (<a href="manual.html#arrays">manual §4.2</a>).</li>
+  <li><strong>La longitud es <code>len(v)</code></strong>, no <code>v.Length</code>; un índice fuera del array lanza
+      un <code>IndexError</code>.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Arrays
+{
+   <span class="kw">function</span> <span class="type">int</span> suma(<span class="type">int</span>[] v)
+   {
+      <span class="type">int</span> s = <span class="num">0</span>;
+      <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> v) s += x;
+      <span class="kw">return</span> s;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span>[] primos = [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>];
+      <span class="type">int</span>[] cuadrados = <span class="kw">new</span> <span class="type">int</span>[<span class="num">4</span>];
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">0</span>; i &lt;= len(cuadrados) - <span class="num">1</span>; i++) cuadrados[i] = i * i;
+      <span class="type">string</span>[] nombres = <span class="kw">new</span> <span class="type">string</span>[<span class="num">2</span>];
+      nombres[<span class="num">0</span>] = <span class="str">"uno"</span>;
+      <span class="type">int</span> buf[<span class="num">8</span>];                  <span class="comment">// de tamaño fijo: en el marco, a cero</span>
+      buf[<span class="num">0</span>] = <span class="num">42</span>;
+      <span class="kw">println</span>(suma(primos), <span class="str">" "</span>, suma(cuadrados), <span class="str">" "</span>, len(buf), <span class="str">" "</span>, buf[<span class="num">0</span>], <span class="str">" "</span>, buf[<span class="num">1</span>]);
+      <span class="kw">println</span>(nombres[<span class="num">0</span>], <span class="str">" "</span>, nombres[<span class="num">1</span>] == <span class="kw">null</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>17 14 8 42 0
+uno true</code></pre>
+
+<h3 id="cadenas">6.5 Cadenas y <code>null</code></h3>
+<p>
+  Una cadena de JC es la de BP: texto UTF-8 que no cambia. Lo que espera quien viene de Java o de C#:
+</p>
+<ul>
+  <li><strong><code>==</code> compara el texto</strong>, como en C# (en Java compararía las referencias), y
+      <code>&lt;</code>, <code>&gt;</code>… comparan el orden alfabético, por punto de código.</li>
+  <li><strong><code>+</code> concatena</strong>, y convierte a texto los números, los enums (su número) y los objetos
+      (su <code>toString()</code>).</li>
+  <li><strong>Una cadena no tiene métodos.</strong> Se usan las funciones de <code>Core</code>, que se ven sin
+      importar nada: <code>len(s)</code>, <code>upper(s)</code>, <code>substring(s, desde, hasta)</code>,
+      <code>indexOf(s, t)</code>, <code>split(s, sep)</code>, <code>replace</code>, <code>contains</code>,
+      <code>startsWith</code>, <code>charAt</code>, <code>charCodeAt</code>, <code>parseInt</code>… (la lista, en la
+      <a href="referencia.html#stdlib-funcs">referencia §13.1</a>). Para ir juntando texto,
+      <code>StringBuilder</code>.</li>
+  <li><strong>No se indexa</strong>: <code>s[i]</code> no vale; <code>charAt(s, i)</code> da el carácter, como
+      cadena, y <code>charCodeAt(s, i)</code>, su código.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Textos
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">string</span> s = <span class="str">"hola mundo"</span>;
+      <span class="kw">println</span>(len(s), <span class="str">" "</span>, upper(s), <span class="str">" "</span>, substring(s, <span class="num">0</span>, <span class="num">4</span>), <span class="str">" "</span>, indexOf(s, <span class="str">"mu"</span>));
+      <span class="kw">println</span>(charAt(s, <span class="num">1</span>), <span class="str">" "</span>, charCodeAt(s, <span class="num">1</span>), <span class="str">" "</span>, contains(s, <span class="str">"mun"</span>), <span class="str">" "</span>, startsWith(s, <span class="str">"ho"</span>));
+      <span class="type">string</span>[] partes = split(<span class="str">"a,b,c"</span>, <span class="str">","</span>);
+      <span class="kw">println</span>(len(partes), <span class="str">" "</span>, partes[<span class="num">2</span>], <span class="str">" "</span>, replace(s, <span class="str">"mundo"</span>, <span class="str">"JC"</span>));
+      <span class="kw">println</span>(s == <span class="str">"hola "</span> + <span class="str">"mundo"</span>, <span class="str">" "</span>, <span class="str">"abc"</span> &lt; <span class="str">"abd"</span>, <span class="str">" "</span>, parseInt(<span class="str">"42"</span>) + <span class="num">1</span>);
+      StringBuilder sb = <span class="kw">new</span> StringBuilder();
+      sb.appendStr(<span class="str">"uno"</span>);
+      sb.appendStr(<span class="str">"+dos"</span>);
+      <span class="kw">println</span>(sb.toString());
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>10 HOLA MUNDO hola 5
+o 111 true true
+3 c hola JC
+true true 43
+uno+dos</code></pre>
+<p>
+  <strong>Una cadena nunca es <code>null</code>, pero una variable <code>string</code> sí puede serlo</strong>, como en
+  C#: <code>string s = null;</code> es una variable que no referencia ninguna cadena. Lo mismo un parámetro, un campo o
+  lo que devuelve una función. Con ella:
+</p>
+<ul>
+  <li>concatenarla y escribirla es como con <code>""</code>: <code>"x" + s + "y"</code> da <code>"xy"</code>;</li>
+  <li><code>==</code> y <code>!=</code>: <code>null</code> sólo es igual a <code>null</code> (<code>s == ""</code> es
+      <code>false</code>);</li>
+  <li>un <code>switch</code> sobre ella va al <code>default</code>;</li>
+  <li>lo que pide una cadena —<code>len</code>, <code>upper</code>, <code>&lt;</code>, los ficheros, una clave de un
+      <code>Map</code>…— lanza un <code>RuntimeError</code>: «referencia nula: <code>upper</code> de un string null».</li>
+</ul>
+<p>
+  Un campo, una property o una variable del módulo <code>string</code> sin valor nace <code>""</code>, no
+  <code>null</code>; una local sin valor no se puede leer (§6.2). Y una <code>const string</code> no puede ser
+  <code>null</code>: es un valor, no una variable.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Nulos
+{
+   <span class="type">string</span> nombre;                  <span class="comment">// del módulo, sin valor: ""</span>
+
+   <span class="kw">function</span> <span class="type">string</span> busca(<span class="type">int</span> id)
+   {
+      <span class="kw">if</span> (id == <span class="num">1</span>) <span class="kw">return</span> <span class="str">"Ana"</span>;
+      <span class="kw">return</span> <span class="kw">null</span>;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">string</span> s = busca(<span class="num">2</span>);
+      <span class="kw">println</span>(<span class="str">"["</span>, s, <span class="str">"] ["</span>, <span class="str">"x"</span> + s + <span class="str">"y"</span>, <span class="str">"]"</span>);
+      <span class="kw">println</span>(s == <span class="kw">null</span>, <span class="str">" "</span>, s == <span class="str">""</span>, <span class="str">" "</span>, len(nombre));
+      <span class="kw">try</span>
+      {
+         <span class="kw">println</span>(upper(s));
+      }
+      <span class="kw">catch</span> (RuntimeError e)
+      {
+         <span class="kw">println</span>(e.msg);
+      }
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>[] [xy]
+true false 0
+referencia nula: upper de un string null</code></pre>
+
+<h3 id="tuplas">6.6 Tuplas</h3>
+<p>Una función puede devolver varios valores, como en C#:</p>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>function (int, int) divmod(int a, int b)</code></td><td><code>function divmod(a: integer, b: integer): (integer, integer)</code></td></tr>
+  <tr><td><code>return (a / b, a % b);</code></td><td><code>return (a / b, a mod b)</code></td></tr>
+  <tr><td><code>(q, r) = divmod(17, 5);</code></td><td><code>{ q, r } := divmod(17, 5)</code></td></tr>
+  <tr><td><code>(int, int) t = divmod(9, 4);</code></td><td><code>var t: (integer, integer) := divmod(9, 4)</code></td></tr>
+</table>
+<p>
+  Los destinos del desempaquetado tienen que existir ya —variables, campos o casillas de un array—, y
+  <code>_</code> descarta un valor. Una tupla no se imprime ni entra en una lista
+  (<a href="manual.html#tuplas">manual §8.2</a>).
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Tuplas
+{
+   <span class="kw">function</span> (<span class="type">int</span>, <span class="type">int</span>) divmod(<span class="type">int</span> a, <span class="type">int</span> b)
+   {
+      <span class="kw">return</span> (a / b, a % b);
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> q, r;
+      (q, r) = divmod(<span class="num">17</span>, <span class="num">5</span>);
+      <span class="kw">println</span>(q, <span class="str">" "</span>, r);
+      (<span class="type">int</span>, <span class="type">int</span>) t = divmod(<span class="num">9</span>, <span class="num">4</span>);
+      (q, _) = t;
+      <span class="kw">println</span>(q);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>3 2
+2</code></pre>
+
+<h3 id="enums">6.7 Enums</h3>
+<p>
+  Como en C#: <code>enum Color { Rojo, Verde = 5, Azul }</code>, con una coma al final si se quiere. Es el
+  <code>enum … end</code> de BP. Los valores se numeran desde 0, y uno escrito es un entero sin signo; las
+  expresiones de C# (<code>1 &lt;&lt; 3</code>, <code>-1</code>) y el tipo de debajo (<code>enum Color : byte</code>)
+  no están.
+</p>
+<ul>
+  <li><strong>De un enum a un entero, sí</strong>: <code>(int) Color.Verde</code> y <code>(int) c</code>, como en C#.
+      En BP, <code>integer(c)</code>.</li>
+  <li><strong>De un entero a un enum, no</strong>: <code>(Color) 2</code> es un error. Un enum es un tipo cerrado.</li>
+  <li><strong>Al escribirlo sale su número</strong>, y su nombre con <code>Enum.getName(c)</code>.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Colores
+{
+   <span class="kw">public enum</span> Color { Rojo, Verde = <span class="num">5</span>, Azul }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Color c = Color.Azul;
+      <span class="kw">println</span>(c, <span class="str">" "</span>, (<span class="type">int</span>) Color.Verde, <span class="str">" "</span>, (<span class="type">int</span>) c + <span class="num">1</span>);
+      <span class="kw">println</span>(Enum.getName(c));
+      <span class="kw">if</span> (c == Color.Azul) <span class="kw">println</span>(<span class="str">"es azul"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>6 5 7
+Azul
+es azul</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="expresiones">7. Expresiones y operadores</h2>
+
+<h3 id="operadores">7.1 Los operadores</h3>
+<table>
+  <tr><th>JC</th><th>BP</th><th>Qué hace</th></tr>
+  <tr><td><code>=</code></td><td><code>:=</code></td><td>asigna (es una sentencia, §7.3)</td></tr>
+  <tr><td><code>+ - * /</code></td><td>igual</td><td>entre dos enteros, <code>/</code> es la división entera: <code>17 / 5</code> es 3</td></tr>
+  <tr><td><code>%</code></td><td><code>mod</code></td><td>el resto</td></tr>
+  <tr><td><code>**</code></td><td><code>^</code></td><td>la potencia: <code>2 ** 10</code> es 1024</td></tr>
+  <tr><td><code>&amp;&amp; || !</code></td><td><code>and or not</code></td><td>lógicos; <code>&amp;&amp;</code> y <code>||</code> se saltan el segundo si ya está claro</td></tr>
+  <tr><td><code>&amp; |</code></td><td>igual</td><td>de bits; entre dos <code>bool</code>, lógicos que calculan los dos lados</td></tr>
+  <tr><td><code>^</code></td><td><code>xor</code></td><td>el o exclusivo</td></tr>
+  <tr><td><code>&lt;&lt; &gt;&gt;</code></td><td><code>shl shr</code></td><td>desplazamientos</td></tr>
+  <tr><td><code>== != &lt; &lt;= &gt; &gt;=</code></td><td>igual</td><td>comparan; entre cadenas, el texto (§6.5); entre objetos, si son el mismo</td></tr>
+  <tr><td><code>x is Perro</code></td><td><code>x instanceof Perro</code></td><td>¿es de esa clase o interfaz? (§7.4)</td></tr>
+  <tr><td><code>c ? a : b</code></td><td><code>iif(c, a, b)</code></td><td>el ternario (§7.5)</td></tr>
+  <tr><td><code>(int) x</code> · <code>(Perro) a</code></td><td><code>integer(x)</code> · <code>Perro(a)</code></td><td>conversiones (§7.4)</td></tr>
+  <tr><td><code>new Perro(…)</code> · <code>new int[n]</code></td><td><code>Perro(…)</code> · <code>integer[n]</code></td><td>crea un objeto o un array</td></tr>
+  <tr><td><code>obj::metodo</code></td><td>igual</td><td>un método de un objeto, como valor (§13, §15)</td></tr>
+</table>
+<p>
+  No hay <code>~</code>, el no de bits (en BP tampoco: se escribe <code>x ^ -1</code>), ni <code>??</code> ni
+  <code>?.</code>: cada uno da un error que lo dice.
+</p>
+
+<h3 id="precedencia">7.2 La precedencia, la de C#</h3>
+<p>De la más floja a la más fuerte:</p>
+<table>
+  <tr><th>Nivel</th><th>Operadores</th></tr>
+  <tr><td>1</td><td><code>c ? a : b</code> (asociativo por la derecha)</td></tr>
+  <tr><td>2</td><td><code>||</code></td></tr>
+  <tr><td>3</td><td><code>&amp;&amp;</code></td></tr>
+  <tr><td>4, 5, 6</td><td><code>|</code>, después <code>^</code>, después <code>&amp;</code></td></tr>
+  <tr><td>7</td><td><code>==</code> <code>!=</code></td></tr>
+  <tr><td>8</td><td><code>&lt;</code> <code>&lt;=</code> <code>&gt;</code> <code>&gt;=</code> <code>is</code></td></tr>
+  <tr><td>9</td><td><code>&lt;&lt;</code> <code>&gt;&gt;</code></td></tr>
+  <tr><td>10</td><td><code>+</code> <code>-</code></td></tr>
+  <tr><td>11</td><td><code>*</code> <code>/</code> <code>%</code></td></tr>
+  <tr><td>12</td><td>los unarios <code>-</code> y <code>!</code>, y la conversión <code>(T) x</code></td></tr>
+  <tr><td>13</td><td><code>**</code>, más fuerte que el menos y asociativa por la derecha: <code>-2 ** 2</code> es -4, y <code>2 ** 3 ** 2</code> es <code>2 ** 9</code>, 512</td></tr>
+</table>
+<p>
+  La de BP no es la misma en los operadores de bits: en BP, los desplazamientos van con <code>*</code>, y
+  <code>|</code> y <code>xor</code>, con <code>+</code>. Así que el mismo texto puede dar otro valor. En JC:
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Precedencia
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> a = <span class="num">1</span>;
+      <span class="kw">println</span>(a &lt;&lt; <span class="num">1</span> + <span class="num">2</span>);            <span class="comment">// 8: el + va antes que el &lt;&lt;</span>
+      <span class="kw">println</span>(<span class="num">2</span> ** <span class="num">3</span> ** <span class="num">2</span>, <span class="str">" "</span>, -<span class="num">2</span> ** <span class="num">2</span>);
+      <span class="kw">println</span>(<span class="num">7</span> % <span class="num">3</span>, <span class="str">" "</span>, <span class="num">6</span> ^ <span class="num">3</span>, <span class="str">" "</span>, <span class="num">6</span> &amp; <span class="num">3</span>, <span class="str">" "</span>, <span class="num">6</span> | <span class="num">3</span>, <span class="str">" "</span>, <span class="num">1</span> &lt;&lt; <span class="num">4</span>, <span class="str">" "</span>, -<span class="num">16</span> &gt;&gt; <span class="num">2</span>);
+      <span class="type">bool</span> b = a &gt; <span class="num">0</span> &amp;&amp; !(a == <span class="num">2</span>) || <span class="kw">false</span>;
+      <span class="kw">println</span>(b);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>8
+512 -4
+1 5 2 7 16 -4
+true</code></pre>
+<p>Y lo mismo en BP, con sus operadores:</p>
+<pre><code><span class="kw">module</span> PrecedenciaBp
+  <span class="kw">function</span> main()
+    <span class="kw">var</span> a: <span class="type">integer</span> := <span class="num">1</span>
+    <span class="kw">print</span> a <span class="kw">shl</span> <span class="num">1</span> + <span class="num">2</span>               <span class="comment">// 4: en BP, el shl va con el *</span>
+    <span class="kw">print</span> <span class="num">2</span> ^ <span class="num">3</span> ^ <span class="num">2</span>, -<span class="num">2</span> ^ <span class="num">2</span>
+    <span class="kw">print</span> <span class="num">7</span> <span class="kw">mod</span> <span class="num">3</span>, <span class="num">6</span> <span class="kw">xor</span> <span class="num">3</span>, <span class="num">6</span> &amp; <span class="num">3</span>, <span class="num">6</span> | <span class="num">3</span>, <span class="num">1</span> <span class="kw">shl</span> <span class="num">4</span>, -<span class="num">16</span> <span class="kw">shr</span> <span class="num">2</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> PrecedenciaBp</code></pre>
+<pre class="salida" data-bp="skip"><code>4
+512 -4
+1 5 2 7 16 -4</code></pre>
+<p>
+  Al traducir, cada lenguaje pone los paréntesis que pide su precedencia, así que un programa traducido calcula lo
+  mismo que el original: <code>a shl 1 + 2</code> de BP sale en JC como <code>(a &lt;&lt; 1) + 2</code>.
+</p>
+
+<h3 id="asignaciones">7.3 Asignaciones</h3>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>x = e;</code></td><td><code>x := e</code></td></tr>
+  <tr><td><code>x += e;</code> <code>x -= e;</code> <code>x *= e;</code> <code>x /= e;</code></td><td>igual</td></tr>
+  <tr><td><code>x %= e;</code> <code>x ^= e;</code> <code>x &lt;&lt;= e;</code> <code>x &gt;&gt;= e;</code></td><td><code>x mod= e</code> <code>x xor= e</code> <code>x shl= e</code> <code>x shr= e</code></td></tr>
+  <tr><td><code>x &amp;= e;</code> <code>x |= e;</code></td><td>igual</td></tr>
+  <tr><td><code>x++;</code> <code>x--;</code></td><td><code>x += 1</code> <code>x -= 1</code></td></tr>
+</table>
+<ul>
+  <li><strong><code>x op= e</code> calcula <code>x</code> una vez</strong> (<code>a[f()] += 5</code> llama a
+      <code>f</code> una vez), y sigue la regla de tipos de C#: si el resultado no cabe en el tipo de
+      <code>x</code>, vale sólo si <code>e</code> cabría, y entonces se recorta dando la vuelta (un
+      <code>byte</code> que vale 255, más 1, es 0). Si no, es un error: <code>int i; i += 1.5;</code> no compila.</li>
+  <li><strong><code>x++</code> y <code>x--</code> son sentencias</strong>, detrás de una variable, un campo o una
+      casilla (<code>a[i]++</code>). <code>++x</code> no existe, y dentro de una expresión (<code>y = x++</code>,
+      <code>a[i++]</code>) tampoco.</li>
+  <li><strong>Una asignación no es una expresión</strong>: <code>a = b = 0;</code> o
+      <code>if ((x = f()) &gt; 0)</code> no valen. Se escriben en dos sentencias.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Asignaciones
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> i = <span class="num">3</span>;
+      i += <span class="num">2</span>;          <span class="comment">// 5</span>
+      i *= <span class="num">4</span>;          <span class="comment">// 20</span>
+      i %= <span class="num">6</span>;          <span class="comment">// 2</span>
+      i &lt;&lt;= <span class="num">3</span>;         <span class="comment">// 16</span>
+      i ^= <span class="num">1</span>;          <span class="comment">// 17</span>
+      i++;             <span class="comment">// 18</span>
+      <span class="kw">println</span>(i);
+      <span class="type">byte</span> b = <span class="num">255</span>;
+      b += <span class="num">1</span>;          <span class="comment">// 0: un byte opera como int y guarda su tamaño</span>
+      <span class="type">long</span> l = <span class="num">1</span>;
+      l &lt;&lt;= <span class="num">40</span>;
+      <span class="type">string</span> s = <span class="str">"n="</span>;
+      s += <span class="num">5</span>;          <span class="comment">// + concatena</span>
+      <span class="kw">println</span>(b, <span class="str">" "</span>, l, <span class="str">" "</span>, s);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>18
+0 1099511627776 n=5</code></pre>
+
+<h3 id="conversiones">7.4 Conversiones e <code>is</code></h3>
+<p>
+  Como en C#: <code>(T) x</code>. En BP, crear, llamar y convertir se escriben igual —<code>Perro(x)</code>— y
+  decide el compilador; en JC cada cosa tiene su forma: <code>new Perro(x)</code> crea, <code>(Perro) x</code>
+  convierte y <code>f(x)</code> llama.
+</p>
+<ul>
+  <li><strong>Entre números</strong>: <code>(int) d</code> trunca hacia cero; <code>(byte)</code>,
+      <code>(sbyte)</code>, <code>(short)</code> y <code>(ushort)</code> miran el rango al ejecutar y, si no cabe,
+      lanzan un <code>ArithmeticError</code>; <code>(long)</code>, <code>(float)</code> y <code>(double)</code>
+      ensanchan. De un tipo pequeño a uno grande no hace falta escribirla: <code>long l = i;</code> vale.</li>
+  <li><strong>Entre clases</strong>: <code>(Perro) a</code> baja desde un antepasado o desde <code>Object</code>, y si
+      el objeto no es un <code>Perro</code> lanza un <code>CastError</code>. Lo que ya es un <code>Perro</code> se queda
+      como está. Dos clases sin parentesco no se convierten: es un error de compilación.</li>
+  <li><strong><code>x is Perro</code></strong> dice si el objeto es de esa clase o interfaz, o de una hija; también
+      con el módulo delante, <code>x is Lib.Perro</code>. Lo demás del <code>is</code> de C#
+      (<code>x is Perro p</code>, <code>x is null</code>) no está: para <code>null</code>, <code>x == null</code>.</li>
+  <li><strong>Un paréntesis o una conversión</strong>, con la regla de C#: es una conversión si entre los paréntesis
+      hay un tipo del lenguaje (<code>(int)</code>…), o si hay un nombre y tras el <code>)</code> viene un nombre, un
+      literal, una palabra reservada (<code>new</code>, <code>this</code>…), un <code>(</code> o un <code>!</code>.
+      Así, <code>(a) - b</code> es una resta; para convertir <code>-x</code>, <code>(Perro) (-x)</code>.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Conversiones
+{
+   <span class="kw">class</span> Animal
+   {
+      <span class="kw">public function</span> <span class="type">string</span> habla()
+      {
+         <span class="kw">return</span> <span class="str">"..."</span>;
+      }
+   }
+
+   <span class="kw">class</span> Perro : Animal
+   {
+      <span class="kw">public function</span> <span class="type">string</span> habla()
+      {
+         <span class="kw">return</span> <span class="str">"guau"</span>;
+      }
+
+      <span class="kw">public function</span> <span class="type">string</span> trae()
+      {
+         <span class="kw">return</span> <span class="str">"la pelota"</span>;
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">double</span> d = <span class="num">3.9</span>;
+      <span class="type">int</span> i = (<span class="type">int</span>) d;                     <span class="comment">// 3: trunca hacia cero</span>
+      <span class="type">long</span> l = (<span class="type">long</span>) i * <span class="num">1000000000</span>;
+      <span class="type">byte</span> b = (<span class="type">byte</span>) <span class="num">200</span>;
+      <span class="kw">println</span>(i, <span class="str">" "</span>, l, <span class="str">" "</span>, b);
+      Animal a = <span class="kw">new</span> Perro();
+      <span class="kw">if</span> (a <span class="kw">is</span> Perro) <span class="kw">println</span>(((Perro) a).trae());
+      Object o = a;
+      Perro p = (Perro) o;                 <span class="comment">// si no lo fuera: CastError</span>
+      <span class="kw">println</span>(p.habla());
+      <span class="kw">try</span>
+      {
+         b = (<span class="type">byte</span>) (i * <span class="num">100</span>);
+      }
+      <span class="kw">catch</span> (ArithmeticError e)
+      {
+         <span class="kw">println</span>(<span class="str">"300 no cabe en un byte"</span>);
+      }
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>3 3000000000 200
+la pelota
+guau
+300 no cabe en un byte</code></pre>
+<p>
+  Escribir una cosa por otra es un error que dice cómo va en JC: <code>Perro("Rex")</code> sin <code>new</code> da
+  «'Perro(…)' crea un objeto: en JC se escribe 'new Perro(…)'», e <code>int(d)</code>, «en JC, una conversión se
+  escribe (int) x».
+</p>
+
+<h3 id="ternario">7.5 El ternario</h3>
+<p>
+  <code>c ? a : b</code> vale <code>a</code> si se cumple <code>c</code>, y si no, <code>b</code>. Es el
+  <code>iif(c, a, b)</code> de BP, y <strong>sólo calcula la rama que toca</strong>, así que una función recursiva
+  con él termina. Su tipo es el de las dos ramas: el mismo; o dos números, y gana el más ancho; o <code>null</code> y
+  una referencia; o una clase y su hija, y gana el padre. No es una sentencia: para elegir qué hacer, un
+  <code>if</code>.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Ternario
+{
+   <span class="kw">function</span> <span class="type">int</span> fib(<span class="type">int</span> n)
+   {
+      <span class="kw">return</span> n &lt; <span class="num">2</span> ? n : fib(n - <span class="num">1</span>) + fib(n - <span class="num">2</span>);
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">for</span> (<span class="type">int</span> n = <span class="num">1</span>; n &lt;= <span class="num">4</span>; n++) <span class="kw">println</span>(n, n % <span class="num">2</span> == <span class="num">0</span> ? <span class="str">" par"</span> : <span class="str">" impar"</span>);
+      <span class="kw">println</span>(fib(<span class="num">10</span>));
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>1 impar
+2 par
+3 impar
+4 par
+55</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="control">8. Control de flujo</h2>
+
+<h3 id="if">8.1 <code>if</code>, <code>while</code> y <code>do</code></h3>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>if (c) { … } else if (d) { … } else { … }</code></td><td><code>if c then … elseif d then … else … endif</code></td></tr>
+  <tr><td><code>while (c) { … }</code></td><td><code>while c do … endwh</code></td></tr>
+  <tr><td><code>do { … } while (c);</code></td><td><code>do … loop c</code></td></tr>
+  <tr><td><code>while (true) { … }</code></td><td><code>do … loop</code> (sin condición)</td></tr>
+</table>
+<p>
+  Los de C. Con una sola sentencia, sin llaves. El <code>else</code> va con el <code>if</code> más cercano, y
+  <code>else if</code> es el <code>elseif</code> de BP. El <code>do</code> repite mientras se cumpla la condición, y un
+  <code>continue</code> dentro de él va a la condición, como en C#. El bucle sin fin es <code>while (true)</code>: JC
+  no tiene el <code>do … loop</code> sin condición de BP.
+</p>
+<p>
+  El <code>do</code>, con sus llaves: un nombre justo detrás de <code>do</code> es el nombre del bucle (§8.5), así que
+  <code>do i++; while (i &lt; 3);</code> toma <code>i</code> por el nombre y no compila. Con llaves,
+  <code>do { i++; } while (i &lt; 3);</code>, no hay duda.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Control
+{
+   <span class="kw">function</span> <span class="type">string</span> etapa(<span class="type">int</span> edad)
+   {
+      <span class="kw">if</span> (edad &lt; <span class="num">18</span>) <span class="kw">return</span> <span class="str">"menor"</span>;
+      <span class="kw">else if</span> (edad &lt; <span class="num">65</span>) <span class="kw">return</span> <span class="str">"adulto"</span>;
+      <span class="kw">else</span> <span class="kw">return</span> <span class="str">"senior"</span>;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">println</span>(etapa(<span class="num">10</span>), <span class="str">" "</span>, etapa(<span class="num">40</span>), <span class="str">" "</span>, etapa(<span class="num">70</span>));
+      <span class="type">int</span> i = <span class="num">0</span>;
+      <span class="kw">while</span> (i &lt; <span class="num">3</span>) i++;
+      <span class="kw">do</span>
+      {
+         i += <span class="num">10</span>;
+      } <span class="kw">while</span> (i &lt; <span class="num">25</span>);
+      <span class="kw">println</span>(i);
+      <span class="kw">while</span> (<span class="kw">true</span>)
+      {
+         i -= <span class="num">7</span>;
+         <span class="kw">if</span> (i &lt; <span class="num">0</span>) <span class="kw">break</span>;
+      }
+      <span class="kw">println</span>(i);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>menor adulto senior
+33
+-2</code></pre>
+
+<h3 id="for">8.2 <code>for</code></h3>
+<p>
+  El <code>for</code> de JC es el de BP con la ropa de C: un contador. Tiene cuatro formas:
+</p>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>for (int i = a; i &lt;= b; i++)</code></td><td><code>for i := a to b do</code></td></tr>
+  <tr><td><code>for (int i = a; i &lt;= b; i += 2)</code></td><td><code>for i := a to b step 2 do</code></td></tr>
+  <tr><td><code>for (int i = a; i &gt;= b; i--)</code></td><td><code>for i := a to b step -1 do</code></td></tr>
+  <tr><td><code>for (int i = a; i &gt;= b; i -= 2)</code></td><td><code>for i := a to b step -2 do</code></td></tr>
+</table>
+<ul>
+  <li><strong>La variable la declara el <code>for</code></strong>, y es siempre <code>int</code>.</li>
+  <li><strong>El límite se calcula una vez</strong>, antes de empezar, y es inclusivo: <code>&lt;=</code> si sube,
+      <code>&gt;=</code> si baja.</li>
+  <li><strong>El paso es un número escrito</strong>, no una variable.</li>
+  <li><strong>Lo demás es un error que lo dice.</strong> El <code>i &lt; n</code> de C, el más típico, se escribe
+      <code>i &lt;= n - 1</code>; otra condición, otro incremento o un paso en una variable, con un
+      <code>while</code>.</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Contar
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= <span class="num">10</span>; i += <span class="num">3</span>) <span class="kw">print</span>(i, <span class="str">" "</span>);
+      <span class="kw">println</span>(<span class="str">"fin"</span>);
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">3</span>; i &gt;= <span class="num">1</span>; i--)
+      {
+         <span class="kw">print</span>(i, <span class="str">"... "</span>);
+      }
+      <span class="kw">println</span>(<span class="str">"¡ya!"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>1 4 7 10 fin
+3... 2... 1... ¡ya!</code></pre>
+
+<h3 id="foreach">8.3 <code>foreach</code></h3>
+<p>
+  <code>foreach (var x in coleccion)</code> es el <code>for x in coleccion do</code> de BP. Recorre un array o una
+  <code>List</code> (también <code>SyncList</code> y <code>OwnerList</code>). La variable se escribe siempre
+  <code>var</code>: toma el tipo de los elementos —en una <code>List</code> a secas, <code>Object</code>; en una
+  <code>List&lt;Sensor&gt;</code>, <code>Sensor</code> (§12)—. Con un tipo escrito,
+  <code>foreach (int x in a)</code>, es un error. La lista se mide una vez, al entrar: lo que el cuerpo le añade no
+  se recorre.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Recorrer
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="type">int</span> total = <span class="num">0</span>;
+      <span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>]) total += n;
+      <span class="kw">println</span>(total);
+      List&lt;Object&gt; l = <span class="kw">new</span> List&lt;Object&gt;();
+      l.add(<span class="str">"uno"</span>);
+      l.add(<span class="num">2</span>);
+      <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> l) <span class="kw">println</span>(x);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>17
+uno
+2</code></pre>
+
+<h3 id="switch">8.4 <code>switch</code></h3>
+<p>
+  La forma de C# con el significado de BP: <code>case 1, 2:</code> con varios valores, y el <code>default</code> al
+  final. <strong>No cae de un caso al siguiente</strong>, así que no hace falta <code>break</code>; si se escribe, sale
+  del <code>switch</code>. El sujeto es un entero, un <code>bool</code>, un enum o una cadena, que se compara por su
+  texto; un real o un objeto, no.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Ordenes
+{
+   <span class="kw">function</span> <span class="type">void</span> ejecuta(<span class="type">string</span> orden)
+   {
+      <span class="kw">switch</span> (orden)
+      {
+         <span class="kw">case</span> <span class="str">"ls"</span>, <span class="str">"dir"</span>:
+            <span class="kw">println</span>(<span class="str">"lista"</span>);
+         <span class="kw">case</span> <span class="str">"cd"</span>:
+            <span class="kw">println</span>(<span class="str">"cambia de carpeta"</span>);
+         <span class="kw">default</span>:
+            <span class="kw">println</span>(<span class="str">"no conozco "</span>, orden);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      ejecuta(<span class="str">"dir"</span>);
+      ejecuta(<span class="str">"cd"</span>);
+      ejecuta(<span class="str">"rm"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>lista
+cambia de carpeta
+no conozco rm</code></pre>
+
+<h3 id="break">8.5 <code>break</code> y <code>continue</code>, con nombre</h3>
+<p>
+  <code>break</code> sale del bucle o del <code>switch</code> más cercano, y <code>continue</code> sigue con la vuelta
+  siguiente del bucle más cercano. Un bucle puede llevar un nombre, detrás de su palabra, para salir de varios de
+  golpe o seguir por el de fuera:
+</p>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>for fila (int i = 1; i &lt;= 3; i++) { … }</code></td><td><code>for i := 1 to 3 do fila</code></td></tr>
+  <tr><td><code>foreach fila (var x in l) { … }</code></td><td><code>for x in l do fila</code></td></tr>
+  <tr><td><code>while fila (c) { … }</code></td><td><code>while c do fila</code></td></tr>
+  <tr><td><code>do fila { … } while (c);</code></td><td><code>do fila … loop c</code></td></tr>
+  <tr><td><code>break fila;</code> · <code>continue fila;</code></td><td><code>break fila</code> · <code>continue fila</code></td></tr>
+</table>
+<p>
+  No son etiquetas ni hay <code>goto</code>: el nombre sólo se ve dentro de su bucle. Al salir, se cierran los
+  <code>try</code> de por medio y corren sus <code>finally</code>.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Buscar
+{
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">for</span> fila (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= <span class="num">3</span>; i++)
+      {
+         <span class="kw">for</span> (<span class="type">int</span> j = <span class="num">1</span>; j &lt;= <span class="num">3</span>; j++)
+         {
+            <span class="kw">if</span> (j &gt; i) <span class="kw">continue</span> fila;
+            <span class="kw">if</span> (i * j == <span class="num">6</span>)
+            {
+               <span class="kw">println</span>(<span class="str">"encontrado: "</span>, i, <span class="str">" x "</span>, j);
+               <span class="kw">break</span> fila;
+            }
+         }
+      }
+      <span class="kw">println</span>(<span class="str">"fuera"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>encontrado: 3 x 2
+fuera</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="funciones">9. Funciones</h2>
+
+<h3 id="declarar">9.1 Declarar y llamar</h3>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>function int suma(int a, int b = 1) { … }</code></td><td><code>function suma(a: integer, b: integer := 1): integer … end suma</code></td></tr>
+  <tr><td><code>function void avisa(string msg) { … }</code></td><td><code>function avisa(msg: string) … end avisa</code></td></tr>
+  <tr><td><code>public function …</code></td><td><code>public function …</code></td></tr>
+  <tr><td><code>function (int, string) par() { … }</code></td><td><code>function par(): (integer, string) … end par</code></td></tr>
+</table>
+<ul>
+  <li><strong>Se escribe <code>function</code></strong>, como en BP, también en los métodos de una clase. La forma de
+      C#, <code>int suma(…)</code> sin <code>function</code>, no existe: se leería como una variable.</li>
+  <li><strong>El tipo de retorno, siempre</strong>, y <code>void</code> si no devuelve nada. Sin tipo, y con un nombre
+      que no es el de la clase, es un error: «falta el tipo de la función; si no devuelve nada, void».</li>
+  <li><strong>Los valores por defecto</strong> son literales y van al final. Los pone el compilador en cada llamada,
+      así que valen también entre módulos.</li>
+  <li><strong>La sobrecarga</strong>, por los parámetros, como en BP: el tipo de retorno no cuenta, y si encajan varias
+      gana la más específica (<a href="manual.html#sobrecarga">manual §8.4</a>).</li>
+  <li><strong>No hay</strong> argumentos con nombre, <code>params</code> ni <code>ref</code>/<code>out</code>; lo más
+      parecido a <code>ref</code> es el parámetro <code>var</code> (§9.2).</li>
+</ul>
+<pre data-bp="jc"><code><span class="kw">module</span> Funciones
+{
+   <span class="kw">public function</span> <span class="type">string</span> etiqueta(<span class="type">string</span> texto, <span class="type">string</span> antes = <span class="str">"["</span>, <span class="type">string</span> despues = <span class="str">"]"</span>)
+   {
+      <span class="kw">return</span> antes + texto + despues;
+   }
+
+   <span class="kw">function</span> <span class="type">string</span> texto(<span class="type">int</span> n)
+   {
+      <span class="kw">return</span> <span class="str">"int:"</span> + n;
+   }
+
+   <span class="kw">function</span> <span class="type">string</span> texto(<span class="type">string</span> s)
+   {
+      <span class="kw">return</span> <span class="str">"str:"</span> + s;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> avisa(<span class="type">string</span> msg)
+   {
+      <span class="kw">println</span>(<span class="str">"aviso: "</span>, msg);
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">println</span>(etiqueta(<span class="str">"hola"</span>), <span class="str">" "</span>, etiqueta(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>), <span class="str">" "</span>, etiqueta(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span class="str">"&gt;"</span>));
+      <span class="kw">println</span>(texto(<span class="num">5</span>), <span class="str">" "</span>, texto(<span class="str">"cinco"</span>));
+      avisa(<span class="str">"fin"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>[hola] &lt;hola] &lt;hola&gt;
+int:5 str:cinco
+aviso: fin</code></pre>
+
+<h3 id="param-var">9.2 Parámetros <code>var</code></h3>
+<p>
+  Un parámetro <code>var</code> no recibe un valor, sino <strong>una property de un objeto</strong>, que se pasa con
+  <code>objeto::property</code>: leer el parámetro es leer la property, y asignarle es escribirla. Es el
+  <code>ref</code> de C#, pero sólo con properties: en esta VM no hay referencias a variables.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Contadores
+{
+   <span class="kw">public class</span> Contador
+   {
+      <span class="kw">public</span> <span class="type">int</span> valor { get; set; }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> suma(<span class="kw">var</span> <span class="type">int</span> n, <span class="type">int</span> m)
+   {
+      n += m;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Contador c = <span class="kw">new</span> Contador();
+      suma(c::valor, <span class="num">5</span>);
+      suma(c::valor, <span class="num">2</span>);
+      <span class="kw">println</span>(c.valor);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>7</code></pre>
+<p>
+  En BP, <code>function suma(var n: integer, m: integer)</code> y la misma llamada. Se le pasa
+  <code>objeto::property</code>, del mismo tipo y que quien llama pueda leer y escribir, u otro parámetro
+  <code>var</code> por su nombre; una variable o un campo, no. Sin valor por defecto, y no en un constructor, un evento
+  ni una <code>native</code>. Las properties de un módulo y las estáticas, todavía no
+  (<a href="manual.html#var">manual §8.1b</a>).
+</p>
+
+<h3 id="native">9.3 <code>native</code> e <code>inline</code></h3>
+<pre data-bp="jc"><code><span class="kw">module</span> Nativo
+{
+   <span class="kw">native function</span> <span class="type">int</span> sumaCuadrados(<span class="type">int</span> n)
+   {
+      <span class="type">int</span> s = <span class="num">0</span>;
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= n; i++) s += i * i;
+      <span class="kw">return</span> s;
+   }
+
+   <span class="kw">public function</span> <span class="type">int</span> codigo(<span class="type">string</span> s, <span class="type">int</span> i) <span class="kw">inline</span> CALL_BUILTIN <span class="num">48</span>;
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">println</span>(sumaCuadrados(<span class="num">10</span>), <span class="str">" "</span>, codigo(<span class="str">"A"</span>, <span class="num">0</span>));
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>385 65</code></pre>
+<ul>
+  <li><strong><code>native function</code></strong> marca una función para el AOT: además de su bytecode, el compilador
+      la traduce a código máquina de la placa, y allí corre mucho más rápido; en el PC, interpretada. Lo que cabe en
+      una <code>native</code> y lo que no, en el <a href="manual.html#funciones-native">manual §8.3</a>: es lo mismo en
+      JC.</li>
+  <li><strong>Una función <code>inline</code></strong> tiene por cuerpo una instrucción de la VM, escrita tras la
+      firma: <code>function T f(…) inline CALL_BUILTIN 48;</code>. Es como está escrita la biblioteca estándar
+      —<code>codigo</code> es el <code>charCodeAt</code> de <code>Core</code>—, y un programa normal no la necesita.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="clases">10. Clases</h2>
+
+<h3 id="herencia">10.1 Constructores, herencia y <code>base</code></h3>
+<p>Como en C#, con lo de BP que C# no tiene. Un animal y un perro:</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Zoo
+{
+   <span class="kw">public class</span> Animal
+   {
+      <span class="kw">protected</span> <span class="type">string</span> nombre;
+      <span class="kw">private static</span> <span class="type">int</span> cuantos = <span class="num">0</span>;
+
+      <span class="kw">public function</span> Animal(<span class="type">string</span> nombre)
+      {
+         <span class="kw">this</span>.nombre = nombre;
+         Animal.cuantos += <span class="num">1</span>;
+      }
+
+      <span class="kw">public function</span> <span class="type">string</span> habla()
+      {
+         <span class="kw">return</span> <span class="str">"..."</span>;
+      }
+
+      <span class="kw">public function</span> <span class="type">string</span> presenta()
+      {
+         <span class="kw">return</span> <span class="kw">this</span>.nombre + <span class="str">" dice "</span> + <span class="kw">this</span>.habla();
+      }
+
+      <span class="kw">public static function</span> <span class="type">int</span> total()
+      {
+         <span class="kw">return</span> Animal.cuantos;
+      }
+   }
+
+   <span class="kw">public class</span> Perro : Animal
+   {
+      <span class="kw">private</span> <span class="type">int</span> edad;
+
+      <span class="kw">public function</span> Perro(<span class="type">string</span> nombre, <span class="type">int</span> edad) : <span class="kw">base</span>(nombre)
+      {
+         <span class="kw">this</span>.edad = edad;
+      }
+
+      <span class="kw">public function</span> Perro(<span class="type">string</span> nombre) : <span class="kw">this</span>(nombre, <span class="num">2</span>)
+      {
+      }
+
+      <span class="kw">public function</span> <span class="type">string</span> habla()
+      {
+         <span class="kw">return</span> <span class="str">"guau"</span>;
+      }
+
+      <span class="kw">public function</span> <span class="type">string</span> presenta()
+      {
+         <span class="kw">return</span> <span class="kw">base</span>.presenta() + <span class="str">" ("</span> + <span class="kw">this</span>.edad + <span class="str">" años)"</span>;
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Animal a = <span class="kw">new</span> Animal(<span class="str">"Bicho"</span>);
+      Perro p = <span class="kw">new</span> Perro(<span class="str">"Rex"</span>, <span class="num">3</span>);
+      Animal q = <span class="kw">new</span> Perro(<span class="str">"Lua"</span>);
+      <span class="kw">println</span>(a.presenta());
+      <span class="kw">println</span>(p.presenta());
+      <span class="kw">println</span>(q.presenta());
+      <span class="kw">println</span>(Animal.total(), <span class="str">" animales"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>Bicho dice ...
+Rex dice guau (3 años)
+Lua dice guau (2 años)
+3 animales</code></pre>
+<p>Traducido a BP —y da el mismo <code>.mod</code>—:</p>
+<pre><code><span class="kw">module</span> Zoo
+  <span class="kw">public class</span> Animal
+    <span class="kw">var</span> nombre: <span class="type">string</span>
+    <span class="kw">private var</span> Animal.cuantos: <span class="type">integer</span> := <span class="num">0</span>
+
+    <span class="kw">public function</span> Animal(nombre: <span class="type">string</span>)
+      <span class="kw">this</span>.nombre := nombre
+      Animal.cuantos += <span class="num">1</span>
+    <span class="kw">end</span> Animal
+
+    <span class="kw">public function</span> habla(): <span class="type">string</span>
+      <span class="kw">return</span> <span class="str">"..."</span>
+    <span class="kw">end</span> habla
+
+    <span class="kw">public function</span> presenta(): <span class="type">string</span>
+      <span class="kw">return</span> <span class="kw">this</span>.nombre + <span class="str">" dice "</span> + <span class="kw">this</span>.habla()
+    <span class="kw">end</span> presenta
+
+    <span class="kw">public function</span> Animal.total(): <span class="type">integer</span>
+      <span class="kw">return</span> Animal.cuantos
+    <span class="kw">end</span> Animal.total
+  <span class="kw">end</span> Animal
+
+  <span class="kw">public class</span> Perro <span class="kw">extends</span> Animal
+    <span class="kw">private var</span> edad: <span class="type">integer</span>
+
+    <span class="kw">public function</span> Perro(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
+      <span class="kw">super</span>(nombre)
+      <span class="kw">this</span>.edad := edad
+    <span class="kw">end</span> Perro
+
+    <span class="kw">public function</span> Perro(nombre: <span class="type">string</span>)
+      Perro(nombre, <span class="num">2</span>)
+    <span class="kw">end</span> Perro
+
+    <span class="kw">public function</span> habla(): <span class="type">string</span>
+      <span class="kw">return</span> <span class="str">"guau"</span>
+    <span class="kw">end</span> habla
+
+    <span class="kw">public function</span> presenta(): <span class="type">string</span>
+      <span class="kw">return</span> <span class="kw">super</span>.presenta() + <span class="str">" ("</span> + <span class="kw">this</span>.edad + <span class="str">" años)"</span>
+    <span class="kw">end</span> presenta
+  <span class="kw">end</span> Perro
+
+  <span class="kw">function</span> main()
+    <span class="kw">var</span> a: Animal := Animal(<span class="str">"Bicho"</span>)
+    <span class="kw">var</span> p: Perro := Perro(<span class="str">"Rex"</span>, <span class="num">3</span>)
+    <span class="kw">var</span> q: Animal := Perro(<span class="str">"Lua"</span>)
+    <span class="kw">print</span> a.presenta()
+    <span class="kw">print</span> p.presenta()
+    <span class="kw">print</span> q.presenta()
+    <span class="kw">print</span> Animal.total(); <span class="str">" animales"</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> Zoo</code></pre>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>class Perro : Animal { … }</code></td><td><code>class Perro extends Animal … end Perro</code></td></tr>
+  <tr><td><code>function Perro(string n) { … }</code>, sin tipo</td><td><code>function Perro(n: string) … end Perro</code></td></tr>
+  <tr><td><code>… : base(n) { … }</code></td><td><code>super(n)</code>, la primera sentencia</td></tr>
+  <tr><td><code>… : this(n, 2) { … }</code></td><td><code>Perro(n, 2)</code>, la primera sentencia</td></tr>
+  <tr><td><code>base.presenta()</code></td><td><code>super.presenta()</code></td></tr>
+  <tr><td><code>static</code></td><td>el nombre de la clase delante: <code>Animal.total</code></td></tr>
+  <tr><td><code>new Perro("Rex", 3)</code></td><td><code>Perro("Rex", 3)</code></td></tr>
+</table>
+<ul>
+  <li><strong>El constructor</strong> es una función con el nombre de la clase, sin tipo. Si la base tiene un
+      constructor con parámetros, la hija que define el suyo lo llama con <code>: base(…)</code>: es obligatorio,
+      aunque los parámetros tengan valor por defecto. Y <code>: this(…)</code> delega en otro constructor de la misma
+      clase (<a href="manual.html#ctor">manual §9.3</a>).</li>
+  <li><strong>Herencia simple</strong>: una clase base, y las interfaces que quiera (§11). Una clase sin base desciende
+      de <code>Object</code>.</li>
+  <li><strong>Todo método es virtual salvo los <code>private</code></strong>: no hay <code>virtual</code> ni
+      <code>override</code>, y un método de la hija con la misma firma sustituye al del padre. Para dejarlo escrito,
+      la anotación <code>@override{}</code> (§11). Un método <code>final</code> no se puede redefinir.</li>
+  <li><strong>No hay</strong> clases dentro de clases, <code>abstract</code>, <code>struct</code> ni clases
+      <code>static</code>. Para un tipo sin código, una interfaz.</li>
+</ul>
+
+<h3 id="visibilidad">10.2 La visibilidad</h3>
+<table>
+  <tr><th>JC</th><th>BP</th><th>Quién lo ve</th></tr>
+  <tr><td><code>public</code></td><td><code>public</code></td><td>todos</td></tr>
+  <tr><td><code>protected</code>, o nada</td><td>nada</td><td>la clase y sus hijas, también las de otro módulo</td></tr>
+  <tr><td><code>private</code></td><td><code>private</code></td><td>sólo la clase (y no es virtual)</td></tr>
+</table>
+<ul>
+  <li><strong>Ojo, quien viene de C#</strong>: en C#, un miembro sin nada es privado; en JC, como en BP, es protegido.
+      El traductor lo escribe siempre, <code>protected</code>.</li>
+  <li><strong>Un campo nunca es <code>public</code></strong>: es un error, y el mensaje manda a la alternativa, una
+      property pública (§10.3). Lo que sale de una clase son sus métodos y sus properties.</li>
+  <li><strong>En el módulo</strong>, lo que no es <code>public</code> es privado del módulo; <code>protected</code> y
+      <code>static</code> sólo van en una clase.</li>
+</ul>
+
+<h3 id="properties">10.3 Properties</h3>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>public int lecturas { get; set; }</code></td><td><code>public property lecturas: integer</code></td></tr>
+  <tr><td><code>public string unidad { get; set; } = "C";</code></td><td><code>public property unidad: string := "C"</code></td></tr>
+  <tr><td><code>double celsius { get { … } set { … } }</code>, con <code>value</code></td><td><code>property celsius: double</code>, <code>get … endget</code>, <code>set(value) … endset</code>, <code>endprop</code></td></tr>
+  <tr><td><code>set(v) { … }</code></td><td><code>set(v) … endset</code></td></tr>
+  <tr><td><code>field</code></td><td><code>field</code></td></tr>
+</table>
+<pre data-bp="jc"><code><span class="kw">module</span> Termometros
+{
+   <span class="kw">public class</span> Termometro
+   {
+      <span class="kw">private</span> <span class="type">double</span> grados;
+
+      <span class="kw">public</span> <span class="type">string</span> unidad { get; set; } = <span class="str">"C"</span>;
+      <span class="kw">public</span> <span class="type">int</span> lecturas { get; set; }
+
+      <span class="kw">public</span> <span class="type">double</span> celsius
+      {
+         get
+         {
+            <span class="kw">return</span> <span class="kw">this</span>.grados;
+         }
+         set
+         {
+            <span class="kw">if</span> (value &lt; -<span class="num">273.15</span>) <span class="kw">throw new</span> RuntimeError(<span class="str">"bajo el cero absoluto"</span>);
+            <span class="kw">this</span>.grados = value;
+            <span class="kw">this</span>.lecturas += <span class="num">1</span>;
+         }
+      }
+
+      <span class="kw">public</span> <span class="type">double</span> fahrenheit
+      {
+         get
+         {
+            <span class="kw">return</span> <span class="kw">this</span>.grados * <span class="num">9</span> / <span class="num">5</span> + <span class="num">32</span>;
+         }
+      }
+
+      <span class="kw">public</span> <span class="type">long</span> nivel
+      {
+         get
+         {
+            <span class="kw">return</span> <span class="kw">field</span>;
+         }
+         set(v)
+         {
+            <span class="kw">field</span> = v * <span class="num">2</span>;
+         }
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Termometro t = <span class="kw">new</span> Termometro();
+      t.celsius = <span class="num">25</span>;
+      t.celsius += <span class="num">5</span>;
+      t.nivel = <span class="num">7</span>;
+      <span class="kw">println</span>(t.celsius, <span class="str">" "</span>, t.unidad, <span class="str">" = "</span>, t.fahrenheit, <span class="str">" F"</span>);
+      <span class="kw">println</span>(t.lecturas, <span class="str">" lecturas, nivel "</span>, t.nivel);
+      <span class="kw">try</span>
+      {
+         t.celsius = -<span class="num">300</span>;
+      }
+      <span class="kw">catch</span> (RuntimeError e)
+      {
+         <span class="kw">println</span>(e.msg);
+      }
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>30 C = 86 F
+2 lecturas, nivel 14
+bajo el cero absoluto</code></pre>
+<ul>
+  <li><strong>La automática es <code>{ get; set; }</code></strong>, entera: no hay <code>{ get; private set; }</code> ni
+      <code>init</code>. Con el valor inicial detrás, <code>= "C";</code>.</li>
+  <li><strong>Sólo con <code>get</code></strong>, se lee y no se escribe (<code>fahrenheit</code>).</li>
+  <li><strong>El <code>set</code> sin nombre</strong> llama <code>value</code> a lo que recibe, como en C#;
+      <code>set(v)</code> le da otro nombre, como en BP.</li>
+  <li><strong><code>field</code></strong> es, dentro del <code>get</code> y del <code>set</code>, el campo donde la
+      property guarda su valor, con su tipo.</li>
+  <li><strong>Una hija puede redeclarar una property</strong> de su padre, y <code>base.nombre</code> lee y escribe la
+      del padre. Las hay también de módulo (§5.1) y estáticas (§10.4).</li>
+</ul>
+
+<h3 id="static">10.4 <code>static</code>, <code>const</code> y <code>sync</code></h3>
+<pre data-bp="jc"><code><span class="kw">module</span> Estaticos
+{
+   <span class="kw">public sync</span> <span class="type">int</span> pedidos { get; set; }
+
+   <span class="kw">public class</span> Cuenta
+   {
+      <span class="kw">public const</span> <span class="type">int</span> MAXIMO = <span class="num">1000</span>;
+      <span class="kw">public static</span> <span class="type">int</span> abiertas { get; set; }
+      <span class="kw">public sync</span> <span class="type">int</span> saldo { get; set; }
+
+      <span class="kw">public function</span> Cuenta(<span class="type">int</span> inicial)
+      {
+         <span class="kw">this</span>.saldo = inicial;
+         Cuenta.abiertas += <span class="num">1</span>;
+      }
+
+      <span class="kw">public static function</span> Cuenta abre(<span class="type">int</span> inicial)
+      {
+         <span class="kw">if</span> (inicial &gt; Cuenta.MAXIMO) <span class="kw">throw new</span> RuntimeError(<span class="str">"demasiado"</span>);
+         <span class="kw">return</span> <span class="kw">new</span> Cuenta(inicial);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Cuenta a = Cuenta.abre(<span class="num">100</span>);
+      Cuenta b = Cuenta.abre(<span class="num">50</span>);
+      a.saldo -= <span class="num">30</span>;
+      pedidos += <span class="num">2</span>;
+      <span class="kw">println</span>(a.saldo, <span class="str">" "</span>, b.saldo, <span class="str">" "</span>, Cuenta.abiertas, <span class="str">" "</span>, Cuenta.MAXIMO, <span class="str">" "</span>, pedidos);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>70 50 2 1000 2</code></pre>
+<ul>
+  <li><strong><code>static</code></strong> es lo que en BP lleva delante el nombre de la clase
+      (<code>Cuenta.abre</code>). Vale en funciones, campos y properties, y se usa siempre con la clase delante,
+      también desde dentro de ella: <code>Cuenta.abiertas</code>. Un constructor o un destructor no lo llevan.</li>
+  <li><strong>Una constante de clase ya es de la clase</strong>, como en C#: sin <code>static</code>.</li>
+  <li><strong>Un campo estático no sale del módulo</strong>, como ninguna variable: lo que tienen que ver otros
+      módulos va en una property estática (<a href="manual.html#static">manual §9.6</a>).</li>
+  <li><strong><code>sync</code></strong> en una property, de clase o de módulo, hace su <code>get</code> y su
+      <code>set</code> atómicos frente a otros hilos. Cada acceso, no la suma de varios: <code>a.saldo -= 30</code> son
+      un <code>get</code> y un <code>set</code>, y entre ellos puede colarse otro hilo. Para eso, un <code>Mutex</code>
+      (<a href="manual.html#props">manual §9.5</a>).</li>
+</ul>
+
+<h3 id="destructor">10.5 El destructor y <code>owner</code></h3>
+<p>
+  BP destruye los objetos en el momento, sin esperar al recolector, cuando tienen dueño: es <code>owner</code>. Y lo
+  que hay que hacer al destruirlos se escribe una vez, en el destructor de la clase.
+</p>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>public function ~Recurso() { … }</code></td><td><code>public function ~Recurso() … end ~Recurso</code></td></tr>
+  <tr><td><code>owner Recurso r = new Recurso("db");</code></td><td><code>var owner r: Recurso := Recurso("db")</code></td></tr>
+  <tr><td><code>protected owner Recurso contenido;</code></td><td><code>var owner contenido: Recurso</code></td></tr>
+  <tr><td><code>try (Recurso f = new Recurso("x")) { … }</code></td><td><code>try var f: Recurso := Recurso("x") … endtry</code></td></tr>
+</table>
+<pre data-bp="jc"><code><span class="kw">module</span> Recursos
+{
+   <span class="kw">public class</span> Recurso
+   {
+      <span class="kw">private</span> <span class="type">string</span> nombre;
+
+      <span class="kw">public function</span> Recurso(<span class="type">string</span> nombre)
+      {
+         <span class="kw">this</span>.nombre = nombre;
+         <span class="kw">println</span>(<span class="str">"abre "</span>, nombre);
+      }
+
+      <span class="kw">public function</span> ~Recurso()
+      {
+         <span class="kw">println</span>(<span class="str">"cierra "</span>, <span class="kw">this</span>.nombre);
+      }
+
+      <span class="kw">public function</span> <span class="type">void</span> usa()
+      {
+         <span class="kw">println</span>(<span class="str">"usa "</span>, <span class="kw">this</span>.nombre);
+      }
+   }
+
+   <span class="kw">public class</span> Caja
+   {
+      <span class="kw">protected owner</span> Recurso contenido;
+
+      <span class="kw">public function</span> Caja(<span class="type">string</span> n)
+      {
+         <span class="kw">this</span>.contenido = <span class="kw">new</span> Recurso(n);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> trabaja()
+   {
+      <span class="kw">owner</span> Recurso r = <span class="kw">new</span> Recurso(<span class="str">"db"</span>);
+      r.usa();
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      trabaja();
+      <span class="kw">try</span> (Recurso f = <span class="kw">new</span> Recurso(<span class="str">"fichero"</span>))
+      {
+         f.usa();
+      }
+      <span class="kw">owner</span> Caja c = <span class="kw">new</span> Caja(<span class="str">"caja"</span>);
+      <span class="kw">println</span>(<span class="str">"fin del main"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>abre db
+usa db
+cierra db
+abre fichero
+usa fichero
+cierra fichero
+abre caja
+fin del main
+cierra caja</code></pre>
+<ul>
+  <li><strong>El destructor</strong> se llama como la clase, con <code>~</code> delante, sin parámetros ni tipo. Lo
+      llama el lenguaje, nunca el programa, cada vez que el objeto se libera: al acabar el ámbito de su dueño, cuando
+      lo recoge el recolector o al acabar el programa. No es el finalizador de C#, que corre cuando quiere: con un
+      dueño, corre en ese momento (<a href="manual.html#destructor">manual §9.4b</a>).</li>
+  <li><strong>Una local <code>owner</code></strong> se destruye al salir de su función, salga como salga; no se
+      devuelve ni se guarda en otro sitio.</li>
+  <li><strong>Un campo <code>owner</code></strong> se destruye con su objeto, antes que él: la <code>Caja</code> no tiene
+      destructor, y su recurso se cierra igual.</li>
+  <li><strong><code>try (T r = e) { … }</code></strong> es el de Java: el recurso es un <code>owner</code> del bloque y
+      se destruye al acabarlo, también con una excepción. Admite <code>catch</code> y <code>finally</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="interfaces">11. Interfaces</h2>
+<p>
+  Una clase hereda de una sola clase e implementa las interfaces que quiera. Una interfaz dice qué métodos y qué
+  properties tiene un tipo, sin código, y puede heredar de varias.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Formas
+{
+   <span class="kw">public interface</span> Forma
+   {
+      <span class="kw">function</span> <span class="type">double</span> area();
+      <span class="kw">function</span> <span class="type">string</span> nombre();
+   }
+
+   <span class="kw">public interface</span> Poligono : Forma
+   {
+      <span class="kw">function</span> <span class="type">int</span> lados();
+   }
+
+   <span class="kw">public interface</span> Etiquetado
+   {
+      <span class="type">string</span> etiqueta { get; set; }
+   }
+
+   <span class="kw">public class</span> Figura
+   {
+      <span class="kw">public function</span> <span class="type">string</span> nombre()
+      {
+         <span class="kw">return</span> <span class="str">"figura"</span>;
+      }
+   }
+
+   <span class="kw">public class</span> Cuadrado : Figura, Poligono, Etiquetado
+   {
+      <span class="kw">private</span> <span class="type">double</span> lado;
+
+      @implement{ Etiquetado }
+      <span class="kw">public</span> <span class="type">string</span> etiqueta { get; set; }
+
+      <span class="kw">public function</span> Cuadrado(<span class="type">double</span> l)
+      {
+         <span class="kw">this</span>.lado = l;
+      }
+
+      @implement{ Poligono }
+      <span class="kw">public function</span> <span class="type">double</span> area()
+      {
+         <span class="kw">return</span> <span class="kw">this</span>.lado * <span class="kw">this</span>.lado;
+      }
+
+      @implement{ Poligono }
+      <span class="kw">public function</span> <span class="type">int</span> lados()
+      {
+         <span class="kw">return</span> <span class="num">4</span>;
+      }
+
+      @implement{ Poligono }
+      @override{}
+      <span class="kw">public function</span> <span class="type">string</span> nombre()
+      {
+         <span class="kw">return</span> <span class="str">"cuadrado"</span>;
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Forma f = <span class="kw">new</span> Cuadrado(<span class="num">2.0</span>);
+      <span class="kw">println</span>(f.nombre(), <span class="str">" "</span>, f.area());
+      Poligono p = (Poligono) f;
+      <span class="kw">println</span>(p.lados(), <span class="str">" "</span>, f <span class="kw">is</span> Etiquetado);
+      Etiquetado e = (Etiquetado) f;
+      e.etiqueta = <span class="str">"cuadrado de 2"</span>;
+      <span class="kw">println</span>(e.etiqueta);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>cuadrado 4
+4 true
+cuadrado de 2</code></pre>
+<ul>
+  <li><strong>Lo que lleva una interfaz</strong>: métodos, sólo su firma y con su <code>function</code>
+      (<code>function double area();</code>), y properties automáticas (<code>string etiqueta { get; set; }</code>).
+      Todo es público, sin escribirlo. No lleva campos, constantes, eventos, constructores ni nada
+      <code>static</code>.</li>
+  <li><strong><code>class Cuadrado : Figura, Poligono, Etiquetado</code></strong>: como en C#, la clase base y las
+      interfaces van en la misma lista, la base primero. El primer nombre puede ser también una interfaz; lo decide el
+      compilador. En BP: <code>class Cuadrado extends Figura implements Poligono, Etiquetado</code>.</li>
+  <li><strong><code>@implement{ I }</code> es obligatoria</strong> en lo que la clase declara para cumplir una
+      interfaz: nombra una de las suyas que tenga ese miembro, también heredado (<code>area</code> es de
+      <code>Forma</code>, y vale <code>Poligono</code>, que la hereda). Lo que pone el padre no se marca.</li>
+  <li><strong><code>@override{}</code> es opcional</strong> en lo que redefine un método o una property del padre: no
+      cambia nada, lo deja escrito; si no redefine nada, es un error. Una declaración puede llevar varias anotaciones,
+      como <code>nombre()</code>.</li>
+  <li><strong>Se usan como un tipo más</strong>: variables, parámetros, arrays, <code>is</code>, <code>(Poligono) f</code>
+      y <code>==</code>. Una interfaz no se construye. Un <code>Thread</code> y sus hijas no implementan interfaces
+      (<a href="manual.html#interfaces-clase">manual §9.8</a>).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="genericos">12. Genéricos</h2>
+<p>
+  <code>List&lt;Sensor&gt;</code> es la <code>List</code> de siempre con una orden para el compilador: lo que entra
+  tiene que ser un <code>Sensor</code>, y lo que sale es un <code>Sensor</code>, sin escribir la conversión. La clase
+  no cambia y la VM no se entera. Lo mismo <code>SyncList&lt;T&gt;</code> y <code>OwnerList&lt;T&gt;</code>; y un
+  <code>Map</code> lleva dos, la llave (<code>int</code> o <code>string</code>) y el valor.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Almacen
+{
+   <span class="kw">import</span> Collections;
+
+   <span class="kw">public class</span> Sensor
+   {
+      <span class="kw">private</span> <span class="type">int</span> v;
+
+      <span class="kw">public function</span> Sensor(<span class="type">int</span> v)
+      {
+         <span class="kw">this</span>.v = v;
+      }
+
+      <span class="kw">public function</span> <span class="type">int</span> valor()
+      {
+         <span class="kw">return</span> <span class="kw">this</span>.v;
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      List&lt;Sensor&gt; sensores = <span class="kw">new</span> List&lt;Sensor&gt;();
+      sensores.add(<span class="kw">new</span> Sensor(<span class="num">4</span>));
+      sensores.add(<span class="kw">new</span> Sensor(<span class="num">7</span>));
+      <span class="kw">println</span>(sensores.get(<span class="num">0</span>).valor(), <span class="str">" "</span>, sensores[<span class="num">1</span>].valor());
+      <span class="type">int</span> suma = <span class="num">0</span>;
+      <span class="kw">foreach</span> (<span class="kw">var</span> s <span class="kw">in</span> sensores) suma += s.valor();
+      <span class="kw">println</span>(<span class="str">"suma: "</span>, suma);
+      Collections.Map&lt;<span class="type">int</span>, <span class="type">string</span>&gt; nombres = <span class="kw">new</span> Collections.Map&lt;<span class="type">int</span>, <span class="type">string</span>&gt;();
+      nombres.put(<span class="num">10</span>, <span class="str">"diez"</span>);
+      nombres[<span class="num">20</span>] = <span class="str">"veinte"</span>;
+      <span class="kw">println</span>(nombres.get(<span class="num">10</span>), <span class="str">" "</span>, nombres[<span class="num">20</span>]);
+      Collections.Map&lt;<span class="type">string</span>, Sensor&gt; porNombre = <span class="kw">new</span> Collections.Map&lt;<span class="type">string</span>, Sensor&gt;();
+      porNombre[<span class="str">"patio"</span>] = <span class="kw">new</span> Sensor(<span class="num">21</span>);
+      <span class="kw">println</span>(porNombre[<span class="str">"patio"</span>].valor());
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>4 7
+suma: 11
+diez veinte
+21</code></pre>
+<ul>
+  <li><strong>Entre <code>&lt;</code> y <code>&gt;</code> va una clase, una interfaz o <code>string</code></strong>, como en
+      Java. Un número va en su caja: <code>List&lt;Integer&gt;</code>. <code>List&lt;Object&gt;</code> es la
+      <code>List</code> a secas.</li>
+  <li><strong><code>new Collections.Map&lt;int, T&gt;()</code></strong> crea el de llaves enteras, que en BP es
+      <code>Collections.numericMap()</code>; con llaves <code>string</code>, el <code>Collections.Map()</code> de BP.
+      El <code>Map</code> está en el módulo <code>Collections</code>, que se importa.</li>
+  <li><strong><code>x[i]</code> sobre un objeto</strong> es <code>x.get(i)</code>, y <code>x[i] = v</code>,
+      <code>x.set(i, v)</code> (en un <code>Map</code>, <code>put</code>). Vale con cualquier clase que tenga esos métodos
+      (<a href="manual.html#indice-objeto">manual §4.7</a>).</li>
+  <li><strong>Lo que no se mezcla</strong>: <code>List&lt;Perro&gt;</code> no pasa a <code>List&lt;Animal&gt;</code>,
+      como en Java y en C#. La <code>List</code> a secas, sí, en los dos sentidos.</li>
+</ul>
+<p>
+  <strong>Una clase tuya es genérica</strong> si dice su tipo base con la anotación <code>@element{Tipo}</code>. Se
+  escribe con ese tipo en sus firmas, y quien la usa pide uno que descienda de él. No hay una variable
+  <code>&lt;T&gt;</code>, ni métodos genéricos:
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Bolsas
+{
+   <span class="kw">public class</span> Medida
+   {
+      <span class="kw">protected</span> <span class="type">double</span> v;
+
+      <span class="kw">public function</span> Medida(<span class="type">double</span> v)
+      {
+         <span class="kw">this</span>.v = v;
+      }
+
+      <span class="kw">public function</span> <span class="type">double</span> valor()
+      {
+         <span class="kw">return</span> <span class="kw">this</span>.v;
+      }
+   }
+
+   <span class="kw">public class</span> Metro : Medida
+   {
+      <span class="kw">public function</span> Metro(<span class="type">double</span> v) : <span class="kw">base</span>(v)
+      {
+      }
+
+      <span class="kw">public function</span> <span class="type">double</span> enCm()
+      {
+         <span class="kw">return</span> <span class="kw">this</span>.v * <span class="num">100</span>;
+      }
+   }
+
+   @element{Medida}
+   <span class="kw">public class</span> Bolsa
+   {
+      <span class="kw">private</span> List cosas = <span class="kw">new</span> List();
+
+      <span class="kw">public function</span> <span class="type">void</span> mete(Medida m)
+      {
+         <span class="kw">this</span>.cosas.add(m);
+      }
+
+      <span class="kw">public function</span> Medida saca(<span class="type">int</span> i)
+      {
+         <span class="kw">return</span> (Medida) <span class="kw">this</span>.cosas.get(i);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Bolsa&lt;Metro&gt; b = <span class="kw">new</span> Bolsa&lt;Metro&gt;();
+      b.mete(<span class="kw">new</span> Metro(<span class="num">2</span>));
+      <span class="kw">println</span>(b.saca(<span class="num">0</span>).enCm());
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>200</code></pre>
+<p>
+  <code>b.saca(0)</code> sale como un <code>Metro</code>, sin convertir. Lo que se pierde por el camino —una lista que
+  pasa por un <code>Object</code> o por una <code>List</code> a secas— y lo que pasa entre módulos, en el
+  <a href="manual.html#genericos">manual §4.6</a>: es lo mismo en JC.
+</p>
+
+<!-- ============================================================ -->
+<h2 id="eventos">13. Eventos</h2>
+<p>
+  Un evento deja que un objeto avise de que algo ha pasado, sin saber quién le escucha. Es la base de la interfaz
+  gráfica —un botón no sabe qué hace tu programa cuando lo pulsan—, pero vale en cualquier clase.
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Botones
+{
+   <span class="kw">public class</span> Boton
+   {
+      <span class="kw">public</span> <span class="type">int</span> numero { get; set; }
+      <span class="kw">event</span> onClick(Boton sender, <span class="type">int</span> veces);
+
+      <span class="kw">public function</span> Boton(<span class="type">int</span> n)
+      {
+         <span class="kw">this</span>.numero = n;
+      }
+
+      <span class="kw">public function</span> <span class="type">void</span> pulsa(<span class="type">int</span> veces)
+      {
+         <span class="kw">if</span> (onClick != <span class="kw">null</span>) <span class="kw">raise</span> onClick(<span class="kw">this</span>, veces);
+      }
+   }
+
+   <span class="kw">public class</span> Panel
+   {
+      <span class="kw">private</span> <span class="type">string</span> nombre;
+
+      <span class="kw">public function</span> Panel(<span class="type">string</span> n)
+      {
+         <span class="kw">this</span>.nombre = n;
+      }
+
+      <span class="kw">function event</span> <span class="type">void</span> pulsado(Boton b, <span class="type">int</span> veces)
+      {
+         <span class="kw">println</span>(<span class="str">"  boton "</span>, b.numero, <span class="str">" x"</span>, veces, <span class="str">" en "</span>, <span class="kw">this</span>.nombre);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Boton b = <span class="kw">new</span> Boton(<span class="num">7</span>);
+      Panel p = <span class="kw">new</span> Panel(<span class="str">"principal"</span>);
+      b.pulsa(<span class="num">1</span>);
+      b.onClick = p::pulsado;
+      <span class="kw">println</span>(<span class="str">"antes del raise"</span>);
+      b.pulsa(<span class="num">3</span>);
+      <span class="kw">println</span>(<span class="str">"despues del raise"</span>);
+      sleep(<span class="num">30</span>);
+      <span class="kw">println</span>(<span class="str">"fin"</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>antes del raise
+despues del raise
+  boton 7 x3 en principal
+fin</code></pre>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>event onClick(Boton sender, int veces);</code></td><td><code>event onClick(sender: Boton, veces: integer)</code></td></tr>
+  <tr><td><code>raise onClick(this, veces);</code></td><td><code>raise onClick(this, veces)</code></td></tr>
+  <tr><td><code>function event void pulsado(Boton b, int veces) { … }</code></td><td><code>function event pulsado(b: Boton, veces: integer) … end pulsado</code></td></tr>
+  <tr><td><code>b.onClick = p::pulsado;</code></td><td><code>b.onClick := p::pulsado</code></td></tr>
+  <tr><td><code>if (onClick != null) …</code></td><td><code>if onClick != null then …</code></td></tr>
+</table>
+<ul>
+  <li><strong>El evento se declara en la clase que avisa</strong>, sin <code>public</code>: suscribirse ya es público, y
+      dispararlo es cosa de la clase y de sus hijas. Lleva cuatro parámetros como mucho.</li>
+  <li><strong>Quien escucha</strong> declara un manejador con <code>function event</code> y los mismos parámetros, y se
+      suscribe con <code>::</code>, que ata un objeto y un método suyo. Un evento tiene un suscriptor: asignar otro lo
+      sustituye, y <code>= null</code> lo quita.</li>
+  <li><strong><code>onClick != null</code></strong>, dentro de la clase del evento, dice si tiene suscriptor, como el
+      <code>if (Click != null)</code> de C#: la primera llamada, <code>b.pulsa(1)</code>, no escribe nada, porque todavía
+      no lo hay. Fuera de la clase, un evento no es un valor: no se guarda ni se compara.</li>
+  <li><strong>Lo importante: <code>raise</code> no llama al manejador.</strong> Lo encola y vuelve en seguida; el
+      manejador corre después, en su hilo. Por eso «despues del raise» sale antes que la línea del manejador. Un
+      evento de C# es otra cosa: una lista de métodos a los que se llama allí mismo, con <code>+=</code> y
+      <code>-=</code> (<a href="manual.html#eventos">manual §15</a>).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="excepciones">14. Excepciones</h2>
+<p>El <code>try</code> de BP, con llaves, y el <code>catch</code> por tipo con el tipo delante, como en C#:</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Errores
+{
+   <span class="kw">public class</span> SensorError : RuntimeError
+   {
+      <span class="kw">public</span> <span class="type">int</span> pin { get; set; }
+
+      <span class="kw">public function</span> SensorError(<span class="type">string</span> msg, <span class="type">int</span> pin) : <span class="kw">base</span>(msg)
+      {
+         <span class="kw">this</span>.pin = pin;
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">int</span> lee(<span class="type">int</span> pin)
+   {
+      <span class="kw">if</span> (pin &lt; <span class="num">0</span>) <span class="kw">throw new</span> SensorError(<span class="str">"pin no válido"</span>, pin);
+      <span class="kw">return</span> <span class="num">100</span> / pin;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> prueba(<span class="type">int</span> pin)
+   {
+      <span class="kw">try</span>
+      {
+         <span class="type">int</span> r = lee(pin);
+         <span class="kw">println</span>(<span class="str">"lee "</span>, pin, <span class="str">": "</span>, r);
+      }
+      <span class="kw">catch</span> (SensorError e)
+      {
+         <span class="kw">println</span>(<span class="str">"sensor: "</span>, e.msg, <span class="str">" ("</span>, e.pin, <span class="str">")"</span>);
+      }
+      <span class="kw">catch</span> (ArithmeticError e)
+      {
+         <span class="kw">println</span>(<span class="str">"cuenta: "</span>, e.msg);
+      }
+      <span class="kw">catch</span>
+      {
+         <span class="kw">println</span>(<span class="str">"otro error"</span>);
+      }
+      <span class="kw">finally</span>
+      {
+         <span class="kw">println</span>(<span class="str">"  hecho"</span>);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      prueba(<span class="num">4</span>);
+      prueba(-<span class="num">1</span>);
+      prueba(<span class="num">0</span>);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>lee 4: 25
+  hecho
+sensor: pin no válido (-1)
+  hecho
+cuenta: División por cero
+  hecho</code></pre>
+<table>
+  <tr><th>JC</th><th>BP</th></tr>
+  <tr><td><code>try { … } catch (RuntimeError e) { … } finally { … }</code></td><td><code>try … catch e: RuntimeError … finally … endtry</code></td></tr>
+  <tr><td><code>catch (Exception e) { … }</code></td><td><code>catch e</code></td></tr>
+  <tr><td><code>catch { … }</code>, sin variable: atrapa todo</td><td><code>catch</code></td></tr>
+  <tr><td><code>throw new SensorError("…", 3);</code></td><td><code>throw SensorError("…", 3)</code></td></tr>
+  <tr><td><code>try (Recurso f = new Recurso("x")) { … }</code></td><td><code>try var f: Recurso := Recurso("x") … endtry</code></td></tr>
+  <tr><td><code>class SensorError : RuntimeError</code></td><td><code>class SensorError extends RuntimeError</code></td></tr>
+</table>
+<ul>
+  <li><strong>Los <code>catch</code> se prueban en orden</strong>: el más concreto, primero. Toda excepción desciende de
+      <code>Exception</code>, con su <code>msg</code>.</li>
+  <li><strong>Los errores de la VM llevan su tipo</strong>, todos hijos de <code>RuntimeError</code>:
+      <code>ArithmeticError</code> (una división entera por cero, un número que no cabe en su tipo),
+      <code>NullReferenceError</code>, <code>IndexError</code>, <code>CastError</code> e <code>IOError</code> (y su hija
+      <code>EncodingError</code>). Lo demás es <code>RuntimeError</code> (<a href="manual.html#excepciones">manual
+      §11</a>).</li>
+  <li><strong>El <code>finally</code> corre siempre</strong>, también cuando un <code>return</code>, un
+      <code>break</code> o un <code>continue</code> salen del <code>try</code>; y no puede salir él con ninguno de los
+      tres. El <code>catch</code> es opcional: <code>try { … } finally { … }</code> vale.</li>
+  <li><strong>Lo que JC no tiene</strong>: el <code>throw;</code> que relanza (se escribe <code>throw e;</code>), los
+      filtros <code>when</code> y el <code>using</code> de C# (es el <code>try (…)</code> de Java).</li>
+  <li><strong>Una excepción que nadie atrapa</strong> acaba su hilo; si es el principal, el programa, que sale con
+      código 1.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="hilos">15. Hilos y <code>parallel</code></h2>
+<p>
+  Los hilos de BP son hilos de verdad, que el planificador de la VM alterna y que, en una placa de dos núcleos,
+  corren a la vez (<a href="manual.html#concurrencia">manual §14</a>). En JC se escriben de tres maneras:
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Hilos
+{
+   <span class="kw">public class</span> Calculo
+   {
+      <span class="kw">public function</span> <span class="type">void</span> suma(<span class="type">int</span> n)
+      {
+         <span class="type">int</span> s = <span class="num">0</span>;
+         <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= n; i++) s += i;
+         <span class="kw">println</span>(<span class="str">"suma hasta "</span>, n, <span class="str">" = "</span>, s);
+      }
+   }
+
+   <span class="kw">public class</span> Contador : Thread
+   {
+      <span class="kw">private</span> <span class="type">string</span> nombre;
+
+      <span class="kw">public function</span> Contador(<span class="type">string</span> nombre) : <span class="kw">base</span>(<span class="num">2048</span>)
+      {
+         <span class="kw">this</span>.nombre = nombre;
+      }
+
+      <span class="kw">public function</span> <span class="type">void</span> run()
+      {
+         <span class="kw">println</span>(<span class="kw">this</span>.nombre, <span class="str">" corre en su hilo"</span>);
+      }
+   }
+
+   <span class="kw">function</span> <span class="type">int</span> sumaRango(<span class="type">int</span> a, <span class="type">int</span> b)
+   {
+      <span class="type">int</span> s = <span class="num">0</span>;
+      <span class="kw">for</span> (<span class="type">int</span> i = a; i &lt;= b; i++) s += i;
+      <span class="kw">return</span> s;
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">parallel</span>
+      {
+         <span class="kw">case</span> t1 = <span class="kw">new</span> Thread(<span class="num">2048</span>):
+            <span class="kw">println</span>(<span class="str">"t1 = "</span>, sumaRango(<span class="num">1</span>, <span class="num">100</span>));
+         <span class="kw">case</span> t2 = <span class="kw">new</span> Thread(<span class="num">2048</span>):
+            <span class="kw">println</span>(<span class="str">"t2 = "</span>, sumaRango(<span class="num">101</span>, <span class="num">200</span>));
+      }
+      <span class="kw">println</span>(<span class="str">"los dos han acabado"</span>);
+      Contador c = <span class="kw">new</span> Contador(<span class="str">"contador"</span>);
+      c.start();
+      c.join();
+      Calculo k = <span class="kw">new</span> Calculo();
+      Thread h = <span class="kw">new</span> Thread(k::suma(<span class="num">10</span>));
+      h.start();
+      h.join();
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>t1 = 5050
+t2 = 15050
+los dos han acabado
+contador corre en su hilo
+suma hasta 10 = 55</code></pre>
+<ul>
+  <li><strong><code>parallel { case t1 = new Thread(2048): … default: … }</code></strong> arranca un hilo por cada
+      <code>case</code>, con la pila que dice (en bytes), y los espera todos en la <code>}</code>. El
+      <code>default</code>, si lo hay, corre en el hilo que llama mientras tanto. Es el <code>parallel … endpar</code> de
+      BP, con <code>case t1 := Thread(2048)</code>.</li>
+  <li><strong>Lo que ve un <code>case</code></strong>: sus propias locales, las funciones, las clases y las constantes del
+      módulo. Las variables del módulo y las locales de la función que lo contiene, no: para compartir datos, un objeto
+      (<a href="manual.html#conc-encapsulacion">manual §14.3</a>).</li>
+  <li><strong>Una clase hija de <code>Thread</code></strong> pide su pila con <code>: base(2048)</code> y escribe su
+      <code>run()</code>; <code>start()</code> la arranca y <code>join()</code> la espera.</li>
+  <li><strong><code>new Thread(objeto::metodo(args))</code></strong> lanza un método en otro hilo, sin escribir la clase:
+      lo que se hace con una lambda en C#.</li>
+  <li><strong>Lo compartido entre hilos</strong> se protege con un <code>Mutex</code>, una <code>SyncList</code> o una
+      property <code>sync</code>. Cada <code>println</code> sale entero. En una placa de dos núcleos, <code>t1</code> y
+      <code>t2</code> pueden salir en otro orden.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="anotaciones">16. Anotaciones</h2>
+<p>
+  Las de BP, tal cual: <code>@Nombre{ clave = valor, clave }</code>, delante de la declaración, con las llaves aunque
+  no lleven nada, y varias por declaración si hace falta. No son los <code>[Atributos]</code> de C# ni las anotaciones
+  de Java. Las que hay: <code>@BD</code>, que describe las entidades del ORM
+  (<a href="basedatos.html#entidades">bases de datos §3</a>); <code>@element</code>, el tipo de una clase genérica
+  (§12); y <code>@implement</code> y <code>@override</code> (§11).
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Entidades
+{
+   @BD{ tabla = <span class="str">"medidas"</span> }
+   <span class="kw">public class</span> Medida
+   {
+      @BD{ pk }
+      <span class="kw">public</span> <span class="type">long</span> id { get; set; }
+
+      @BD{ columna = <span class="str">"sensor_id"</span> }
+      <span class="kw">public</span> <span class="type">long</span> sensorId { get; set; }
+
+      @BD{}
+      <span class="kw">public</span> <span class="type">double</span> valor { get; set; }
+   }
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      Medida m = <span class="kw">new</span> Medida();
+      m.valor = <span class="num">21.5</span>;
+      <span class="kw">println</span>(m.id, <span class="str">" "</span>, m.valor);
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>0 21.5</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="diferencias">17. Lo que JC no tiene, y lo que choca</h2>
+
+<h3 id="no-tiene">17.1 Lo que JC no tiene</h3>
+<p>
+  JC es BP: lo que BP no tiene, no lo tiene JC. Mucho de lo de C# que falta, el compilador lo reconoce y lo dice con su
+  nombre («JC no tiene el ?? de C#…»); lo demás da un error de sintaxis.
+</p>
+<table>
+  <tr><th>De Java o de C#</th><th>En JC</th></tr>
+  <tr><td>las lambdas, los delegados, LINQ</td><td>no; un método como valor es <code>objeto::metodo</code>, para un evento (§13) o un hilo (§15)</td></tr>
+  <tr><td>los genéricos propios: <code>class Caja&lt;T&gt;</code>, <code>T f&lt;T&gt;()</code></td><td>no; una clase genérica dice su tipo base con <code>@element{Tipo}</code> (§12)</td></tr>
+  <tr><td><code>struct</code>, clases anidadas, <code>abstract</code>, <code>static class</code></td><td>no</td></tr>
+  <tr><td><code>var x = 5;</code></td><td>no: el tipo se escribe siempre (§6.2)</td></tr>
+  <tr><td><code>char</code>, <code>uint</code>, <code>ulong</code>, <code>decimal</code></td><td>un carácter es un <code>int</code> (§6.3); los otros, no</td></tr>
+  <tr><td><code>@"…"</code>, <code>$"…{x}"</code></td><td>no; se concatena con <code>+</code></td></tr>
+  <tr><td><code>??</code>, <code>?.</code>, <code>x is T t</code>, <code>x is null</code></td><td>no; <code>x == null</code>, <code>x is T</code> y <code>(T) x</code></td></tr>
+  <tr><td><code>++x</code>, <code>y = x++</code>, <code>a = b = 0</code></td><td><code>x++;</code> como sentencia; una asignación no va dentro de una expresión (§7.3)</td></tr>
+  <tr><td><code>~x</code></td><td><code>x ^ -1</code></td></tr>
+  <tr><td>el <code>for</code> general de C</td><td>las cuatro formas del contador; lo demás, con <code>while</code> (§8.2)</td></tr>
+  <tr><td>un <code>switch</code> que cae, <code>goto case</code>, patrones</td><td>no; cada <code>case</code> es su bloque (§8.4)</td></tr>
+  <tr><td><code>goto</code> y etiquetas</td><td><code>break</code> y <code>continue</code> con el nombre del bucle (§8.5)</td></tr>
+  <tr><td><code>ref</code>, <code>out</code>, <code>params</code>, argumentos con nombre</td><td>el parámetro <code>var</code>, con una property (§9.2)</td></tr>
+  <tr><td><code>throw;</code>, <code>catch … when</code>, <code>using (…)</code></td><td><code>throw e;</code>; sin filtros; <code>try (T r = e)</code> (§14)</td></tr>
+  <tr><td><code>namespace</code>, <code>using System;</code></td><td>los módulos y el <code>import</code> (§5)</td></tr>
+  <tr><td>la sobrecarga de operadores, la reflexión, <code>async</code>/<code>await</code></td><td>no; para lo que bloquea, un hilo (§15)</td></tr>
+</table>
+
+<h3 id="desde-java">17.2 Si vienes de Java o de C#</h3>
+<p>Lo que compila igual que en Java o en C#, pero hace otra cosa, o se escribe un poco distinto:</p>
+<ul>
+  <li><strong>Un miembro de clase sin marca es protegido</strong>, no privado como en C# (§10.2). Y un campo nunca es
+      público: se expone con una property.</li>
+  <li><strong>Las funciones y los métodos se declaran con <code>function</code></strong>, y todo método es virtual
+      salvo los <code>private</code>.</li>
+  <li><strong><code>print</code> no salta de línea</strong>; <code>println</code>, sí (§2.3).</li>
+  <li><strong><code>==</code> entre cadenas compara el texto</strong>, también en lo que viene de Java; y las cadenas no
+      tienen métodos: <code>len(s)</code>, <code>upper(s)</code>… (§6.5).</li>
+  <li><strong><code>int a, b = 3;</code> sólo da valor a <code>b</code></strong>, como en C# (§6.2).</li>
+  <li><strong>Un real sin letra es un <code>double</code></strong>, como en C#; en las placas suele convenir el
+      <code>float</code>, <code>1.5f</code> (§6.3).</li>
+  <li><strong>Un evento avisa más tarde</strong>: <code>raise</code> lo encola y sigue, y tiene un suscriptor (§13).</li>
+  <li><strong>Un objeto con dueño se destruye en el momento</strong>, con su destructor; el recolector se ocupa del
+      resto (§10.5).</li>
+  <li><strong>El <code>for</code> es un contador</strong>, con el límite incluido y calculado una vez (§8.2).</li>
+  <li><strong>Una <code>List</code> guarda <code>Object</code></strong>: <code>List&lt;Sensor&gt;</code> para que el
+      compilador sepa lo que guarda (§12).</li>
+  <li><strong>Una excepción que nadie atrapa acaba su hilo</strong>; los demás siguen (§14).</li>
+</ul>
+
+<h3 id="choca">17.3 Lo que choca con BP</h3>
+<p>Lo que hay que saber al traducir de un lenguaje al otro (§18.3):</p>
+<ul>
+  <li><strong>Un nombre de BP que en JC es una palabra reservada</strong> —<code>base</code>, <code>int</code>,
+      <code>bool</code>, <code>new</code>, <code>is</code>, <code>static</code>, <code>void</code>,
+      <code>foreach</code>, <code>protected</code>, <code>println</code>…— no se traduce: el traductor lo dice, con su
+      línea, y no renombra nada.</li>
+  <li><strong>Al revés, un nombre de JC que en BP es una palabra reservada</strong> —<code>step</code>,
+      <code>next</code>, <code>end</code>, <code>then</code>, <code>loop</code>, <code>to</code>, <code>mod</code>,
+      <code>and</code>…, en mayúsculas o en minúsculas, porque las de BP no las distinguen— se traduce tal cual, y el BP
+      que sale no compila: lo dice el compilador de BP («'step' es una palabra reservada del lenguaje; elige otro
+      nombre»). Si piensas traducir, evítalos.</li>
+  <li><strong>Lo de BP que JC no puede escribir</strong>: un <code>for</code> con el paso en una variable, un
+      <code>do … loop</code> sin condición y un <code>inline</code> entre otras sentencias. El traductor lo dice.</li>
+  <li><strong>Lo de JC que BP no puede escribir</strong>: <code>(Caja) x</code> cuando el constructor de
+      <code>Caja</code> acepta <code>x</code>, porque en BP <code>Caja(x)</code> construiría. El traductor lo dice.</li>
+  <li><strong>La forma escrita de un literal no viaja</strong>: <code>'a'</code> llega a BP como <code>97</code>, y
+      <code>0xFF</code>, como <code>255</code>.</li>
+  <li><strong>Los comentarios y las líneas en blanco no viajan</strong>: la traducción sale sin comentarios, con el
+      formato del traductor.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="compilar">18. Compilar, traducir y el IDE</h2>
+
+<h3 id="compilar-jc">18.1 Compilar un <code>.jc</code></h3>
+<p>
+  Como un <code>.bp</code>: el compilador elige el lector por la extensión, y lo demás es común. Las opciones son las de
+  siempre (<a href="referencia.html#cli-frontend">referencia §16.1</a>):
+</p>
+<pre><code>java -jar basicplus-frontend.jar Programa.jc --compile out --backend=mivm</code></pre>
+<ul>
+  <li><strong>El <code>.mod</code></strong> es el mismo que daría el programa escrito en BP, y el <code>.dbg</code>
+      apunta al <code>.jc</code> y a sus líneas: el depurador para en los <code>.jc</code> sin hacer nada más.</li>
+  <li><strong>Las funciones <code>native</code></strong> pasan por el AOT igual que las de BP.</li>
+  <li><strong>Los <code>import</code></strong> encuentran los <code>.bp</code> y los <code>.mod</code>; un
+      <code>.jc</code> importado, compilado antes (§5.4).</li>
+</ul>
+
+<h3 id="proyecto">18.2 Un proyecto</h3>
+<p>
+  Un <code>.bpbuild</code> (<a href="referencia.html#cli-bpbuild">referencia §16.2</a>) con <code>"main": "Programa"</code>
+  busca <code>src/Programa.bp</code> y, si no está, <code>src/Programa.jc</code>. Con los dos a la vez, no adivina: lo
+  dice («el main está dos veces, Programa.bp y Programa.jc: el proyecto no sabe cuál compilar») y no compila. La lista
+  <code>sources</code> admite <code>.jc</code>, y se compila en su orden, así que un módulo en JC que importa otro en JC
+  va detrás de él:
+</p>
+<pre><code>{
+  "sourceDir": "src",
+  "outDir":    "out",
+  "main":      "Programa",
+  "sources":   ["src/Utiles.jc", "src/Programa.jc"]
+}</code></pre>
+<pre><code>java -jar basicplus-frontend.jar --project app.bpbuild</code></pre>
+<p>
+  Con los ficheros de §5.4 en <code>src</code>, compila <code>Utiles</code>, después <code>Programa</code> y, porque
+  <code>Programa</code> lo importa, <code>Viejo.bp</code>.
+</p>
+
+<h3 id="traducir">18.3 Traducir entre BP y JC</h3>
+<p>
+  El compilador traduce un fuente al otro lenguaje y lo escribe por la salida. Traduce el árbol ya analizado, así que
+  sabe dónde va cada <code>new</code>, qué llamada es una conversión y qué tipo tiene una constante que en BP no lo
+  escribe.
+</p>
+<table>
+  <tr><th>Opción</th><th>Con un <code>.bp</code></th><th>Con un <code>.jc</code></th></tr>
+  <tr><td><code>--escribir-jc</code></td><td>su traducción a JC</td><td>el mismo, reescrito</td></tr>
+  <tr><td><code>--escribir-bp</code></td><td>el mismo, reescrito</td><td>su traducción a BP</td></tr>
+  <tr><td><code>--comprobar-jc</code></td><td>la ida y vuelta: lo traduce a JC, lo vuelve a leer y compara los dos árboles</td><td>—</td></tr>
+</table>
+<p>Un fuente de BP, con sus comentarios:</p>
+<pre><code><span class="kw">module</span> Saludo
+  <span class="comment">// cuántas veces se saluda</span>
+  <span class="kw">const</span> VECES := <span class="num">2</span>
+
+  <span class="kw">function</span> main()
+    <span class="kw">for</span> i := <span class="num">1</span> <span class="kw">to</span> VECES <span class="kw">do</span>
+      <span class="kw">print</span> <span class="str">"hola "</span>; i     <span class="comment">// sin coma: sin espacio</span>
+    <span class="kw">next</span>
+  <span class="kw">end</span> main
+<span class="kw">end</span> Saludo</code></pre>
+<pre><code>java -jar basicplus-frontend.jar Saludo.bp --escribir-jc &gt; Saludo.jc
+java -jar basicplus-frontend.jar Saludo.bp --comprobar-jc</code></pre>
+<p>La segunda orden hace la ida y vuelta, y el árbol que vuelve es el mismo:</p>
+<pre class="salida" data-bp="skip"><code>Saludo.bp: EQUIVALENTE</code></pre>
+<p>
+  La primera deja en <code>Saludo.jc</code> la traducción, sin los comentarios y con el tipo que el compilador deduce
+  para la constante:
+</p>
+<pre data-bp="jc"><code><span class="kw">module</span> Saludo
+{
+   <span class="kw">const</span> <span class="type">int</span> VECES = <span class="num">2</span>;
+
+   <span class="kw">function</span> <span class="type">void</span> main()
+   {
+      <span class="kw">for</span> (<span class="type">int</span> i = <span class="num">1</span>; i &lt;= VECES; i++)
+      {
+         <span class="kw">println</span>(<span class="str">"hola "</span>, i);
+      }
+   }
+}</code></pre>
+<pre class="salida" data-bp="skip"><code>hola 1
+hola 2</code></pre>
+<ul>
+  <li><strong>Los comentarios no viajan</strong>, ni las líneas en blanco: la traducción tiene el formato del traductor
+      (tres espacios de sangría en JC; dos en BP).</li>
+  <li><strong>Lo que no tiene forma en el otro lenguaje</strong> (§17.3) no se traduce: sale «no soportado», con el
+      motivo y la línea del original, y el código de salida es 2. Si el original no compila, 3. Bien, 0.</li>
+  <li><strong>Con una carpeta</strong>, <code>--escribir-jc</code> y <code>--comprobar-jc</code> recorren todos sus
+      <code>.bp</code> y dan las cuentas: los que se traducen, los que no y por qué.</li>
+  <li><strong>El programa traducido es el mismo</strong>: compilado, da el mismo <code>.mod</code>, salvo donde el
+      <code>print</code> de BP usa la coma, que en JC es una pieza <code>" "</code> y escribe lo mismo con otro
+      código.</li>
+</ul>
+
+<h3 id="ide">18.4 En el IDE</h3>
+<p>Lo justo; el detalle, en la <a href="guia-ide.html">guía del IDE</a>.</p>
+<ul>
+  <li><strong>Los <code>.jc</code> se abren, se editan y se guardan</strong> como los <code>.bp</code>, y salen en el
+      árbol del proyecto. El coloreado y el plegado, por llaves, van por la extensión del fichero; al guardar uno nuevo
+      sin extensión, el IDE pone la del lenguaje del editor.</li>
+  <li><strong>Compilar, ejecutar y depurar</strong> funcionan igual, en el PC y en la placa, con los puntos de parada en
+      las líneas del <code>.jc</code>. En un proyecto, el main puede ser <code>&lt;main&gt;.jc</code>; con los dos, el IDE
+      lo dice antes de tocar nada.</li>
+  <li><strong>Edit → «Traducir a JC» y «Traducir a BP»</strong> guardan el fichero activo y abren su traducción en una
+      pestaña nueva, sin guardar. Lo que no se traduce lo dice la consola, con su motivo.</li>
+  <li><strong>«Nuevo proyecto» crea el main en BP.</strong> Para tenerlo en JC: «Traducir a JC», guardar la pestaña como
+      <code>src/&lt;main&gt;.jc</code> y borrar el <code>.bp</code>.</li>
+</ul>
+
+<h3 id="errores">18.5 Los mensajes de error</h3>
+<ul>
+  <li><strong>Los errores de sintaxis</strong> son de JC: <code>[línea:columna] error sintáctico: …</code> (o
+      <code>error léxico</code>). El lector de JC para en el primero.</li>
+  <li><strong>Muchos dicen cómo se escribe en JC</strong>: «en JC es 'base', como en C#»; «en JC, ++ y -- van detrás:
+      v++;»; «JC no tiene el ?? de C#, de momento (el ternario, c ? a : b, sí)»; «'Perro(…)' crea un objeto: en JC se
+      escribe 'new Perro(…)'».</li>
+  <li><strong>Los demás errores</strong> —tipos, nombres, visibilidad— los da el análisis, que es el de BP, y algunos
+      hablan en BP: <code>i += 1.5</code> da «'+=': 'integer' + 'double' da 'double', que no se guarda solo en 'integer'
+      (como en C#: escribe la conversión, x := integer(x + …))», que en JC es <code>i = (int) (i + 1.5);</code>. Las
+      tablas de este volumen dan la equivalencia.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="librerias">19. Las librerías</h2>
+<p>
+  La biblioteca estándar, la interfaz gráfica, SQLite y los packs son módulos de BP compilados: un programa en JC los
+  importa y los usa igual, con los mismos nombres. Su documentación está en los volúmenes de BP:
+</p>
+<table>
+  <tr><th>Quiero…</th><th>Mira</th></tr>
+  <tr><td>las funciones de <code>Core</code>, <code>List</code>, <code>Map</code>, ficheros, <code>Json</code>, <code>Math</code>…</td><td><a href="referencia.html#stdlib">Referencia, §13</a></td></tr>
+  <tr><td>los pines, los buses, la red, el Bluetooth, la tarjeta SD, el sonido</td><td><a href="referencia.html#stdlib-hw-policy">Referencia, §14</a></td></tr>
+  <tr><td>la interfaz gráfica: pantallas, widgets, eventos, formularios</td><td><a href="gui.html">Interfaz gráfica</a></td></tr>
+  <tr><td>SQLite y el ORM</td><td><a href="basedatos.html">Bases de datos</a></td></tr>
+  <tr><td>el IDE, las placas, los packs, depurar</td><td><a href="guia-ide.html">Guía del IDE</a></td></tr>
+  <tr><td>el fondo de cada construcción: el GC, los hilos, <code>owner</code>, los módulos</td><td><a href="manual.html">Manual del lenguaje</a></td></tr>
+</table>
+<p>Sus ejemplos están en BP. Se leen en JC así:</p>
+<table>
+  <tr><th>En la documentación (BP)</th><th>En JC</th></tr>
+  <tr><td><code>function parseInt(s: string): integer</code></td><td><code>int n = parseInt("42");</code></td></tr>
+  <tr><td><code>var l: List := List()</code></td><td><code>List l = new List();</code></td></tr>
+  <tr><td><code>var txt: Gui.Label := Gui.Label(scr, "Hola")</code></td><td><code>Gui.Label txt = new Gui.Label(scr, "Hola");</code></td></tr>
+  <tr><td><code>var m: Modelo.Medida := Modelo.Medida(l.get(i))</code> (convierte)</td><td><code>Modelo.Medida m = (Modelo.Medida) l.get(i);</code></td></tr>
+  <tr><td><code>print "valor:", v</code></td><td><code>println("valor: ", v);</code></td></tr>
+  <tr><td><code>b.onClick := this::pulsado</code></td><td><code>b.onClick = this::pulsado;</code></td></tr>
+  <tr><td><code>try var f: IO.TextFile := IO.TextFile("datos.txt", "r")</code> … <code>endtry</code></td><td><code>try (IO.TextFile f = new IO.TextFile("datos.txt", "r")) { … }</code></td></tr>
+  <tr><td><code>while not f.eof() do</code> … <code>endwh</code></td><td><code>while (!f.eof()) { … }</code></td></tr>
+</table>
+<p>
+  O, para un ejemplo entero, se copia a un <code>.bp</code> y se traduce: <code>--escribir-jc</code>, o «Traducir a JC»
+  en el IDE. Un programa en JC de verdad, con la librería <code>Json</code>, está en el repositorio:
+  <code>samplesJC/JsonDemo.jc</code>, probado también en una placa.
+</p>
+
+</main>
+</div>
+</body>
+</html>

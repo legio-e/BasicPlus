@@ -1,8 +1,704 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v7.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
-> `v5.0`, v6 en `v6.0`). Ajusta versión/fecha al publicar.
+> `v8.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
+> `v5.0`, v6 en `v6.0`, v7 en `v7.0`). Ajusta versión/fecha al publicar.
+
+---
+
+## v8.0 — noviembre 2026
+
+> **Borrador de la introducción: la escribe o la corrige Eduardo.**
+
+En esta versión nos hemos centrado en tres puntos:
+
+- **La WiFi y el Bluetooth.** Eran el tema de la versión. En la P4, la S3 y la C5 la placa se conecta sola a la red
+  al arrancar, y el IDE trabaja con ella sin cable: sube los ficheros, graba los packs, ejecuta un programa y lo para.
+  Un programa enciende y apaga la WiFi y abre conexiones con `Net`. Del Bluetooth hemos hecho, de momento, lo que más
+  falta hacía en una placa: el teclado y el ratón. Se emparejan una vez y vuelven solos, y en un programa con pantalla
+  el ratón mueve una flecha y el teclado escribe en los campos, sin escribir una línea de código. Las dos radios están
+  apagadas de normal y se apagan solas tras diez minutos sin uso. El bajo consumo, que iba con ellas, lo hemos pasado a
+  V9: es demasiado complejo y depende mucho del hardware.
+- **JC.** BasicPlus con la ropa de Java y C#: llaves, punto y coma y el tipo delante del nombre, pero el mismo
+  lenguaje, el mismo compilador y el mismo bytecode, y un programa se traduce de uno a otro con una orden del IDE. Para
+  probarlo hemos pasado a JC las pruebas del compilador de C# de Mono: 848 funcionan, y desde ahora son una prueba de
+  caja negra de los dos lenguajes. Por el camino, BasicPlus ha ganado lo que esas pruebas pedían y tenía sentido para
+  nosotros —las interfaces, los genéricos como una orden al compilador, los errores con su tipo— y han salido a la luz
+  fallos del compilador que llevaban ahí mucho tiempo.
+- **La fiabilidad.** Un dispositivo puede pasar días funcionando sin que nadie lo mire. Hemos tenido cuatro placas 48
+  horas seguidas con un programa que lo toca todo, sin un error ni un reinicio, y la prueba encontró dos fallos de
+  verdad que ya están arreglados. Hemos repasado qué hace la placa en cada situación que se puede dar en el campo y
+  arreglado lo sencillo; lo demás, a V9. Las cadenas, que eran lo más lento del lenguaje, han dejado de ser
+  cuadráticas. Y una página nueva de la documentación cuenta todas las pruebas que pasa BasicPlus.
+
+En resumen, V8 empezó como una versión para experimentar, sin obligaciones: lo que ha funcionado es lo que publicamos,
+y lo que no, o no ha dado tiempo, pasa a V9.
+
+Lo que no cambia es el invariante de siempre: el mismo bytecode, la misma salida
+byte a byte en las dos VMs, y todo verificado en placa.
+
+### La WiFi: el IDE sin cable, y la red desde el programa
+
+**La red en placa** (hito H3), en la P4 de Waveshare, la S3 y la C5. En V7, `Net` sólo funcionaba en el PC; ahora la
+placa se conecta sola al arrancar y coge su IP —por DHCP o fija—, y la usan el IDE y los programas. La C3 y la C6 no la
+llevan: sin PSRAM, sólo por enlazarla perderían de 33 a 88 KB de RAM, aunque no se encendiera nunca. Tampoco las
+STM32; y la Pico 2 W, aplazada a otra versión.
+
+**Se configura en dos ficheros de `/sys`**, los mismos en todas las placas. `/sys/wifi.json` lleva la red —`ssid`,
+`password`, `country`—, `autoStart` (encenderla al arrancar) y `autoOff` (los segundos sin actividad para apagarse
+sola: 600 por defecto; 0, nunca); `/sys/net.json`, si hace falta, el `hostname` para el DHCP o la IP fija (`ip`,
+`mask`, `gateway`, `dns`). El primero lo escribe el botón **WiFi** del IDE. La clave `wifi=1` del Entorno la enciende
+al arrancar, y `wifi=0` la deja apagada diga lo que diga el fichero. **La radio está apagada de normal**: se enciende
+cuando hace falta y se apaga sola tras diez minutos sin actividad (una conexión abierta, del programa o del IDE, es
+actividad). La clave de la red va en claro en el fichero: la seguridad, de momento, no.
+
+En la P4 la WiFi va por la ESP32-C6 que la placa lleva al lado: su Entorno lo dice con `radio=c6`, y esos pines pasan
+a ser del sistema (sin la línea, no se toca ningún pin y la placa no tiene WiFi). Esa C6 necesita un firmware nuevo
+(abajo, «Qué implica»). La S3 y la C5 llevan la radio en su chip.
+
+**El IDE por WiFi**: en el explorador, el backend **Placa (red)**, con la IP de la placa, o **Buscar en la red**, que
+pregunta a toda la red qué placas hay. Todo va como por el cable —el árbol de ficheros, subir y bajar, los packs, Run
+con su salida, el Stop, el log y la memoria del `INFO`—, y los dos cables funcionan a la vez: el IDE puede entrar por
+la red en una placa que ya corre un programa —el autorun, por ejemplo— y pararlo. Si la placa desaparece de la red, el
+IDE lo dice a los pocos segundos y vuelve a desconectado (`#803`). En la P4, subir 1 MB tarda 16 s y bajarlo, 1,5 (por
+la UART, unos 95 s cada cosa); grabar `Gui`, `SQLite` y `Stdlib` —1,5 MB, sellándolos—, 14 s, frente a más de dos
+minutos.
+
+**Desde un programa**, el módulo nuevo `Air` enciende y apaga: `Air.Wifi`, con `turnOn()` —que espera a tener IP,
+hasta 20 s, sin parar los demás hilos—, `turnOff()`, `isConnected()` e `isAvailable()`. Y `Net`, que en V7 sólo
+funcionaba en el PC, abre conexiones TCP como cliente en las placas, con DNS y plazos, hasta ocho a la vez. Al acabar
+el programa la WiFi vuelve a lo que diga la configuración: uno que la apaga no deja al IDE fuera, y uno que la enciende
+no la deja gastando. En el PC, `turnOn()` da siempre `true`.
+
+```basic
+import Air
+import Net
+
+var wifi: Air.Wifi := Air.Wifi()
+if wifi.turnOn() then                 // enciende y espera a tener IP
+  var c: Net.Tcp := Net.Tcp()
+  if c.connect("192.168.1.50", 8080, 3000) then
+    c.sendStr("hola")
+    c.close()
+  endif
+endif
+wifi.turnOff()
+```
+
+Lo que no hay todavía: servir conexiones (`listen`/`accept`), UDP, TLS, la placa como punto de acceso, la hora por NTP
+y la lista de redes desde un programa. Todo, en la referencia §14.19.
+
+### El Bluetooth: el teclado y el ratón
+
+**El teclado y el ratón Bluetooth LE** (hito H2, `#697`), en la P4, la C5 y la S3 —en la P4, por la misma C6 que la
+WiFi—. Se emparejan una vez y, desde entonces, vuelven solos por su dirección cada vez que se enciende el Bluetooth.
+Lo que mandan llega a un teclado y a un ratón del sistema, que juntan todos los aparatos conectados, y de ahí, a la
+GUI y al programa:
+
+- **En un programa con pantalla, sin escribir nada**: el ratón mueve una flecha y hace clic, la rueda desplaza las
+  listas, y el teclado escribe en el campo que tiene el foco; Tab pasa al siguiente. Los programas de V7 funcionan así
+  tal cual. Lo hace la GUI de la P4 y la de la C5 (la S3 no tiene pantalla).
+- **Desde el programa**, dos módulos nuevos: `Keyboards.Keyboard` —el evento `onKey` por cada pulsación, o preguntar
+  con `hasKey()` y `readKey()`; la tecla, con su código HID (con nombre en `Keyboards.Key`) y su carácter— y
+  `Mice.Mouse` —`onPress`, `onMove` y `onWheel`, y los botones en `Mice.Button`—. La pantalla tiene además
+  `scr.onKey`. La distribución de teclado, de momento, la americana.
+- **El Bluetooth**, en `Air.Bluetooth`: `turnOn`, `scan(ms)`, `connect`, `disconnect`, `forget` y `listDevices`, con
+  los aparatos en `Air.BtDevice`. Lo recordado va en `/sys/bluetooth.json` —con `autoStart` y `autoOff`, como la
+  WiFi— y las claves de los emparejamientos, aparte, en `/sys/bluetooth.keys`. La clave `bt=1` del Entorno lo enciende
+  al arrancar, y se apaga solo tras diez minutos sin uso (una tecla o el ratón cuentan como uso).
+
+```basic
+import Air
+var bt: Air.Bluetooth := Air.Bluetooth()
+bt.turnOn()
+var vistos: List := bt.scan(10000)          // 10 s: los aparatos en modo de emparejar
+var d: Air.BtDevice := Air.BtDevice(vistos.get(0))
+if bt.connect(d) then                       // la primera vez empareja y lo recuerda
+  print d.getName() + " conectado"
+endif
+```
+
+**En el PC**, un Bluetooth simulado, igual en las dos VMs y en el micro simulado del IDE, con dos aparatos de prueba,
+«Teclado simulado» y «Ratón simulado»: conectados, el teclado y el ratón del PC llegan al programa por la ventana de su
+GUI, como llegarían en la placa; sin conectar, el programa no recibe teclas, como una placa sin teclado.
+
+Dos cosas de los aparatos, no de la placa: un ratón dormido del todo puede no despertarse al moverlo —con un clic, sí,
+y vuelve en unos segundos (`#820`)—; y algunos cambian de dirección al emparejarse con otro equipo, y entonces hay que
+emparejarlos otra vez. El programa de configuración del Bluetooth, escrito en BasicPlus, queda para V9 (`#819`):
+mientras, se empareja con unas líneas como las de arriba (referencia §14.19 a §14.21).
+
+### JC: BasicPlus con la ropa de Java y C#
+
+**JC** (hito H1, `#698`) es BasicPlus con llaves, punto y coma y el tipo delante del nombre. No es otro lenguaje: el
+mismo compilador lee los `.bp` y los `.jc` y los lleva al mismo árbol, y el mismo programa, escrito en BP o en JC, da
+el mismo `.mod` byte a byte (sólo cambia el `.dbg`, que cita su fuente). Las VMs no se enteran: un programa en JC corre
+igual en el PC y en las placas, se depura igual y usa las mismas librerías.
+
+```
+module Hola
+{
+   function void main(string arg = "mundo")
+   {
+      println("hola, ", arg);
+   }
+}
+```
+
+- **El compilador** lee un `.jc` por su extensión, también en un proyecto (su main, en `<main>.jc`; si están el `.bp`
+  y el `.jc`, lo dice) y en el AOT. Y traduce: `--escribir-jc` y `--escribir-bp` llevan un fuente de un lenguaje al
+  otro, y `--comprobar-jc` comprueba que la ida y la vuelta dan lo mismo.
+- **El IDE** abre, guarda, colorea y pliega los `.jc`, los compila, los ejecuta y los depura, en el PC y en la placa;
+  y **Edit → Traducir a JC** y **Traducir a BP** abren la traducción en una pestaña nueva. Los comentarios no viajan al
+  traducir.
+- **`print` y `println`**: en JC, `print(a, b)` no salta de línea y `println(a, b)` sí (`#703`). Y en BP, un `print`
+  que acaba en `;` deja la línea abierta (`#700`).
+- Un módulo en JC importa los de BP —la biblioteca estándar está escrita en BP—, y se mezclan en un proyecto.
+
+El volumen nuevo, **`docs/jc.html`** («El lenguaje JC»), cuenta la sintaxis entera, cada cosa en los dos lenguajes, y
+lo que JC no tiene porque BP tampoco lo tiene (las lambdas, los `struct`, los genéricos propios con `<T>`…).
+
+**Y C# como banco de pruebas** (hitos H6, H7 y H8). Con un traductor de C# a JC —`compat/csharp/cs2jc`, en el
+repositorio; necesita el SDK de .NET— se pasaron por JC las 2322 pruebas válidas del compilador de C# de Mono: **848
+funcionan** —traducidas, compilan y dan lo mismo en las dos VMs— y desde el 7-nov son la prueba de caja negra de BP y
+de JC: una que deje de funcionar es una regresión. Lo que pedían y tenía sentido para BasicPlus entró en los dos
+lenguajes (H7.1 a H7.5, abajo: los compuestos y el ternario, los genéricos, las interfaces, los parámetros `var` y los
+errores con su tipo). Lo demás de C# —los delegados, los `struct` con estado, los operadores propios, `?.`, los
+patrones…— no se promete para V9 (Eduardo: *«Hay muchas cosas de C# que no quiero migrar, hacen al lenguaje
+complicado y en mi opinión aportan poco»*).
+
+### El sonido
+
+**El módulo `Sound`** (hito H4, `#708`) reproduce un WAV —PCM de 16 u 8 bits, mono o estéreo— siempre en paralelo:
+`play` vuelve en seguida y el programa sigue mientras suena. Con `stop`, `isPlaying`, el volumen (`setVolume` y
+`getVolume`, de 0 a 100; 85 por defecto) y el progreso (`getPosition` y `getLength`); un sonido a la vez.
+
+```basic
+import Sound
+Sound.play("/sd/aviso.wav")   // vuelve en seguida: suena mientras el programa sigue
+```
+
+Suena en la **P4 de Waveshare**, por su códec ES8311 y su amplificador, con la línea `audio` del Entorno
+(`audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53`); el amplificador sólo se enciende mientras suena. **Y en el
+PC**, en las dos VMs, unos 20 dB más bajo, para que el 85 no deje sordo a nadie. En una placa sin sonido,
+`isAvailable()` da `false` y `play` lanza con el motivo, el mismo texto en todas. La C5 lleva el mismo códec, pero su
+altavoz no entra en el conector de la placa: a V9. El MP3, fuera.
+
+### Placas
+
+El parque no cambia: **ocho imágenes y diez placas**, las de V7 (la tabla de v7.0, abajo). Lo que cambia es lo que
+lleva cada una:
+
+| placa | WiFi | Bluetooth (teclado y ratón) | sonido |
+|---|---|---|---|
+| ESP32-P4 de Waveshare | sí, por su C6 (`radio=c6`) | sí, por la misma C6 | sí (`audio=`) |
+| ESP32-P4 de Espressif (el kit) | sin probar en V8 *(por confirmar)* | sin probar *(por confirmar)* | sin probar *(por confirmar)* |
+| ESP32-S3 | sí | sí | — |
+| ESP32-C5 | sí | sí | en V9 |
+| ESP32-C3 y C6 | no (sin PSRAM) | no | — |
+| Pico 2 y Metro | no (la Pico 2 W, aplazada) | no | — |
+| Nucleo y DK2 | no | no | — |
+
+Y en cada una:
+
+- **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes, con la tanda de V7 sin un cambio (0 de 250
+  pruebas). En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
+- **La S3 y la C5**, para la WiFi, pasan de 1 a 2 MB de aplicación: la tabla de particiones nueva obliga a borrar la
+  flash una vez (abajo, «Qué implica»).
+- **La S3 dice la frecuencia a la que va** —160 MHz; decía 240— y se puede subir a 240 con la clave `cpu.mhz` del
+  Entorno o con `Machine.setCpuFreqMHz` (`#784`): a 240, el cálculo tarda un tercio menos. Y sus cachés, al máximo
+  —32 KB de instrucciones y 64 de datos— (`#737`): las operaciones con cadenas tardan del 18 al 27 % menos, a cambio
+  de 48 KB de RAM interna.
+- **La P4**: su caché L2, de 128 a 256 KB (`#737`): un programa que mueve muchos datos en la PSRAM ya no echa al
+  intérprete de la caché —interpretar después de leer 128 KB costaba un 97 % más; ahora, un 1 %—, a cambio de 128 KB
+  de RAM interna.
+- **Las cinco ESP32**: `Machine.cpuFreqHz()` y el `INFO` dicen la frecuencia de verdad, y `setCpuFreqMHz` funciona
+  —la S3 y la C5, 80, 160 o 240 MHz; la C3, 80 o 160; la C6, 80, 120 o 160; la P4, 360 fija— (`#784`);
+  `Machine.tempC()` lee el sensor del chip, que en V7 daba 0, y el `INFO` lo enseña también en las STM32 (`#826`); y
+  el motivo del reinicio ya no sale «unknown» tras un reinicio por el USB (`#709`).
+- **La C3 y la C6, con mucho más heap** (`#740`): las pilas de los hilos BP salen ahora del heap, y la región fija
+  de pilas desaparece. La C3 pasa de 48 a 96 KB de heap, y la C6, de 61 a 112; y también la Nucleo, de 384 a 496, y la
+  DK2, de 768 a 1008. El log de la C3 y la C6, de 8 a 4 KB.
+- **La Pico 2 y la Metro**: la imagen única lleva ahora dos firmwares. Con `psram=1`, en una RP2350B —la Metro—
+  arranca M, con lo más usado de la VM y del sistema en la SRAM: frente a P, las operaciones con cadenas tardan del 25
+  al 31 % menos, y el GC, un 33 % menos. La Pico 2 sigue con P, y la Metro vuelve a P con `imagen=P` en el Entorno; el
+  `INFO` dice cuál corre. **La Metro ya llena sus 6 MB de heap**: en V7, hacia los 4,7 MB, el GC se quedaba sin
+  memoria para su mapa y el programa moría con «heap descarrilado» (`#787`).
+- **Las STM32**: tras un fallo fatal se reinician solas (`#839`, abajo); y copiar, rellenar y comparar memoria, que
+  su biblioteca de C hacía byte a byte, va mucho más deprisa en todo el firmware (`#785`: en la Nucleo, copiar 2 KB,
+  de 87,5 a 13,2 µs; un `gc()`, de 2,13 a 0,94 ms).
+
+Las nueve placas del lote final —todas menos la P4 del kit— han pasado la tanda de V8 con la imagen que se publica
+(abajo, «Pruebas»).
+
+### La robustez en el campo
+
+Un dispositivo puede pasar días encendido sin que nadie lo mire. V8 ha mirado qué pasa entonces.
+
+**La prueba de resistencia**: 48 horas seguidas, del 15 al 17 de noviembre, en cuatro placas a la vez —la Pico 2 y
+la Metro (la misma imagen; la diferencia, la PSRAM), la P4 y la C6—, con el autorun y un programa que en cada vuelta
+calcula, reserva memoria, escribe ficheros, lanza hilos y, en las que la tienen, pinta la pantalla. **Las cuatro, sin
+un error ni un reinicio**: 61 360 vueltas entre todas, la memoria libre tras el GC, quieta, y los tiempos de cada fase,
+los del principio. Encontró dos fallos de verdad, ya arreglados: el `Mutex` de cada `Collections.Map` no se soltaba
+hasta el final del RUN, y un programa que crea mapas en un bucle acababa sin mutex (`#831`: la Pico 2 empezó a fallar
+a las ~257 vueltas); y un número guardado en una global que valía justo la dirección de un objeto lo retenía horas,
+partiendo el heap (`#833`). El programa y su guion, en `compat/resistencia/`, para repetirla.
+
+**La tabla de la robustez** (`V8_IDEAS` §E15): dieciséis situaciones —el programa que se queda sin memoria, el error
+sin atrapar, el bucle sin fin, el pánico, el corte de corriente…—, qué hace hoy la placa y qué deja registrado. De ella
+salieron cinco arreglos pequeños, hechos y vistos en las placas:
+
+- **Con el log apagado** —`log=0`, lo de serie—, los avisos urgentes de la VM llegan al log igual: una excepción sin
+  atrapar, con su informe entero; un interbloqueo; sin memoria (`#837`). En el campo, de un programa que muere ya queda
+  algo. Los avisos de una referencia caducada, los tres primeros.
+- **Las ESP32 apuntan en el log la causa de cada reinicio** («boot: causa del reset = …»), como la Pico; y la línea
+  del autorun que no arranca tras un fallo fatal se escribe aunque el log esté apagado (`#838`).
+- **Las STM32, tras un fallo fatal** —un HardFault, la pila o el heap del sistema—, dejan su informe, se reinician a
+  los ~2 s por su perro guardián y arrancan sin autorun, como las demás (`#839`). En V7 se quedaban paradas hasta que
+  alguien las desenchufara.
+- **Un RESET con un programa que no para** —un hilo metido en una función de C que no vuelve— se sirve a los 2 s: la
+  placa se reinicia por software y conserva su log; y tras un KILL, la placa sigue leyendo el cable (`#840`). En V7,
+  la Pico y las STM32 sólo volvían con las manos.
+- **`Wdt` con dos runs** (la P4 y la S3) ya no reinicia una placa sana: un `feed` desde cualquier hilo cuenta
+  (`#836`).
+
+Y de paso: una carga que fallaba a medias ya no se deja memoria del sistema en cada intento (`#835`); con dos runs, se
+acabó un «No space in heap» falso (`#762`, `#829`); y un motor nativo que no carga ya no llena el log, repitiéndolo
+en cada `INFO` (`#798`).
+
+Lo que no es sencillo —contener el fallo en el run que lo tiene, el MPU, un contador de reinicios contra el bucle del
+autorun, un perro para el sistema y el informe del pánico de las ESP32— queda para V9 (abajo, «Lo que todavía no»).
+
+### Las cadenas, mucho más rápidas
+
+**Las cadenas** (hito H5) eran lo más lento del lenguaje: recorrerlas por índice, compararlas o construir un `Map`
+con muchas claves tenía un coste cuadrático. Ya no:
+
+- **Dos caminos**: el rápido, si la cadena no tiene acentos —un carácter es un byte—, y el lento si los tiene, que
+  recuerda por dónde iba (dos cursores por hilo, `#731`). Se mira una vez, al crear la cadena. También en los
+  literales (`#732`) y en las natives (`#733`).
+- **Comparar, en C**: `==`, `<`, `>`… y `Str.compare`, con una sola comparación por bytes, que en UTF-8 es el orden de
+  los caracteres (`#713`).
+- **bpstr**, una biblioteca de cadenas propia en C, la misma en ARM, RISC-V y Xtensa y verificada contra un oráculo,
+  para buscar, reemplazar, pasar a mayúsculas o recortar (`#730`): `indexOf` en 2 KB, de 5 a 9 veces más rápido.
+- **El `Map`** desplaza sus elementos de una vez al meter y al quitar.
+- **El GC y la reserva**: los huecos libres, en 48 listas por tamaño (`#718`, `#715`, abajo).
+
+Medido en la Pico 2: recorrer una cadena de 2 KB, de 535 a 20 ms; una de 4000 caracteres con acentos, de 1 992 a
+44 ms; un `==` entre dos de 2 KB iguales, de 22,8 ms a 68 µs; `Str.compare` de dos de 4000 caracteres con acentos,
+cinco veces, de 7,3 s a 1 ms; y un JSON de 8 KB, de 16,7 a 2,5 s. En la P4, un `Map` de 2000 claves en desorden, de
+56,7 a 1,5 s. (Medido el 21-oct, al hacerlo.)
+
+Y **un string es un invariante**: nace válido y no cambia.
+
+- `move` ya no escribe dentro de una cadena —lo que no debía cambiar cambiaba, y lo veían todas sus referencias—:
+  lanza «move: dst es de solo lectura» (`#714`). Para un texto que cambia, `StringBuilder`.
+- El texto de fuera que no es UTF-8 válido —un fichero, el puerto serie, la red— se descodifica al nacer la cadena:
+  `fromBytes`, `readFile`, `readLine`… lanzan `EncodingError`, o, con su indicador (`fromBytes(b, true)`,
+  `readFile(ruta, true)`, `readLine(true)`), ponen «�» en lo que no vale (`#711`). En V7 las dos VMs contaban distinto
+  un texto mal formado.
+- `Net.Tcp.recvStr` espera el resto de un carácter partido entre dos paquetes; y el texto de un pack —SQLite— llega
+  entero y descodificado, con `getStr(i)` estricto y `getStr(i, ignorarError)` (`#724`).
+
+### El lenguaje y la biblioteca estándar
+
+**Las interfaces** (H7.3, `#756`). Una clase hereda de una clase e implementa las interfaces que quiera: la herencia
+múltiple de tipos, no de código. Una interfaz lleva métodos —sólo su firma— y properties, y puede heredar de otras; lo
+que implementa un miembro de una interfaz lo dice con `@implement{ … }`, y `@override{}`, opcional, marca lo que
+redefine del padre. Se convierte con su nombre, como una clase, y vale con `instanceof`.
+
+```basic
+public interface Poligono
+  function lados(): integer
+end Poligono
+
+public class Cuadrado implements Poligono
+  @implement{ Poligono }
+  public function lados(): integer
+    return 4
+  end lados
+end Cuadrado
+```
+
+**Los genéricos, una orden al compilador** (`#793`, `#749`). `List<Sensor>` es la `List` de siempre con una orden
+para el compilador: le dice qué guarda, comprueba lo que entra y escribe él la conversión de lo que sale. La VM no se
+entera. Lo mismo `Collections.Map<string, Tarea>` y las clases propias que dicen su tipo base con `@element{tipo}`; y
+`for s in sensores` recorre la lista. **Y `x[i]` sobre un objeto** (`#794`) es `x.get(i)`; `x[i] := v`, `x.set(i, v)`
+(en un `Map`, `put`); y `x.pin[i]`, `x.getPin(i)`. No hay nada que declarar.
+
+```basic
+var sensores: List<Sensor> := List()
+sensores.add(Sensor(4))
+sensores.add("hola")            // error: 'List<Sensor>' guarda 'Sensor', no 'string' (add)
+print sensores[0].valor()       // sale como un Sensor: sin cast
+```
+
+**Los errores de la VM, con su tipo** (H7.5), como en Java: `ArithmeticError`, `NullReferenceError`, `IndexError`,
+`CastError` e `IOError` —con su hija `EncodingError`—, todas hijas de `RuntimeError`. `catch e: RuntimeError` las
+sigue atrapando todas, con el mensaje de siempre, y con un `catch` de su clase delante se tratan aparte; también lo
+que lanza una `native`. Lo demás —los pines, los buses, la red, el heap lleno, la pila desbordada— sigue siendo
+`RuntimeError`.
+
+```basic
+try
+  media := total / n
+catch e: ArithmeticError
+  print "sin datos: " + e.msg     // sin datos: División por cero
+endtry
+```
+
+**Una variable `string` puede valer `null`** (`#774`), como en C#: la variable no referencia ninguna cadena; una
+cadena, en cambio, nunca es `null`. Un campo, una property o una global `string` sin valor nace `""`. Con un `null`,
+escribir y concatenar dan lo mismo que con `""`, `== null` es `true`, y lo que pide una cadena —`strlen`, `upper`,
+abrir un fichero…— lanza «referencia nula: strlen de un string null». Una constante, en cambio, no puede ser `null`
+(`#777`).
+
+**Los compuestos y el ternario** (H7.1, `#747`): `*=`, `/=`, `&=`, `|=`, `mod=`, `xor=`, `shl=` y `shr=`, con los tipos
+como en C# —sobre un `byte` o un `int16` dan la vuelta—; e `iif(c, a, b)`, que sólo calcula la rama que toca
+(`iif(p != null, p.nombre, "nadie")` no falla con `p` nulo). **Los parámetros `var`** (H7.4): una función recibe una
+property de un objeto, y la lee y la escribe —el `ref` de C#, sólo con properties—:
+
+```basic
+function suma(var n: integer, m: integer)
+  n += m                          // lee y escribe la property que le pasaron
+end suma
+```
+
+con `suma(c::valor, 5)`. Y además:
+
+- `print x;` —con `;` al final— deja la línea abierta, y el siguiente `print` sigue en ella (`#700`).
+- Un bucle puede llevar nombre, y `break` y `continue` lo nombran para salir de varios a la vez (`do fuera` …
+  `break fuera`); el `continue` de un `do … loop c` va a la condición, como en C (`#699`).
+- `T[n]` crea un array de cualquier tipo con su tamaño: `Punto[10]`, `string[n + 1]`.
+- `&`, `|` y `xor` valen entre dos `boolean`, y calculan los dos lados.
+- Un enum se convierte en su entero con `integer(c)` (`#754`), y `Enum.getName(c)` da su nombre (`#778`).
+- Las sobrecargas: gana la más específica, como en Java (`#772`), y una que no se ve desde donde se llama no compite
+  (`#796`). Lo protegido sobre otro objeto, con la regla de Java y C# (`#760`).
+- Un evento se compara con `null` dentro de su clase, para saber si tiene suscriptor: `if onClick != null then …`
+  (`#771`).
+- Los datos de un módulo —sus literales, globales y constantes— pueden llegar a 64 KB, y si no caben, el error dice
+  cuál (`#768`).
+- `eol()` da el fin de línea de la plataforma, y un `\n` dentro de una cadena es siempre LF, en las dos VMs (`#755`).
+
+**Los overlays** (hito H9, `#786`): un programa carga a otro con sus módulos, lo ejecuta y lo descarga, con la clase
+`Overlays.Overlay`. Lo que se usa poco —la configuración, exportar o importar datos— va aparte y sólo ocupa memoria
+mientras corre, como los overlays de MS-DOS con la barrera de los 640 K. `tryExe` atrapa los errores del programa
+cargado y dice cuál fue. Probado en el PC, la Metro, la P4 y la Nucleo; lo que todavía no hace, en `PENDIENTES`
+(«Los overlays»).
+
+```basic
+import Overlays
+function Main()
+  var ov: Overlays.Overlay := Overlays.Overlay()
+  ov.load("/app/Demo.mod")            // un .mod o un pack
+  if ov.tryExe("su argumento") then
+    print "acabó bien"
+  else
+    print "falló: " + ov.getError()
+  endif
+  ov.unload()
+end Main
+```
+
+**La biblioteca estándar:**
+
+- Cinco módulos nuevos: `Air`, `Keyboards`, `Mice`, `Sound` y `Overlays` (arriba).
+- `Json.parseJson` sigue tras un error, como un compilador, y los da todos —diez como mucho— en un `AggregateError`,
+  cada uno un `JsonError` con su línea y su columna (`#725`). Quien atrapaba `RuntimeError` los sigue atrapando.
+- `List.get`, `set` y `remove` miran el tamaño de la lista, no su capacidad: fuera de la lista, siempre un error
+  (`#795`).
+- `parseInt` y `parseFloat`, con una regla, la misma en las dos VMs: un texto que no es un número limpio es un
+  `RuntimeError` atrapable —«parseInt: '12abc' no es un número entero»— (`#716`); y `charCodeAt` fuera de rango lanza
+  también en la VM-C (`#717`).
+- `/data`, la carpeta para los datos de los programas —cada uno en la suya, `/data/<proyecto>/`—, en las placas, en
+  el PC y en el micro simulado; el IDE no la toca nunca (`#816`). Y las rutas relativas, documentadas: mejor `/data`
+  (`#823`).
+- `IO.rmdir` sólo borra una carpeta vacía, e `IO.removeFile`, sólo un fichero, en todas partes (`#824`).
+- `Machine.setCpuFreqMHz` en las ESP32, con la clave `cpu.mhz` (`#784`); `Machine.tempC()` en las ESP32 (`#826`); y
+  en la VM-Java, `Machine.uptimeMs()` cuenta desde el arranque, como en la VM-C (`#827`).
+
+### El código nativo
+
+- **Una `native` da lo mismo que interpretada cuando un entero da la vuelta** (`#790`): el AOT escribe las cuentas
+  sin signo, y el compilador de C ya no se salta una comparación como `x + 1 > x`.
+- **Dividir por cero dentro de una `native` de enteros lanza**, como interpretada, y se atrapa dentro y fuera; y en el
+  PC, el mínimo entre -1 ya no tumba la VM-C (`#791`).
+- **Convertir una referencia dentro de una `native`** (`Perro(a)`) es un error de compilación: el AOT construía un
+  `Perro` en vez de convertir, sin decir nada (`#757`). Se hace fuera de la native.
+- Una `native` recorre una cadena por índice en un tiempo lineal (`#733`) y lanza los errores con su tipo (H7.5).
+  La ABI no cambia: los `.mdn` siguen en la ABI 9.
+- No se llama por una interfaz desde una `native`: se llama desde BP y se le pasa lo que haga falta.
+
+### Interfaz gráfica
+
+- **El teclado y el ratón**, en la GUI de la P4 y la C5 (arriba, el Bluetooth): la flecha, los clics, la rueda en las
+  listas y el teclado en el campo con el foco; y `scr.onKey`. En el PC, con el «Ratón simulado» conectado, el ratón
+  deja de hacer de táctil y hace de ratón.
+- **En el PC, la ventana gira con la pantalla** (`#813`): con `Gui.setRotation(90)`, la ventana de la VM-C y la del
+  micro simulado salían pálidas y con rayas; ahora miden lo que la pantalla del modelo, como la de la VM-Java.
+- **En la C5, con la WiFi y el Bluetooth encendidos, la pantalla dejaba de refrescarse**: el DMA del SPI lee ya de la
+  PSRAM (`#818`; también en la S3 y la P4). Y el driver de la pantalla podía quedar grabado encima del final del motor
+  de LVGL, con la pantalla a puntos y la placa caída (`#817`): los packs de la GUI están rehechos.
+- Al parar un programa de GUI, el destructor de `Gui.Button` ya no lanza, y no quedan objetos sin destruir (`#695`).
+  En la VM-Java, un clic de verdad en un `Gui.Button` llega al programa (`#811`).
+- La GUI recorta su texto por caracteres, no por bytes (`#711`).
+
+### El IDE
+
+- **La placa por la red**: **Placa (red)**, **Buscar en la red** y el botón **WiFi**, que escribe `/sys/wifi.json`
+  (arriba). Si la placa desaparece, el IDE lo dice y vuelve a desconectado (`#803`).
+- **JC**: abrir, colorear, plegar, compilar, ejecutar y depurar los `.jc`, y **Edit → Traducir a JC / Traducir a BP**
+  (arriba).
+- **Un error dice dónde** (`#582`): un error sin atrapar en la placa trae su cadena de llamadas, y el IDE la traduce a
+  fichero y línea con los `.dbg` («en Sensor.bp:42», «llamado desde …»); con la VM local, lo mismo (`#788`). En V7,
+  en la placa, sólo salía el mensaje. Dentro de una `native`, la línea es la de quien la llamó.
+- **Un programa a la vez** (`#822`): con uno en marcha, Run, Run Window, Debug y Run on Device no lanzan otro, y lo
+  dicen; el Stop para también la VM-C de Run Window, y al cerrar el IDE se para lo que tenga en marcha en el PC. Y el
+  Stop y el Run esperan la respuesta de la placa y dicen qué pasó: que para el programa, que no había ninguno, que no
+  contesta o por qué rechaza el RUN (`#694`).
+- **La flash del PC** (`#808`): las dos VMs del PC tienen la suya, una carpeta —por defecto
+  `%USERPROFILE%\.basicplus\flash`, u otra con `--flash-dir=`— que hace de `/` de la placa. Con la VM local, el
+  programa corre en `<flash>/app/<proyecto>`, y lo que escribe se queda al acabar.
+- **El micro simulado** trae la WiFi y el Bluetooth simulados, con el teclado y el ratón de prueba.
+- El jar pasa a `BpIde-8.0.jar`.
+
+### La ejecución y la memoria
+
+- **Las pilas de los hilos, del heap** (`#740`): cada hilo pide la suya al heap al arrancar —2 KB, o lo que diga
+  `Thread(stackSize)`— y la devuelve al acabar; la región fija de pilas desaparece, y las placas sin PSRAM ganan heap
+  (arriba, «Placas»). Y la VM mira la pila antes de cada instrucción: lo que en V7 podía escribir fuera de su pila sin
+  aviso —una expresión muy anidada— es ahora un «desbordamiento de pila». La clave `stack=` del Entorno pide sólo la
+  pila del `main`.
+- **Reservar con muchos huecos** (`#718`, `#715`): los huecos libres van en 48 listas por tamaño, y el GC ya no rehace
+  su lista con un coste cuadrático. En V7, con 4000 cadenas vivas, cada `gc()` tardaba 3,6 s en la P4; con 4000
+  huecos, diez `gc()` pasan en la Metro de 11,9 s a 0,64, y en la Pico 2, de 1,2 a 0,19.
+- **Sin memoria del sistema, el error dice cuál falta y qué hacer** (`#828`): «no hay memoria del sistema (malloc)
+  para las tablas de las clases (en una placa sin PSRAM, un vmheap= menor en el ENV le deja mas)», o «no hay sitio en
+  el bloque de la VM». En la Pico 2, un programa con `Gui` y `Json` necesita un `vmheap=` menor.
+- **Una referencia caducada** —a un objeto ya soltado— que llega a un builtin da `NullReferenceError` «referencia a
+  objeto eliminado (use-after-free)», como al usarla directamente (`#805`, `#807`); y el `throw` de una excepción
+  `null` es un `NullReferenceError` que se atrapa (`#806`).
+- **El GC sólo se fía de una referencia de verdad**, con su contador (`#799`, `#833`): un número que valga justo la
+  dirección de un objeto ya no lo retiene, y un objeto que murió sin cerrar se destruye en el primer `gc()`.
+- **`sleep(0)` cede el turno** también en la VM-C, como `yield()` (`#770`).
+- **El turno de un hilo se cuenta en instrucciones** (`#801`): uno que pasa el rato en builtins largos —leer o escribir
+  ficheros— hace esperar a los demás; `quantum=256` en el Entorno lo reparte mejor (manual §14.2).
+- Un array enorme ya no desborda el cálculo de sus bytes: «No space in heap» (`#712`). Y el argumento del RUN, hasta
+  127 bytes, con un error si no cabe (`#764`).
+- **El rendimiento frente a V7**, medido el 31-oct con una herramienta nueva que compara en la placa con una versión
+  publicada, `bpgenvm-c/tools/rendimiento_versiones.py` (`#743`): en la Metro, `AllocBench` tarda un 38 % menos y
+  `PrintBench`, la mitad; y el cálculo puro, entre un 2 y un 7 % más (`fib(28)`, un 4 % en la Metro y en la P4),
+  probablemente por mirar la pila antes de cada instrucción (`#740`) *(por confirmar en el pre-flight)*.
+
+### Pruebas
+
+- **Una página nueva, `docs/pruebas.html`** («Cómo se prueba BasicPlus»): todas las pruebas que pasa BasicPlus, qué
+  comprueba cada una, cuántos casos tiene, un fallo real que cazó y cómo correrlas.
+- **La red de paridad dual-VM** pasa de 149 casos a **217** *(por confirmar en el pre-flight)*; los mismos en el
+  formato de V6, MOD8, **209**, y 8 que usan lo que sólo tiene el formato nuevo *(por confirmar en el pre-flight)*; y
+  con dos workers, **217** *(por confirmar en el pre-flight)*. Las VMs de V8 siguen ejecutando byte a byte los **59**
+  `.mod` de V6 de la cápsula *(por confirmar en el pre-flight)*.
+- **117 pruebas de C** de la VM en la red (en V7, 102) *(por confirmar en el pre-flight)* —el depurador, las natives
+  contra su versión interpretada, los ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más
+  delicado con su **sabotaje**: un interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y
+  el micro simulado, **15** casos; la sombra, **15**; la norma de versiones, **9** *(por confirmar en el pre-flight)*.
+- **El compilador**: **396** pruebas propias, y **66** de la VM-Java *(por confirmar en el pre-flight)*; **39**
+  programas de `samples/errores/` que tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7,
+  19 y 50) *(por confirmar en el pre-flight)*; y los **415** samples compilan con el compilador de V8 (en V7, 399)
+  *(por confirmar en el pre-flight)*.
+- **Los ejemplos de la documentación**: los **343** fragmentos de código de 26 páginas compilan, y una línea que el
+  manual enseña como un error lo da (`#832`) *(por confirmar en el pre-flight)*.
+- **JC**: el corpus, pasado a JC, da la misma salida (`check-jc`, **215**) *(por confirmar en el pre-flight)*; y las
+  **848** pruebas de Mono que funcionan, la caja negra de los dos lenguajes *(por confirmar en el pre-flight)*.
+- **En las placas**: la tanda de V8, **24** pruebas —la prueba de fuego y lo nuevo de V8— en las **nueve** placas del
+  lote final, con las imágenes que se publican y la salida comparada con la del PC *(por confirmar en el pre-flight)*:
+  igual, salvo lo que difiere a propósito —`lastModified`, que el sistema de ficheros de las placas no tiene, y la GUI
+  en las placas sin pantalla—. Y la prueba de resistencia: **48 horas** en cuatro placas, **61 360** vueltas, sin un
+  error ni un reinicio (arriba).
+
+### Bugs de V7 corregidos
+
+- **Un programa que crea mapas en un bucle acababa sin `Mutex`**: el de cada `Collections.Map` y cada `SyncList` no
+  se soltaba hasta el final del RUN, y tras horas daba «mutex.lock: id inválido -1» (`#831`). **Un número en una
+  global podía retener un objeto**, horas o hasta el final del RUN, partiendo el heap (`#833`).
+- **Con dos runs, un «No space in heap» falso** cuando otro hilo recogía la basura a la vez (`#762`, `#829`); y **una
+  carga que fallaba a medias se dejaba memoria del sistema** en cada intento, hasta reiniciar (`#835`).
+- **El GC rehacía la lista de huecos con un coste cuadrático**, y una reserva que no cabía en ningún hueco la recorría
+  entera (`#715`, `#718`). **La Metro no llegaba a llenar sus 6 MB de heap** (`#787`). **Un array enorme pisaba otros
+  objetos**: `newIntArray(2^30 + 1)` desbordaba el cálculo de sus bytes (`#712`).
+- **Las cadenas**: `move` escribía dentro de una cadena, y lo veían todas sus copias (`#714`); `<`, `<=`, `>` y `>=`
+  entre dos cadenas compilaban y daban basura, distinta en cada VM (`#713`); un texto que no era UTF-8 válido se
+  contaba distinto en las dos VMs (`#711`); `charCodeAt` fuera de rango daba 0 en la VM-C (`#717`); `parseInt("12abc")`
+  daba 12 en la VM-C y en la VM-Java mataba el hilo sin que el `try` lo viera (`#716`); una cadena guardada en un
+  `Object` no se podía imprimir (`#748`); y el texto que devolvía SQLite se cortaba en 512 bytes, a veces a medio
+  carácter (`#724`).
+- **El compilador**: el `continue` de un `do … loop c` volvía arriba sin mirar la condición —y en una `native` sí la
+  miraba: el mismo bucle daba otra cosa— (`#699`); un `if`, `while` o `for` de una línea al final de un bloque no
+  compilaba (`#701`), ni un `raise` dentro del `set` de una property (`#702`); `a[f()] += 5` llamaba dos veces a `f()`
+  (`#746`); `b += 1` con un `byte` a 255 guardaba 256 (`#747`); `super.prop` iba a la property de la hija (`#744`); un
+  método no podía construir una clase declarada más abajo en el mismo módulo (`#751`); un método privado llamado
+  sobre `null` corría con `this` nulo (`#752`); `super()` en una clase sin padre paraba el compilador sin decir por qué
+  (`#753`); desde fuera se podía llamar a una sobrecarga `private`, porque la visibilidad se miraba en la primera
+  (`#796`); y el mismo programa podía dar otro `.mod` en otra compilación (`#704`).
+- **Las natives**: una cuenta que daba la vuelta daba otro resultado que interpretada (`#790`); dividir por cero no
+  lanzaba (`#791`); y convertir una referencia construía un objeto, sin un error (`#757`).
+- **Las dos VMs no hacían lo mismo**: con un `\n` dentro de lo que se imprime, en Windows (`#755`); en tres caminos de
+  error —los textos de los ficheros, una cadena eliminada, un `Mutex` que no vale— (`#805`); con un `throw` de una
+  excepción `null`, que no se atrapaba (`#806`); con `sleep(0)`, que en la VM-C no cedía (`#770`); con `IO.rmdir` e
+  `IO.removeFile`, que en la VM-Java y en la SD borraban también lo que no les tocaba (`#824`); con
+  `Machine.uptimeMs()`, que en la VM-Java era la hora del PC cortada a 32 bits (`#827`); con el argumento del RUN, que
+  la VM-C cortaba a 127 bytes en silencio (`#764`); y en Windows, donde la VM-C del PC no hablaba UTF-8 en los nombres
+  de fichero ni en el argumento (`#763`).
+- **`List.get` y `set` miraban la capacidad, no el tamaño**: fuera de la lista no siempre había error, y `SyncList` se
+  dejaba el cerrojo cogido si lo de dentro lanzaba (`#795`). **Una referencia caducada pasada a un builtin** no daba
+  error, y podía leer el contenido de otro objeto (`#807`). **`Net.tcpClose`**, suelto, cambiaba las variables locales
+  de antes (`#705`).
+- **Las placas**: `Wdt` con dos runs reiniciaba una P4 o una S3 sanas (`#836`); las STM32 se quedaban paradas tras un
+  fallo fatal (`#839`); un RESET con un programa que no paraba no se servía, y tras un KILL la placa dejaba de leer el
+  cable (`#840`); con el log apagado no quedaba nada de un programa que moría (`#837`), ni de por qué se había
+  reiniciado una ESP32 (`#838`); la S3 decía ir a 240 MHz e iba a 160 (`#784`); `Machine.tempC()` daba 0 en las ESP32
+  (`#826`); el motivo del reinicio salía «unknown» tras un reinicio por el USB (`#709`); y la STM32 copiaba la memoria
+  byte a byte (`#785`).
+- **La GUI**: al parar un programa, el destructor de `Gui.Button` lanzaba «referencia nula» y quedaban objetos sin
+  destruir (`#695`); y en el PC, la ventana con la pantalla girada salía pálida y con rayas (`#813`).
+- **El IDE**: decía «KILL enviado» sin saber si había llegado, y un RUN que la placa rechazaba lo dejaba esperando
+  (`#694`); una línea del cable que se estancaba 300 ms se tiraba en silencio —así se perdió un KILL— (`#693`); dos
+  Run seguidos con la VM local dejaban la primera dando vueltas, y ni el Stop ni cerrar el IDE la paraban (`#822`); y
+  con la VM local, un error daba la posición y no la línea (`#788`). **En la placa, un error no decía su línea**
+  (`#582`): ahora la dice, salvo dentro de una `native`.
+
+### Qué implica al actualizar desde V7
+
+⚠️ **Graba la imagen de V8 en cada placa antes que nada, y después la stdlib y los packs de V8.** El `.mod` sigue en
+MOD9 y el código nativo en la ABI 9, pero lo compilado con V8 —tus programas y la stdlib del `Stdlib.pack`— usa
+funciones de la VM que una imagen de V7 no tiene (comparar cadenas, crearlas de solo lectura, descodificar el texto de
+fuera, lanzar los errores con su tipo…) y, si hay interfaces, opcodes nuevos. Graba los packs de V8: el `Stdlib.pack`
+va con su imagen, los de la GUI están rehechos (`#817`) y el de SQLite también (`#724`). Si la imagen nueva mueve la
+zona de packs o el bloque de RAM de los motores, un motor dice «realojado para OTRA direccion» hasta que se regraba
+(`#741`). Lo más limpio, como en V7, en el panel de Packs: **Formatear zona…** y grabar los de V8. En la RP2350, graba
+siempre el `bpvm_pico.uf2` entero: lleva los dos firmwares, P y M.
+
+⚠️ **La S3 y la C5: la flash, borrada entera, una vez.** Su aplicación pasa de 1 a 2 MB para la WiFi, y la tabla de
+particiones nueva pide borrar la flash: se pierden el Entorno, el sistema de ficheros y los packs de la placa. Baja
+antes lo que quieras conservar, graba la imagen fusionada de V8 y vuelve a aprovisionarla: las particiones (la C5 se
+reparte sola), el Entorno, los packs y tus programas.
+
+📌 **La P4 de Waveshare, para la WiFi y el Bluetooth**: su C6 necesita el firmware ESP-Hosted 3.0.9 —el de fábrica no
+vale para la WiFi—; en V8 se grabó por el conector P1 de la placa, con un adaptador USB-serie (`V8_IDEAS` §E3, «Paso
+1»). *(Por decidir: cómo se le da al usuario, y si ese firmware va en el ZIP.)* Y en su Entorno, `radio=c6` —sin esa
+línea, ni WiFi ni Bluetooth— y, para el sonido, la línea `audio=…`.
+
+📌 **Recompila los `.mod`.** El formato no cambia (MOD9), así que un `.mod` de V7 carga *(por confirmar: la red no
+tiene una cápsula de V7)*, pero con la VM de V8 debajo: un campo, una property o una global `string` sin valor es para
+él `null`, y se para con «referencia nula: strlen de un string null» si llega a un builtin (`#774`; recompilado, nace
+`""`); y lo que lee texto de fuera ya es estricto (`#711`), recompilado o no. El IDE recompila en cada Run; lo que
+hay que mirar es lo que quedó en `/app` —el programa del autorun, sobre todo—. Y recompila las natives para tener los
+arreglos del AOT (`#790`, `#791`): un `.mdn` ya compilado sigue como estaba.
+
+📌 **Revisa el Entorno.**
+- **`stack=` pide ahora la pila del `main`**, no la región de todos los hilos (`#740`): una línea de V7 le quita heap
+  a la placa —en la Pico 2, `stack=90` le quitaba 74 KB—; quítala si no la necesitas.
+- **En una placa sin PSRAM**, un programa que no arranca por «no hay memoria del sistema (malloc)…» se arregla con un
+  `vmheap=` menor (`#828`).
+- **Lo nuevo**: `wifi=` y `bt=` (encender la radio al arrancar), `radio=c6` y `audio=` (la P4), `cpu.mhz=` (las
+  ESP32) e `imagen=P` (la RP2350).
+
+📌 **Lo que rompe fuentes de V7** (deja de compilar, y el compilador dice por qué):
+- **Lo protegido de otra clase, leído por una referencia del padre** (`#760`): desde `B`, lo protegido se usa sobre un
+  `B` o una hija suya; sobre un objeto que sólo es un `A`, por su getter.
+- **Una sobrecarga `private` o protegida, llamada desde fuera** (`#796`).
+- **Algunas llamadas con sobrecargas**: con la regla de Java, lo que antes era ambiguo compila, y alguna llamada que
+  antes elegía una pasa a ser ambigua; el error dice cómo elegir (`#772`).
+- **Una conversión de referencia dentro de una `native`** (`Perro(a)`): se hace fuera (`#757`).
+- **Una función que se llame `iif`**: es el ternario (`#747`).
+- **Un valor por defecto del argumento de `main` de más de 127 bytes** (`#764`).
+
+📌 **Lo que cambia de comportamiento sin que el compilador avise:**
+- **`print x;`**, con `;` al final, ya no salta de línea (`#700`).
+- **El `continue` de un `do … loop c` va a la condición**: si ya no se cumple, el bucle acaba (`#699`).
+- **`move` sobre una cadena** lanza «move: dst es de solo lectura» (`#714`).
+- **`parseInt` y `parseFloat`** lanzan con un texto que no es un número limpio —`"12abc"`, `""`, un hexadecimal—
+  (`#716`); y **`charCodeAt`** fuera de rango lanza también en la placa (`#717`).
+- **El texto de fuera que no es UTF-8 válido** —`fromBytes`, `readFile`, `readLine`, `getStr` de SQLite— lanza
+  `EncodingError` (`#711`, `#724`): un programa que lee ficheros en Latin-1 necesita el indicador, `readFile(ruta,
+  true)`.
+- **`Json.parseJson`** lanza un `AggregateError` con todos los errores, y un entero que no cabe en 32 bits ya es un
+  error (`#725`).
+- **Un `string` sin valor es `""`**: `campo == ""` da `true` (en V7, `false`; `#773`, `#774`); y `f(null)`, con una
+  sobrecarga para `string`, va a ella (`#772`).
+- **Los compuestos sobre un `byte` o un `int16` dan la vuelta**: `b += 1` con 255 da 0 (en V7, 256; `#747`); y el
+  destino de un compuesto se calcula una vez (`#746`).
+- **`super.prop` va a la property del padre** (`#744`).
+- **`List.get`, `set` y `remove`**, fuera del tamaño de la lista, lanzan (`#795`).
+- **Una referencia caducada que llega a un builtin** lanza `NullReferenceError` (`#807`), y **el `throw` de un `null`**,
+  también, y se atrapa (`#806`).
+- **`IO.rmdir` y `IO.removeFile`** sólo borran lo suyo: una carpeta vacía y un fichero (`#824`).
+- **`sleep(0)`** cede el turno también en la VM-C (`#770`).
+- **En la S3, `Machine.cpuFreqHz()` dice 160 MHz**, lo que va de verdad (`#784`).
+- **Las STM32, tras un fallo fatal, se reinician y arrancan sin autorun** (`#839`); y **un RESET con un programa que
+  no para reinicia la placa a los 2 s** (`#840`).
+- **En el IDE, un programa a la vez** (`#822`).
+- **En el PC**: una ruta absoluta va a la flash del PC (`%USERPROFILE%\.basicplus\flash`), no a la raíz del disco
+  (`#808`); en la VM-Java, sin el «Teclado simulado» conectado, la GUI no recibe el teclado del PC (H2); y en Windows,
+  un `\n` dentro de lo que se imprime es LF en las dos VMs (`#755`).
+
+📌 **Lo que no rompe:** `catch e: RuntimeError` sigue atrapando todos los errores de la VM, que ahora son sus hijas;
+el formato del `.mod` sigue siendo MOD9 y la ABI del nativo, la 9 *(por confirmar: que los `.mdn` de V7 cargan en la
+imagen de V8)*; las VMs de V8 siguen ejecutando los 59 `.mod` de V6 de la cápsula, con su stdlib de entonces, y sólo
+uno cambia, por `#774` (`GuiWinJson`, que mide un `string` sin valor de su `Gui` de V6); e `import Core`, escrito,
+sigue compilando.
+
+### Lo que todavía no
+
+- **El bajo consumo** (`#490`) pasa a V9 entero: el micro nunca duerme, y un programa a batería no puede ahorrar hoy.
+  Lo que sí hay: las radios, apagadas de normal y apagadas solas sin uso.
+- **La WiFi**, sólo en la P4 de Waveshare, la S3 y la C5 (en la P4 del kit, sin probar *(por confirmar)*); no en la
+  C3, la C6, las STM32 ni la Pico 2 W. Y no hay servidor (`listen`/`accept`), ni UDP, ni TLS, ni la placa como punto
+  de acceso, ni la hora por NTP. Un módulo de radio externo para las demás placas, y un STM32 con WiFi, de V9 o más
+  adelante.
+- **El Bluetooth**: el teclado y el ratón BLE, en la P4, la C5 y la S3, con la distribución americana; el programa de
+  configuración, a V9 (`#819`); y en la S3, mientras se conectan los dos aparatos, la RAM interna va justa (`#821`, a
+  V9).
+- **El sonido**: WAV, en la P4 y el PC; la C5, a V9 (`#708`); el MP3, fuera.
+- **Los streams y los dispositivos** (`#723`), el tema de V9: los `Reader` y `Writer`, y con ellos, rehacer las clases
+  de los dispositivos, la PIO del RP2350 programable desde BP, más UART en las ESP32 y el DMA de `Uart`. Mientras, con
+  un run, un `Uart.read` que espera para a los demás hilos: el rodeo, `available()` y `sleep`.
+- **Que el fallo fatal de un run no tumbe la placa** (la tabla de la robustez): contenerlo en el run, el MPU de la M33,
+  un contador de reinicios contra el bucle del autorun, un perro del sistema que vigile a `io` y el informe del pánico
+  de las ESP32 en el log, a V9.
+- **La imagen de dos núcleos de la RP2350 sigue siendo más lenta con un solo hilo** (`#665`, a V9): en la Pico 2,
+  `PrintBench` tarda 1 321 ms frente a 745 con la de un núcleo, y el cálculo, un 7,7 % más; en la Metro, un 3,5 % (en
+  V7, un 35 %). Con dos hilos, la de dos núcleos gana: ×1,68 en la Pico 2 y ×1,75 en la Metro.
+- **Dentro de una `native`, un error no dice su línea**, sino la de quien la llamó (`#582`): para verla, quítale
+  `native` y ejecútala interpretada.
+- **El `.mod` multifamilia** (`#584`), a V9, y sólo dentro de un proyecto que diga qué familias lleva.
+- **El depurador no despliega los objetos** (`M5`, a V9), y en las placas de dos núcleos va con un solo run.
+- **JC no tiene lo que BP no tiene** —las lambdas, los delegados, los `struct`, los genéricos propios con `<T>`, los
+  operadores propios, `?.`, los patrones, los arrays de varias dimensiones—; los comentarios no viajan al traducir;
+  un módulo escrito en JC que otro importa hay que compilarlo antes; y los mensajes del compilador hablan en BP
+  (`integer`, `boolean`).
+- **La C3 va justa de memoria**, con sus 96 KB de heap: optimizarla, en V9. Y en las ESP32 con PSRAM, pasar a la PSRAM
+  lo que la VM aún tiene en la RAM interna (`#710`), también.
+- **La S3 no tiene AOT** (Xtensa): sus natives corren interpretadas.
+- **El `Wdt` de las STM32 lanza**: su IWDG no se puede parar por software. Y las STM32 siguen sin `Neopixel` ni SD.
+- **`input()`** sigue funcionando sólo en la VM Java.
+- **Para V9, también**: los conjuntos, como en Pascal; los recursos grandes, fuera del bloque de datos del módulo
+  (`#782`), y quitar su tope de 64 KB (`#781`); la zona de packs del PC en un fichero (`#809`); una interfaz del IDE
+  para la IA (`#728`); el simulador con disfraces y la ventana del micro simulado.
+- **La P4 se colgó una vez en `GuiShot`**, en el lote final (`#825`): no se repite —200 parejas y 500 capturas
+  seguidas—, y queda apuntado por si vuelve.
+
+### Artefactos de la release
+
+**Un solo adjunto**: `BasicPlus-8.0-win.zip` (su `sha256`: *(se anota al montar el ZIP)*; va en la página de la
+release y en `dist/BasicPlus-8.0-win.zip.sha256`). Dentro: `BpIde-8.0.jar` y `bpide.bat`, `bin/` (el micro simulado,
+con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con los módulos nuevos), **`packs/`** con los
+**cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
+`samples/` (y los de JC, `samplesJC/` *(por confirmar)*), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
+volúmenes nuevos, `jc.html` y `pruebas.html` *(por confirmar: su versión inglesa)*), `bpgenvm-c/` (cabeceras y fuentes
+que necesita el AOT) y **`firmware/`** con las **ocho imágenes** de siempre —la de la RP2350, con sus dos firmwares—,
+su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del RP2350 en `firmware/boards/` *(por decidir:
+el firmware de la C6 de la P4 de Waveshare)*. Cómo instalar cada una, y qué packs lleva cada placa:
+**[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
 
 ---
 
