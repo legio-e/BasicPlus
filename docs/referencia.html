@@ -2014,7 +2014,7 @@ port.write(tx, <span class="num">4</span>)
           Las funciones <code>sleep*</code> y <code>now()</code> son
           inmunes (timer HW a 1 MHz independiente).
           <strong>En las ESP32 (V8):</strong> los valores de cada chip —la S3 y la C5, 80, 160 y 240; la C3,
-          80 y 160; la C6, 80, 120 y 160; la P4, sólo 360—, con la gestión de energía del IDF. Un valor
+          80 y 160; la C6, 80, 120 y 160; la P4, sólo 360, y la P4X, sólo 400—, con la gestión de energía del IDF. Un valor
           dentro del rango que el chip no da devuelve <code>false</code> y no cambia nada. Los buses no hay
           que volver a configurarlos (van con un reloj de 80 MHz que no cambia), y <code>sleep*</code> y
           <code>now()</code> siguen exactos. La de arranque se pone con <code>cpu.mhz</code> en el ENV
@@ -2058,7 +2058,7 @@ port.write(tx, <span class="num">4</span>)
   <code>ADC_CHANNELS()</code> (= <code>len(analogPins())</code>), <code>PWM_SLICES()</code> (salidas
   simultáneas, en la unidad de <code>pwmUnit()</code>). Y <code>MAX_CPU_MHZ()</code> /
   <code>MIN_CPU_MHZ()</code> son ahora <strong>por micro</strong> (300/18 en RP2350; en una ESP32, desde
-  V8, la más alta de su chip y 80 —en la P4, 360 las dos—) — antes valían los del RP2350 para las
+  V8, la más alta de su chip y 80 —en la P4, 360 las dos; en la P4X, 400—) — antes valían los del RP2350 para las
   cinco familias.
 </p>
 
@@ -3534,7 +3534,7 @@ ra.onWheel := pant::rueda
   el comando <code>kill</code> de la consola, sin reiniciar la placa.
 </p>
 <p>
-  Cinco familias, ocho imágenes, diez placas. La memoria de la VM la decide cada imagen al
+  Cinco familias, nueve imágenes, once placas. La memoria de la VM la decide cada imagen al
   arrancar y lo dice en el log: casi toda es montón, y la pila de cada hilo BP sale de él al
   arrancarlo (V8), así que la RAM que gastan los hilos es la de los que haya. Fuera del montón
   queda la pila del <code>Main</code>, 16&nbsp;KB; <code>stack=N</code> (KB) en el entorno de la
@@ -3571,13 +3571,15 @@ ra.onWheel := pant::rueda
           (ST7789 240×240, sin táctil) y la <strong>ESP32-C5-Touch-LCD-2.8</strong> de Waveshare
           (32 MB de flash, 8 MB de PSRAM), una ST7789 240×320 con táctil; en las dos la GUI llega
           por packs (§14.16) y la ranura TF va en el SPI de la pantalla.</td></tr>
-  <tr><td>ESP32-P4 (RISC-V)</td>
+  <tr><td>ESP32-P4 (RISC-V) <em>— la P4X (la revisión v3.x), nueva en V8</em></td>
       <td>en PSRAM (toda la libre menos los 4 MB del display: decenas de MB)</td>
-      <td>Wire v1 por UART (puerto del bridge USB-UART). <strong>Imagen de
-          firmware única</strong> para las placas P4 con pantalla: el panel se
-          elige con la clave <code>display</code> del entorno de la placa
+      <td>Dos imágenes del mismo código, una por revisión del chip (el IDF no deja que una
+          sirva para las dos). La de la <strong>v1.x</strong>, única para sus placas con
+          pantalla: el panel se elige con la clave <code>display</code> del entorno de la placa
           (<code>display=st7701</code> para la Waveshare; ver la
-          <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>). FS en
+          <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>), y el wire v1 va por UART
+          (puerto del bridge USB-UART). La de la <strong>v3.x</strong> (la ESP32-P4X), con el
+          wire por el USB-Serial-JTAG: su kit no lleva bridge. FS en
           PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil (LVGL, desde V7
           en el <code>Gui.pack</code>, §14.16);
           tarjeta SD por SDIO. <code>native</code> <strong>acelerada</strong> por AOT
@@ -3916,7 +3918,7 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <tr><td><code>vm.runs</code></td><td><code>1</code> o <code>2</code>; por defecto, uno por núcleo: 2 en la Pico 2, la Metro, la S3 y la P4; 1 en las demás</td><td>Cuántos hilos del programa corren a la vez. En la C3, la C5 y la C6, <code>2</code> pone el segundo en el mismo núcleo</td><td>RP2350 · ESP32</td><td>al arrancar</td></tr>
   <tr><td><code>vm.cores</code></td><td><code>1</code> (por defecto, los dos)</td><td>Todas las tareas de la VM en el núcleo 0: la vuelta atrás de los dos núcleos, sin regrabar</td><td>RP2350 · S3 · P4</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>La frecuencia</strong></td></tr>
-  <tr><td><code>cpu.mhz</code></td><td>MHz: la S3 y la C5, <code>80</code>, <code>160</code> o <code>240</code>; la C3, <code>80</code> o <code>160</code>; la C6, <code>80</code>, <code>120</code> o <code>160</code>; la P4, <code>360</code>. Por defecto, la de la imagen: 160 en la S3, la C3 y la C6; 240 en la C5; 360 en la P4</td><td>La frecuencia de la CPU al arrancar, la misma que pone <code>Machine.setCpuFreqMHz</code> (<a href="#stdlib-pico">§14.9</a>). Un valor que la placa no da se dice en el log, y se queda la de la imagen</td><td>ESP32</td><td>al arrancar</td></tr>
+  <tr><td><code>cpu.mhz</code></td><td>MHz: la S3 y la C5, <code>80</code>, <code>160</code> o <code>240</code>; la C3, <code>80</code> o <code>160</code>; la C6, <code>80</code>, <code>120</code> o <code>160</code>; la P4, <code>360</code>; la P4X, <code>400</code>. Por defecto, la de la imagen: 160 en la S3, la C3 y la C6; 240 en la C5; 360 en la P4 y 400 en la P4X</td><td>La frecuencia de la CPU al arrancar, la misma que pone <code>Machine.setCpuFreqMHz</code> (<a href="#stdlib-pico">§14.9</a>). Un valor que la placa no da se dice en el log, y se queda la de la imagen</td><td>ESP32</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>La pantalla</strong></td></tr>
   <tr><td><code>display</code></td><td><code>ek79007</code> (por defecto: la Function-EV, 1024×600) o <code>st7701</code> (la Waveshare de 4,3", 480×800)</td><td>El panel MIPI-DSI de la placa</td><td>P4</td><td>al arrancar la GUI</td></tr>
   <tr><td><code>lcd</code></td><td><code>&lt;controlador&gt;,spi:N,dc:N,cs:N,w:N,h:N</code>; y <code>rst:P</code>, <code>bl:P</code>, <code>mhz:N</code> (20), <code>ram:WxH</code>, <code>off:XxY</code>, <code>seq:CAMINO</code>, <code>inv</code>, <code>bgr</code>, <code>traza</code>. P es un GPIO, o <code>x0</code>…<code>x7</code> del expansor (<code>xpwm</code>, sólo en <code>bl</code>)</td><td>Un panel por SPI —ST7789, ILI9341…— para el driver del pack <code>DriverSpi</code>; exige su línea <code>spiN</code></td><td>C5 · C6</td><td>al arrancar la GUI</td></tr>

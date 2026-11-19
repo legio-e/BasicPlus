@@ -378,8 +378,8 @@
   </tr>
   <tr>
     <td><strong>ESP32-P4</strong> (RISC-V, dual core) — with a screen</td>
-    <td>UART</td>
-    <td>LVGL GUI on a MIPI-DSI panel + touch: the panel driver comes in the image, LVGL in the <code>Gui</code> pack. A <strong>single image</strong> for the Function-EV kit (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at <em>runtime</em> from the environment (<code>display=st7701</code>). By default two BP threads run at once, one per core. AOT enabled (RISC-V).</td>
+    <td>UART; on the P4X, USB-Serial-JTAG</td>
+    <td>LVGL GUI on a MIPI-DSI panel + touch: the panel driver comes in the image, LVGL in the <code>Gui</code> pack. A <strong>single image</strong> for the boards with revision v1.x of the chip, the Function-EV kit (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at <em>runtime</em> from the environment (<code>display=st7701</code>). Since V8, another one for v3.x, the <strong>ESP32-P4X</strong> (its Function-EV kit, with the same 7" panel), from the same code: the IDF does not let one image serve both revisions. By default two BP threads run at once, one per core. AOT enabled (RISC-V).</td>
   </tr>
   <tr>
     <td><strong>STM32</strong> (Nucleo-U575ZI-Q · Discovery U5G9J-DK2)</td>
@@ -388,7 +388,7 @@
   </tr>
 </table>
 <p>
-  Eight images for ten boards. A board with a screen needs, besides its image, the screen's
+  Nine images for eleven boards. A board with a screen needs, besides its image, the screen's
   packs — burned from the IDE: <em>Placa</em> → <em>Packs</em> — and a RAM block for their
   engine (<code>packRam=</code> in the environment): what to burn on each one, in
   <a href="INSTALAR_FIRMWARE.md">Installing the firmware</a>.

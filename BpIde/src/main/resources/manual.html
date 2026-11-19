@@ -2802,8 +2802,9 @@ sb.appendStr(<span class="str">"Humedad: "</span> + h)
   lo dice en el log y en la consola (<code>Machine.resetCause()</code> da
   <code>panic/exception</code> o <code>int-watchdog</code>). El perro guardián de tareas, el que
   arma el módulo <code>Wdt</code>, no es un fallo fatal: tras él, el autorun sí se lanza. En las
-  STM32, un HardFault deja el informe en el log y la placa parada. Que el fallo de un run no
-  tumbe la placa entera es de V8.
+  STM32, desde V8, igual: un HardFault deja el informe en el log, el IWDG reinicia la placa a
+  los dos segundos y el arranque siguiente no lanza el autorun (<code>#839</code>; antes se
+  quedaban paradas). Que el fallo de un run no tumbe la placa entera es de V9.
 </p>
 
 <h2 id="eventos">15. Eventos</h2>
@@ -2975,13 +2976,13 @@ threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la pl
       desde V2, con la carrera B1 (<a href="#conc-gc">§14.4</a>). Por defecto va con uno; en
       la placa, los dos núcleos los usa la VM-C (<a href="#conc-nucleos">§14.6</a>).</li>
   <li>Con la imagen de dos núcleos del RP2350 —la de por defecto en la Pico&nbsp;2 y la
-      Metro—, un programa de un solo thread va más lento de lo que debería: en la Metro, un
-      35&nbsp;% (también con <code>vm.cores=1</code>: es la imagen, no el otro núcleo); en la
-      Pico&nbsp;2, uno que imprime mucho (<code>PrintBench</code>) tarda 1&nbsp;270&nbsp;ms frente a 817 con la imagen
-      de un núcleo, y el cálculo puro, un 1,8&nbsp;% más. Y las cadenas no ganan con dos threads
-      (<a href="#conc-nucleos">§14.6</a>). Se investiga en V8 (<code>#665</code>).</li>
+      Metro—, un programa de un solo thread va algo más lento que con la de un núcleo (medido el
+      15-nov: el cálculo, un 3,5&nbsp;% en la Metro y un 7,7&nbsp;% en la Pico&nbsp;2), y en la
+      Pico&nbsp;2 uno que imprime mucho, bastante más (<code>PrintBench</code>, 1&nbsp;321&nbsp;ms frente
+      a 745). Con dos threads, la de dos núcleos gana en las dos (<a href="#conc-nucleos">§14.6</a>).
+      Por qué imprimir va tan lento en la Pico&nbsp;2 se investiga en V9 (<code>#665</code>).</li>
   <li>Que el fallo fatal de un run no tumbe la placa entera
-      (<a href="#conc-nucleos">§14.6</a>): en V8.</li>
+      (<a href="#conc-nucleos">§14.6</a>): en V9.</li>
   <li>Genéricos / type parameters en clases del usuario.</li>
   <li>Versionado explícito de contratos de librería (cubierto en la práctica por la
       generación de cada librería y el enlace tardío: <a href="#imports">§10.3</a>).</li>

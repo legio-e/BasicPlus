@@ -155,7 +155,7 @@ cp "$RAIZ/dist/firmware/"*.uf2 "$RAIZ/dist/firmware/"*.bin \
 # El README de dist/firmware es la nota INTERNA (habla de H13, PUBLICAR.md, «ayer»):
 # al usuario le vale INSTALAR_FIRMWARE.md, que viaja en docs/. Un LEEME corto apunta.
 cat > "$OUT/firmware/LEEME.md" <<'LEEME'
-# firmware/ — las ocho imágenes de BasicPlus
+# firmware/ — las nueve imágenes de BasicPlus
 
 | fichero | placas |
 |---|---|
@@ -164,13 +164,18 @@ cat > "$OUT/firmware/LEEME.md" <<'LEEME'
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 |
 | `bpvm_esp32c5_merged.bin` | ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) |
 | `bpvm_esp32c6_merged.bin` | ESP32-C6 (y la Waveshare ESP32-C6-LCD-1.3, con su pantalla por packs) |
-| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
+| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" (la P4 de la revisión v1.x) |
+| `bpvm_esp32p4x_merged.bin` | ESP32-P4X-Function-EV (la P4 de la revisión v3.x) |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
 | `bpvm_stm32_dk2.bin` | Discovery STM32U5G9J-DK2 |
 
-Cómo se graba cada una: `docs/INSTALAR_FIRMWARE.md` (`docs/en/INSTALAR_FIRMWARE.md`).
+Y uno más, que no es de BasicPlus: `p4_c6_esp_hosted_3.0.9_merged.bin`, el firmware
+de la ESP32-C6 que pone la WiFi y el Bluetooth en la P4 de Waveshare (de Espressif,
+ESP-Hosted, con licencia Apache 2.0).
+
+Cómo se graba cada uno: `docs/INSTALAR_FIRMWARE.md` (`docs/en/INSTALAR_FIRMWARE.md`).
 Los `_merged.bin` van al **offset 0** (bootloader + particiones + aplicación en un
-solo fichero). `SHA256SUMS.txt` sella las ocho: `sha256sum -c SHA256SUMS.txt`.
+solo fichero). `SHA256SUMS.txt` sella los diez: `sha256sum -c SHA256SUMS.txt`.
 
 **La pantalla no va en las imágenes**: en las placas con pantalla (la C5, la C6, las
 P4 y la DK2) hay que grabar además el pack de la GUI, que está en `packs/` junto con

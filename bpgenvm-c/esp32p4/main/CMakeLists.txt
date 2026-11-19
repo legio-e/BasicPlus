@@ -10,8 +10,15 @@
 if(NOT DEFINED BPVM_P4_WIRE)
     set(BPVM_P4_WIRE "uart")  # default = wire por UART0/COM14 (#138 resuelto); Ethernet
 endif()                       # queda solo para logs. TCP completo con -DBPVM_P4_WIRE=tcp
+# V8, la P4X (19-nov): `-DBPVM_P4_WIRE=usbjtag`, el wire por el USB-Serial-JTAG del chip (GPIO 24/25), como la C3, la C5
+# y la C6: el kit nuevo de la P4X (ESP32-P4 v3.x) no lleva puente USB-UART. Sólo en esa opción se enlaza el componente
+# del USB nativo (abajo): el build por defecto (la UART) queda con los mismos fuentes y componentes.
 if(BPVM_P4_WIRE STREQUAL "tcp")
     set(WIRE_TRANSPORT_SRC "wire_v1_tcp.c")                   # I/O del wire sobre TCP (lwIP)
+elseif(BPVM_P4_WIRE STREQUAL "usbjtag")
+    set(WIRE_TRANSPORT_SRC "../../esp32/common/wire_v1_usbjtag.c"  # el cable del wire por el USB nativo (el de las C)
+                           "../../esp32/common/wire_red.c"      # V8/H3: y el de la red, por la WiFi
+                           "../../src/wire_cables.c")           # V8/H3: los dos a la vez
 else()
     set(WIRE_TRANSPORT_SRC "../../esp32/common/wire_v1.c"       # I/O del wire sobre UART0 (reúso del S3)
                            "../../esp32/common/wire_red.c"      # V8/H3: y el de la red, por la WiFi
@@ -155,6 +162,14 @@ idf_component_register(
         esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
         esp_driver_sdmmc # V5/H6: sdmmc_host + sdmmc_cmd (la tarjeta por SDIO)
 )
+
+# La P4X (19-nov): el cable del wire por el USB nativo pide el driver del USB-Serial-JTAG. El componente ya está en el
+# build (lo piden console, vfs, esp_trace…), pero no en los REQUIRES de main, y un REQUIRES condicional no sirve: el
+# IDF los lee en una pasada previa, donde -DBPVM_P4_WIRE todavía no existe (medido: «driver/usb_serial_jtag.h: No such
+# file or directory»). En la pasada de verdad, sí: se enlaza aquí, sólo en esa opción.
+if(BPVM_P4_WIRE STREQUAL "usbjtag")
+    target_link_libraries(${COMPONENT_LIB} PRIVATE idf::esp_driver_usb_serial_jtag)
+endif()
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas.
 target_compile_definitions(${COMPONENT_LIB} PRIVATE

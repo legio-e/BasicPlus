@@ -11,7 +11,7 @@ Los directorios de compilación (`pico/build`, `esp32*/build`, los `Debug/` de C
 son de trabajo: de ahí sale la imagen **una vez**, se copia aquí, y a partir de ese
 momento manda esta copia.
 
-## Las 8 imágenes (10 placas)
+## Las 9 imágenes (11 placas), y el firmware de la C6
 
 | Fichero | Placas | Cómo se genera |
 |---|---|---|
@@ -20,15 +20,19 @@ momento manda esta copia.
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 (b4, V6) | `idf.py build` + `merge-bin` en `bpgenvm-c/esp32c3` |
 | `bpvm_esp32c5_merged.bin` | ESP32-C5 Waveshare 2,8" (V7) | `idf.py build` + `merge-bin` en `bpgenvm-c/esp32c5` |
 | `bpvm_esp32c6_merged.bin` | ESP32-C6 / C6-LCD-1.3 (b5, V6) | `idf.py build` + `merge-bin` en `bpgenvm-c/esp32c6` |
-| `bpvm_esp32p4_merged.bin` | P4 Kit (b2) · P4 Waveshare (b3) | `idf.py build` + `merge-bin` en `bpgenvm-c/esp32p4` |
+| `bpvm_esp32p4_merged.bin` | P4 Kit (b2) · P4 Waveshare (b3): la P4 v1.x | `idf.py build` + `merge-bin` en `bpgenvm-c/esp32p4` |
+| `bpvm_esp32p4x_merged.bin` | P4X Kit (V8, `#846`): la P4 v3.x | en `bpgenvm-c/esp32p4`, `idf.py -B build-p4x -D SDKCONFIG=sdkconfig.p4x -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.p4x" -DBPVM_P4_WIRE=usbjtag build` + `merge-bin` en `build-p4x` |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575 (c1) | STM32CubeIDE |
 | `bpvm_stm32_dk2.bin` | Discovery U5G9J (c2) | STM32CubeIDE |
+| `p4_c6_esp_hosted_3.0.9_merged.bin` | la C6 de la P4 Waveshare (su radio): NO es de BasicPlus | el coprocesador de ESP-Hosted 3.0.9, de Espressif; no se recompila (`V8_IDEAS` §E3, «Paso 1») |
 
 **Una imagen sirve a dos placas en dos casos**, y no es un atajo: la variante se decide
 en runtime. En RP2350 el micro se identifica solo (A/B: 30 o 48 GPIO, PSRAM); en el P4
-el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). En V7 y en V8 son
-**ocho ficheros**: el empaquetador copia `*.uf2` y `*.bin` sin contar, así que se cuentan a
-mano (`ls *.uf2 *.bin | wc -l` → 8).
+el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). La P4X, en cambio,
+lleva la suya: el IDF no deja que una imagen sirva a las dos revisiones del chip. En V7
+eran **ocho ficheros**; en V8, **diez** (las nueve imágenes y el firmware de la C6): el
+empaquetador copia `*.uf2` y `*.bin` sin contar, así que se cuentan a mano
+(`ls *.uf2 *.bin | wc -l` → 10).
 
 **En V8 (18-nov) la ronda se grabó desde los directorios de compilación** (el lote final,
 `compat/informes/lote_v8_18nov.md`), y las imágenes de aquí se hicieron después, **de esos
@@ -36,7 +40,11 @@ mismos ficheros**, sin recompilar nada entre medias: en cada `_merged` de las ES
 aplicación (en 0x10000) es byte a byte la del build, y su CRC32 es el `imageCrc` que dio
 cada placa en el lote (S3 `636863b9`, C3 `46b2479c`, C5 `d9559635`, C6 `9c7087d1`, P4
 `306828a5`); la de la Pico y las de las STM32 salen de los mismos `.uf2` y `.elf` que
-corrían sus placas, con la fecha que anotó la tanda.
+corrían sus placas, con la fecha que anotó la tanda. La de la **P4X** (19-nov, `#846`) se
+hizo con la receta del repo, en `C:\tmp\p4x_repro`, y se probó la misma: la placa dio
+`imageCrc` `9aecd6ef`, el CRC32 de la aplicación de su `_merged`, y pasó la tanda de 24
+con la GUI. El firmware de la C6 es el que lleva la P4 de Waveshare desde la prueba de la
+WiFi.
 
 Desde V7 LVGL, el motor de la GUI, no va en ninguna imagen —la P4 y la DK2 llevan en la
 suya sólo el driver de su panel; la C5 y la C6, ni eso—: llega en los packs de la GUI, que
@@ -71,7 +79,7 @@ mientras se probaba nos costó una cacería de un bug inexistente: el mecanismo 
 
 ## Los `_merged` se flashean en el offset 0
 
-Las cinco imágenes ESP32 llevan `_merged` en el nombre y no es decorativo: son
+Las seis imágenes ESP32 (y el firmware de la C6) llevan `_merged` en el nombre y no es decorativo: son
 **bootloader + tabla de particiones + aplicación en un solo fichero**, listos para grabar
 de una pieza en el **offset 0**. El binario suelto de la aplicación (`bpvm_esp32*.bin`
 del directorio de compilación) va en 0x10000 y **por sí solo no arranca**; publicar ese

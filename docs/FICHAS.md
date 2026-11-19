@@ -7646,6 +7646,65 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   a explicarla en la documentación (*«La placa tenía los agujeros de los pines pero hubo que soldarlos. Y luego su
   firmware propio. Habrá que explicarlo.»*: los pines de la C6, soldados, y su firmware, el ESP-Hosted; lo hecho, en
   `V8_IDEAS` §E3, «Paso 1»).
+- **19-nov.** `#842`, `#843` y `#844`, arreglados (`899481ce`). La documentación de ayer, hecha (`d09d65bb`):
+  `INSTALAR_FIRMWARE` (la S3 y la C5, borradas enteras una vez; la WiFi de la P4 de Waveshare, con la C6 y su
+  ESP-Hosted, que va en el ZIP: Eduardo, *«Si, mételo en el ZIP»*), el manual §17, `BUILTINS`, `MEMORIA` y los
+  créditos. **La P4X entra en V8** (`#846`, Eduardo: *«es razonable meterla ya»*): su imagen, del mismo código, con su
+  receta, probada en su kit, y en `dist/firmware`; y con ella, la documentación: nueve imágenes y once placas. De paso,
+  `INSTALAR` decía que las STM32 se quedaban paradas tras un fallo fatal (desde `#839` se reinician) y las pruebas del
+  compilador ya son 402. **Lo que queda**, igual que ayer salvo lo hecho: que Eduardo lea las notas; `jc.html` y
+  `pruebas.html` en inglés; el «Nuevo en V8» de las cuatro portadas y el cuerpo de la release; el último `doc_frags` y
+  la guarda de las portadas; y la P4 del kit, la prueba a mano de las pruebas finales.
+
+#### ✅ `#846` — la ESP32-P4X (la P4 de la revisión v3.x): su imagen, del mismo código que la de la P4 (abierta y **CERRADA el 19-nov**, el commit de `#846`, con el kit nuevo de Eduardo, el ESP32-P4X-Function-EV; Eduardo: *«la ESP32-P4X es la corrección de un bug de Expressif. Con el tiempo la versión 1.x desaparece así que esta imagen es necesaria. Lo de si va ahora en V8 o en V9, yo creo que es razonable meterla ya y no esperar a la V9»*)
+
+- **Lo que pasa:** la imagen de la P4 no sirve para la v3.x, ni puede servir: el IDF 6.1 lo dice, *«Support of ESP32-P4
+  rev. <3.0 and >=3.0 is mutually exclusive»* (`CONFIG_ESP32P4_SELECTS_REV_LESS_V3`), y el bootloader rechaza la
+  imagen de la otra revisión. Y el kit nuevo no lleva puente USB-UART: tres USB, uno sólo de alimentación, el
+  USB-Serial-JTAG del chip (GPIO24/25; en el PC de Eduardo, COM17) y el USB FS (GPIO26/27), que sin una pila USB
+  (TinyUSB) en el firmware no enumera: Windows, «Dispositivo USB desconocido (Error de solicitud de descriptor)».
+- **Hecho:** otra imagen, del MISMO código, con otra configuración: `bpgenvm-c/esp32p4/sdkconfig.defaults.p4x`,
+  encima de `sdkconfig.defaults`, en su propia carpeta y con su propia `sdkconfig` (`-B build-p4x -D
+  SDKCONFIG=sdkconfig.p4x`). La revisión, de la v3.0 a la v3.99 (`CONFIG_ESP32P4_REV_MIN_300`); con ella el IDF pone
+  la CPU a 400 MHz (la P4, a 360) y el bootloader a 100, su `P4_REV3_MSPI_CRASH_AFTER_POWER_UP_WORKAROUND`, y apaga
+  `ESP_SLEEP_SET_FLASH_DPD`, que Espressif sólo da por probado en la v1.x (aquí no se usa: no hay bajo consumo); la
+  flash, que con la v3 el IDF pondría a 80 MHz, a 40, como la otra. El wire, por el USB-Serial-JTAG:
+  `-DBPVM_P4_WIRE=usbjtag` en `main/CMakeLists.txt` elige `wire_v1_usbjtag.c` (el de la C3, la C5 y la C6), con
+  `wire_red.c` y `wire_cables.c`; el componente `esp_driver_usb_serial_jtag` se enlaza con `target_link_libraries`
+  tras el registro, porque un `REQUIRES` condicional no vale: el IDF evalúa los `REQUIRES` en una pasada previa, en la
+  que la variable del `-D` no existe. La consola secundaria, que en la P4 va por ese USB, apagada, como en la C3, la C5
+  y la C6. La P4 de siempre, sin cambios: sin `-DBPVM_P4_WIRE=usbjtag`, su `CMakeLists` hace lo de antes. La
+  frecuencia no está escrita a mano en ningún sitio (`#784`): `Machine` y el `INFO` la toman de la imagen.
+- **La prueba, 19-nov, en el kit** (la v3.2, 16 MB de flash, 32 MB de PSRAM): arranca; el wire, por el USB-Serial-JTAG;
+  el reparto de la flash, el de una placa nueva (*Proponer defaults* → *Aplicar tamaños*; aquí, por `wire_serie
+  part`); la tanda del lote (24): 20 iguales o sin petar, las dos de `lastModified` distintas (`RutaFueraFlash` y
+  `ErroresConTipo`, como en las demás placas) y las dos de la GUI saltadas, sin el pack. Con el `Gui.pack` y `SQLite=4`,
+  `GuiWinJson` IGUAL y `GuiShot` sin petar, y en la captura, la pantalla buena. Pero el panel, en blanco.
+- **El panel en blanco no era un fallo** (19-nov, tarde). Yo lo di por dos cables que faltaban (el RST_LCD y el PWM), sin
+  comprobarlo, y estaban puestos (Eduardo: *«en principio los cables están bien, tiene que ser otra cosa»*; y con el
+  programa de fábrica la imagen se veía). Se acotó con el ejemplo `mipi_dsi` del IDF 6.1 como oráculo (`C:\tmp\p4x_ejemplo`,
+  compilado para la v3, con el reset en el 27 y la luz en el 26, y el mismo driver del EK79007, el 1.0.4): a 24 bits se ve
+  (25 FPS, 20 % de CPU); a 16, como nosotros, también (25 FPS, 15 %) —no es el controlador, que Eduardo sospechaba, ni el
+  formato—; con nuestras tres opciones del IDF que el ejemplo no tiene (la L2 de 256 KB, `PM_ENABLE` y
+  `SPIRAM_MALLOC_ALWAYSINTERNAL=2048`), también (E1); y con lo de nuestro código —los tiempos de 52 MHz y porches de
+  160, la luz por LEDC y sin DMA2D—, también (E2). Y con nuestra imagen y un programa que deja su pantalla un minuto
+  (`PantallaMinuto`), **se ve**: el fondo, el panel, el texto, el botón y el deslizador. Lo que se veía en blanco:
+  `GuiShot` deja su pantalla 300 ms, y al acabar el programa queda la pantalla vacía de LVGL, que en el tema claro es
+  blanca. **Lección:** para mirar un panel, un programa que se quede en pantalla; y una causa que se le da a Eduardo,
+  comprobada antes.
+- **La imagen que se publica, de la receta del repo** (`C:\tmp\p4x_repro`): la probada salió de una `sdkconfig`
+  retocada por un script; la de la receta difiere de ella en tres líneas de `sdkconfig.h`, las de
+  `ESP_SLEEP_SET_FLASH_DPD` (en la probada, puesto; el IDF lo apaga en la v3). Su aplicación, CRC32 `9aecd6ef`. Grabada
+  (fusionada, en el 0): el `HELLO`, `9aecd6ef`; el `INFO`, 400 MHz; el heap, el texto y el rodata, en la misma página de
+  64 KB que la probada (el `nm` de los dos `.elf`), así que la zona de packs sigue en `0x4015c000` y el `Gui.pack`,
+  vivo, sin regrabarlo. La tanda de 24, con ella (`C:\tmp\p4x_repro\tanda_p4x_repro.md`): 22 iguales o sin petar
+  —`GuiWinJson` IGUAL y `GuiShot` sin petar, con la pantalla— y las dos de `lastModified`, como en las demás placas. En
+  `dist/firmware`, ésa (la app de su `_merged`, `9aecd6ef`), con el firmware de la C6: diez ficheros, `sha256sum -c`,
+  10 OK, y las ocho de ayer con su misma suma.
+- **En la documentación:** `INSTALAR_FIRMWARE` (los dos idiomas: la sección de la P4X, la tabla de las imágenes y el
+  firmware de la C6 en `firmware/`), la referencia (la fila de la P4 y la cuenta de imágenes), las portadas, los dos
+  README, `PUBLICAR` (la receta, su `merge-bin` y contar diez ficheros), las notas de v8.0 y la nota del ZIP
+  (`montar-zip.sh`).
 
 #### 🔵 `#845` — los mensajes del compilador de JC: los errores de sintaxis acaban en «(punto N)», el número del cuaderno de diseño, y `(Perro) g` entre clases sin parentesco da antes un error que no viene a cuento (abierta el 18-nov, en el `D1`, del volumen de JC; cosmético; V8 o V9, por decidir)
 

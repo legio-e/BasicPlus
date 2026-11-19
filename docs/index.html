@@ -385,8 +385,8 @@
   </tr>
   <tr>
     <td><strong>ESP32-P4</strong> (RISC-V, dos núcleos) — con pantalla</td>
-    <td>UART</td>
-    <td>GUI con LVGL sobre panel MIPI-DSI + táctil: el driver del panel va en la imagen y LVGL, en el pack <code>Gui</code>. Una <strong>imagen única</strong> para el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en <em>runtime</em> desde el entorno (<code>display=st7701</code>). Por defecto, dos hilos BP corren a la vez, uno por núcleo. AOT activo (RISC-V).</td>
+    <td>UART; en la P4X, USB-Serial-JTAG</td>
+    <td>GUI con LVGL sobre panel MIPI-DSI + táctil: el driver del panel va en la imagen y LVGL, en el pack <code>Gui</code>. Una <strong>imagen única</strong> para las placas de la revisión v1.x del chip, el kit Function-EV (EK79007 1024×600) y la Waveshare 4.3" (ST7701 480×800); el panel se elige en <em>runtime</em> desde el entorno (<code>display=st7701</code>). Desde V8, otra para la v3.x, la <strong>ESP32-P4X</strong> (su kit Function-EV, con el mismo panel de 7"), del mismo código: el IDF no deja que una imagen sirva para las dos revisiones. Por defecto, dos hilos BP corren a la vez, uno por núcleo. AOT activo (RISC-V).</td>
   </tr>
   <tr>
     <td><strong>STM32</strong> (Nucleo-U575ZI-Q · Discovery U5G9J-DK2)</td>
@@ -395,7 +395,7 @@
   </tr>
 </table>
 <p>
-  Ocho imágenes para diez placas. Una placa con pantalla necesita, además de su imagen, los
+  Nueve imágenes para once placas. Una placa con pantalla necesita, además de su imagen, los
   packs de la pantalla —se graban desde el IDE: <em>Placa</em> → <em>Packs</em>— y un bloque
   de RAM para su motor (<code>packRam=</code> en el entorno): qué grabar en cada una, en
   <a href="INSTALAR_FIRMWARE.md">Instalar el firmware</a>.

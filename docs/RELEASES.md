@@ -185,13 +185,14 @@ altavoz no entra en el conector de la placa: a V9. El MP3, fuera.
 
 ### Placas
 
-El parque no cambia: **ocho imágenes y diez placas**, las de V7 (la tabla de v7.0, abajo). Lo que cambia es lo que
-lleva cada una:
+El parque crece en una placa: la **ESP32-P4X**, la revisión v3.x de la P4, con su imagen (abajo). **Nueve imágenes y
+once placas**: las de V7 (la tabla de v7.0, abajo) y el kit de la P4X. Lo que cambia es lo que lleva cada una:
 
 | placa | WiFi | Bluetooth (teclado y ratón) | sonido |
 |---|---|---|---|
 | ESP32-P4 de Waveshare | sí, por su C6 (`radio=c6`) | sí, por la misma C6 | sí (`audio=`) |
 | ESP32-P4 de Espressif (el kit) | sin probar en V8 *(por confirmar)* | sin probar *(por confirmar)* | sin probar *(por confirmar)* |
+| ESP32-P4X de Espressif (el kit), nueva | sin probar | sin probar | sin probar |
 | ESP32-S3 | sí | sí | — |
 | ESP32-C5 | sí | sí | en V9 |
 | ESP32-C3 y C6 | no (sin PSRAM) | no | — |
@@ -200,6 +201,11 @@ lleva cada una:
 
 Y en cada una:
 
+- **La ESP32-P4X, nueva** (`#846`): la revisión v3.x de la P4, que corrige errores del silicio de la v1.x y con el
+  tiempo la sustituirá. El IDF no deja que una imagen sirva para las dos revisiones, así que tiene la suya,
+  `bpvm_esp32p4x_merged.bin`, **del mismo código**: cambian la revisión —con ella, lo que pone el IDF: la CPU a 400 MHz
+  y sus arreglos para la v3— y el cable del wire, que va por el USB-Serial-JTAG del chip, porque su kit no lleva puente
+  USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7".
 - **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes, con la tanda de V7 sin un cambio (0 de 250
   pruebas). En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
 - **La S3 y la C5**, para la WiFi, pasan de 1 a 2 MB de aplicación: la tabla de particiones nueva obliga a borrar la
@@ -212,7 +218,7 @@ Y en cada una:
   intérprete de la caché —interpretar después de leer 128 KB costaba un 97 % más; ahora, un 1 %—, a cambio de 128 KB
   de RAM interna.
 - **Las cinco ESP32**: `Machine.cpuFreqHz()` y el `INFO` dicen la frecuencia de verdad, y `setCpuFreqMHz` funciona
-  —la S3 y la C5, 80, 160 o 240 MHz; la C3, 80 o 160; la C6, 80, 120 o 160; la P4, 360 fija— (`#784`);
+  —la S3 y la C5, 80, 160 o 240 MHz; la C3, 80 o 160; la C6, 80, 120 o 160; la P4, 360 fija, y la P4X, 400— (`#784`);
   `Machine.tempC()` lee el sensor del chip, que en V7 daba 0, y el `INFO` lo enseña también en las STM32 (`#826`); y
   el motivo del reinicio ya no sale «unknown» tras un reinicio por el USB (`#709`).
 - **La C3 y la C6, con mucho más heap** (`#740`): las pilas de los hilos BP salen ahora del heap, y la región fija
@@ -228,7 +234,7 @@ Y en cada una:
   de 87,5 a 13,2 µs; un `gc()`, de 2,13 a 0,94 ms).
 
 Las nueve placas del lote final —todas menos la P4 del kit— han pasado la tanda de V8 con la imagen que se publica
-(abajo, «Pruebas»).
+(abajo, «Pruebas»); y el kit de la P4X, con la suya, el 19-nov.
 
 ### La robustez en el campo
 
@@ -501,7 +507,7 @@ end Main
   contra su versión interpretada, los ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más
   delicado con su **sabotaje**: un interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y
   el micro simulado, **15** casos; la sombra, **15**; la norma de versiones, **9** *(por confirmar en el pre-flight)*.
-- **El compilador**: **396** pruebas propias, y **66** de la VM-Java *(por confirmar en el pre-flight)*; **39**
+- **El compilador**: **402** pruebas propias, y **66** de la VM-Java *(por confirmar en el pre-flight)*; **39**
   programas de `samples/errores/` que tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7,
   19 y 50) *(por confirmar en el pre-flight)*; y los **415** samples compilan con el compilador de V8 (en V7, 399)
   *(por confirmar en el pre-flight)*.
@@ -695,9 +701,10 @@ con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con l
 **cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
 `samples/` (y los de JC, `samplesJC/` *(por confirmar)*), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
 volúmenes nuevos, `jc.html` y `pruebas.html` *(por confirmar: su versión inglesa)*), `bpgenvm-c/` (cabeceras y fuentes
-que necesita el AOT) y **`firmware/`** con las **ocho imágenes** de siempre —la de la RP2350, con sus dos firmwares—,
-su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del RP2350 en `firmware/boards/` *(por decidir:
-el firmware de la C6 de la P4 de Waveshare)*. Cómo instalar cada una, y qué packs lleva cada placa:
+que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre, la de la RP2350 con sus dos
+firmwares, y la nueva de la P4X—, el firmware de la C6 de la P4 de Waveshare (el coprocesador de ESP-Hosted 3.0.9, de
+Espressif, para su WiFi y su Bluetooth), su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del
+RP2350 en `firmware/boards/`. Cómo instalar cada una, y qué packs lleva cada placa:
 **[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
 
 ---

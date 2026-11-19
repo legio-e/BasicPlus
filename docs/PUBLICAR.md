@@ -8,7 +8,8 @@ Doc de mantenedor (no enlazado desde la portada). El repo público
 > no tiene forma de comprobarse, es que está mal escrito.
 
 **Lo que se publica en V8 es UN artefacto, como en V7**: `BasicPlus-8.0-win.zip`. Lo que
-dice abajo de V7 vale igual (las ocho imágenes, los cinco packs, el IDE, el simulado); el
+dice abajo de V7 vale igual (las imágenes —en V8, nueve: la de la P4X es nueva, `#846`; y en
+`firmware/` va también el de la C6 de la P4 de Waveshare—, los cinco packs, el IDE, el simulado); el
 de V7 era `BasicPlus-7.0-win.zip` — el paquete
 completo (IDE + compilador + stdlib + **los cinco packs** + samples + docs + micro
 simulado + **las 8 imágenes de firmware dentro**, en `firmware/`: Pico/Metro,
@@ -40,15 +41,15 @@ cuyos números se ponen al día con los de esta tabla).
 
 | comprobación | resultado |
 |---|---|
-| Suite `lexer-java` · suite `miVM` | 18-nov: **396/396** · **66/66** |
+| Suite `lexer-java` · suite `miVM` | 18-nov: **396/396** · **66/66**; 19-nov, la del compilador tras `#842`–`#844`: **402/402** (el corpus, con el jar de antes y el nuevo, los mismos `.mod` byte a byte) |
 | `samples_sweep.py` (corpus entero) | 18-nov: **415 OK, 0 FALLO** (los 2 avisos de import omitido de siempre: `fromtest.bp` y `hello.bp`) |
 | `doc_frags.py` (todos los fragmentos de docs/, BP y JC) | |
 | `h13-errores.sh` | 18-nov: **151/151** |
 | `compat/compat.sh check` | 18-nov, sobre el árbol final: **VERDE** — paridad 217/217 en MOD9, 209 y 8 SKIP en MOD8, 217/217 con dos workers; C 117/117; cápsula V6 59/59; sim 15/15, sombra 15/15, norma 9/9; estrés, `packs-abi` y stdlib embebida; ninguna línea `!! stderr:` |
 | Guarda de las 4 portadas (tamaño + encabezados) | |
-| Las **8** imágenes en `dist/firmware/`, del mismo árbol, `SHA256SUMS.txt` | 18-nov: **8**, de los builds del lote (sin recompilar); `sha256sum -c`, 8 OK. En las cinco ESP32, la app de dentro de cada `_merged`, byte a byte la del build, y su CRC32, el `imageCrc` de cada placa en el lote; la Pico y las STM32, de los mismos `.uf2` y `.elf` |
+| Las **9** imágenes en `dist/firmware/` (y el firmware de la C6: 10 ficheros), del mismo árbol, `SHA256SUMS.txt` | 18-nov: **8**, de los builds del lote (sin recompilar); `sha256sum -c`, 8 OK. En las cinco ESP32, la app de dentro de cada `_merged`, byte a byte la del build, y su CRC32, el `imageCrc` de cada placa en el lote; la Pico y las STM32, de los mismos `.uf2` y `.elf`. 19-nov: **10** —la P4X (`#846`), de la receta del repo, la app de su `_merged` con el CRC32 `9aecd6ef`, el `imageCrc` de su placa en su tanda; y el firmware de la C6 de la P4 de Waveshare—; las ocho de ayer, con su misma suma; `sha256sum -c`, 10 OK |
 | Los **5** packs | |
-| `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. Queda comprobar que las del ZIP son esas mismas |
+| `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. 19-nov, la **P4X** (`#846`), con la suya y el `Gui.pack`: 22 iguales o sin petar, con las dos de la GUI, y las dos de `lastModified`, como las demás. Queda comprobar que las del ZIP son esas mismas |
 | Micro simulado con LVGL y SQLite | |
 | ZIP montado y verificado por dentro | |
 | `pruebas.html`, con los números de esta tabla (ES y EN) | |
@@ -215,13 +216,17 @@ vez**.
       embebidos de las familias.
       ⚠️ *Trampa*: los blobs de stdlib son **generados**. Se tocan regenerando,
       nunca a mano.
-- [ ] **Las 8 imágenes, del MISMO árbol**, y en una sola tanda:
+- [ ] **Las 9 imágenes, del MISMO árbol**, y en una sola tanda:
   - RP2350: `ninja -C bpgenvm-c/pico/build` → `bpvm_pico.uf2` (Pico 2 y Metro:
     una imagen, la variante se detecta en la placa)
   - ESP32: `idf build` en `bpgenvm-c/esp32` (la S3), `esp32c3`, `esp32c5`,
     `esp32c6` y `esp32p4`, con el ESP-IDF 6.1, el mismo para todas (desde V8,
     `#707`; instalado con EIM en `C:\esp\v6.1`). En PowerShell, antes,
     `. bpgenvm-c\tools\entorno_idf.ps1`, que deja la orden `idf`
+  - La P4X (desde V8, `#846`), en `bpgenvm-c/esp32p4` y en su propia carpeta:
+    `idf -B build-p4x -D SDKCONFIG=sdkconfig.p4x -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.p4x" -DBPVM_P4_WIRE=usbjtag build`.
+    El mismo código que la P4; lo que cambia, en `sdkconfig.defaults.p4x`. ⚠️ No en
+    `build/`: las dos P4 tienen cada una su `sdkconfig`, y la de una pisaría la otra
   - STM32 (las dos): CubeIDE headless —
     `stm32cubeidec --launcher.suppressErrors -nosplash -consoleLog -application
     org.eclipse.cdt.managedbuilder.core.headlessbuild -data <ws-temp>
@@ -244,8 +249,9 @@ vez**.
   - ESP32: en el `build/` de cada una,
     `esptool --chip <chip> merge-bin -o <dist>\bpvm_<x>_merged.bin '@flash_args'`
     (`esp32s3` → `bpvm_esp32_merged.bin`; `esp32c3`, `esp32c5`, `esp32c6` y
-    `esp32p4`, con su nombre). Los offsets salen de `flash_args`: S3, C3 y C6
-    `0x0/0x8000/0x10000` @80m · C5 `0x2000/0x8000/0x10000` @80m · P4
+    `esp32p4`, con su nombre; la P4X, `--chip esp32p4` en `build-p4x/` →
+    `bpvm_esp32p4x_merged.bin`). Los offsets salen de `flash_args`: S3, C3 y C6
+    `0x0/0x8000/0x10000` @80m · C5 `0x2000/0x8000/0x10000` @80m · P4 y P4X
     `0x2000/0x8000/0x10000` @40m.
     ⚠️ **`idf.py merge-bin` escribe `build/merged-binary.bin`**, no
     `bpvm_esp32*_merged.bin`, que es el nombre que `INSTALAR_FIRMWARE.md` le da
@@ -254,12 +260,15 @@ vez**.
     nada avise. Medido el 30-ago: al reconstruir el P4, la `*_merged.bin` que
     había al lado era **del 4-ago**. Pásale `-o` el nombre bueno, y comprueba la
     FECHA del fichero, no la salida del comando.
-  - **Contar OCHO** ficheros de imagen en `dist/firmware/`, con la fecha de HOY:
-    `ls -l dist/firmware/*.uf2 dist/firmware/*.bin | wc -l` → **8**. El
+  - **Contar DIEZ** ficheros en `dist/firmware/` (desde V8: las nueve imágenes, con la
+    de la P4X, y el firmware de la C6 de la P4 de Waveshare,
+    `p4_c6_esp_hosted_3.0.9_merged.bin`, que no se recompila: es el de `V8_IDEAS`
+    §E3), las imágenes con la fecha de HOY:
+    `ls -l dist/firmware/*.uf2 dist/firmware/*.bin | wc -l` → **10**. El
     empaquetador copia `*.uf2` y `*.bin` sin contar: si falta una, el ZIP sale con
-    siete y nadie avisa. Y `dist/firmware/README.md` al día.
+    nueve y nadie avisa. Y `dist/firmware/README.md` al día.
   - Regenerar `dist/firmware/SHA256SUMS.txt` (`sha256sum *.uf2 *.bin`) y
-    comprobarlo: `sha256sum -c SHA256SUMS.txt` → **8 OK**.
+    comprobarlo: `sha256sum -c SHA256SUMS.txt` → **10 OK**.
 - [ ] **Los cinco packs, de su compilación** (`packs/`): el `Stdlib.pack`, igual byte
       a byte a `bpstdlib/*.mod` (`stdlib_pack.sh`); los de la GUI y el de SQLite, de
       sus fuentes y con el compilador de la release. La ABI de sus natives la vigila

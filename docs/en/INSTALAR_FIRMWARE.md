@@ -6,7 +6,7 @@ How to put the VM image on each supported board —and, on the ones with a
 display, their packs—. There are two routes:
 
 - **A — Prebuilt image** (the normal one): **you already have it**. The
-  eight images (ten boards) ship inside the package, in the `firmware/`
+  nine images (eleven boards) ship inside the package, in the `firmware/`
   folder, and the packs in `packs/`; flash them with each family's tool — no
   toolchain needed. (If you don't have the package, download it from the
   GitHub *release*.)
@@ -23,10 +23,16 @@ display, their packs—. There are two routes:
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 |
 | `bpvm_esp32c5_merged.bin` | ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) — *new in V7* |
 | `bpvm_esp32c6_merged.bin` | ESP32-C6 (and the Waveshare ESP32-C6-LCD-1.3, with its display through packs) |
-| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
+| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" (both with the P4 of revision v1.x) |
+| `bpvm_esp32p4x_merged.bin` | ESP32-P4X-Function-EV (the P4 of revision v3.x) — *new in V8* |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
 | `bpvm_stm32_dk2.bin` | Discovery STM32U5G9J-DK2 |
 
+The same folder holds one more file, which is not BasicPlus's:
+`p4_c6_esp_hosted_3.0.9_merged.bin`, the firmware of the ESP32-C6 that
+provides the radio on the Waveshare P4 ([its WiFi and Bluetooth](#p4-waveshare-radio)).
+
+<a id="instalar-primera-vez"></a>
 After flashing, the flow is the same everywhere: IDE → Explorer →
 **Connect** to the serial port → Run on Device / console / `autorun` (see
 [QUICKSTART](QUICKSTART.md)). And two more steps, the first time only:
@@ -324,7 +330,14 @@ esptool --chip esp32c5 merge-bin -o bpvm_esp32c5_merged.bin \
 
 ## ESP32-P4 (display boards) — `bpvm_esp32p4_merged.bin`
 
-**A single image for the supported P4 boards** (the 7" 1024×600
+*Since V8, two images, from the same code:* this one, for the chip's
+**revision v1.x**, and `bpvm_esp32p4x_merged.bin`, for **v3.x**, the ESP32-P4X
+(the [next](#esp32-p4x) section). The IDF does not let one image serve both.
+The revision is shown by `esptool -p <port> read-mac` when it connects
+("Chip type: ESP32-P4 (revision v1.3)"); an image for the other one does not
+boot.
+
+**A single image for the P4 boards of revision v1.x** (the 7" 1024×600
 ESP32-P4-Function-EV and the 4.3" 480×800 Waveshare Touch-LCD): the panel is
 chosen at runtime from the board's **ENV** (`display` key: `ek79007` or
 `st7701`); with no key, it boots with the EV profile. On the Waveshare, once:
@@ -362,6 +375,7 @@ bootloader goes at 0x2000 and the flash runs at 40 MHz, unlike the S3). The
 port notes (ESP-IDF 6.1, silicon revision, PSRAM) are in
 `bpgenvm-c/esp32p4/sdkconfig.defaults`.
 
+<a id="p4-waveshare-radio"></a>
 ### The WiFi and Bluetooth of the Waveshare board (since V8)
 
 The P4 has no radio: on the Waveshare board it comes from its **ESP32-C6**,
@@ -400,6 +414,59 @@ Waveshare board's Environment,
 
 ---
 
+<a id="esp32-p4x"></a>
+## ESP32-P4X (revision v3.x) — `bpvm_esp32p4x_merged.bin`
+
+*New in V8.* Revision **v3.x** of the P4, which Espressif calls the
+**ESP32-P4X**, fixes silicon errata of v1.x and will replace it over time. The
+IDF does not let one image serve both revisions (*"Support of ESP32-P4 rev.
+<3.0 and >=3.0 is mutually exclusive"*), so the P4X has its own, **from the
+same code**: what changes is the revision, which the IDF accompanies with its
+own settings (the CPU at 400 MHz, its fixes for v3), and the wire's cable.
+Tested on the **ESP32-P4X-Function-EV-Board** kit (v3.2, 16 MB of flash and
+32 MB of PSRAM).
+
+**The P4X kit has no USB-UART bridge:** the wire (the IDE) goes through its
+**USB Serial/JTAG** port, the chip's own USB (GPIO24/25), which is also the one
+used for flashing. The **USB FS** port is no use for this: without a USB stack
+in the firmware it does not enumerate (Windows sees it as an "unknown device"),
+and its pins, 26 and 27, are the display's.
+
+**The display**, as on the earlier kit: the 7" EK79007 (1024×600) with its
+adapter board, over MIPI-DSI, and two DuPont wires: from **J1 GPIO27** to
+**RST_LCD** on J6 (the panel's reset) and from **J1 GPIO26** to **PWM** (the
+backlight). The adapter board is powered through its own USB, or with two more
+wires, 5 V and GND, from J1 to J6. The GUI, through `Gui.pack` and a RAM block
+in the Environment (`SQLite=4`), as on the other P4 ([The board's
+packs](#packs)). The panel is started the first time a program creates its
+screen, not when the board boots.
+
+### A. Prebuilt image (esptool)
+
+```sh
+esptool --chip esp32p4 -p <usb-serial-jtag-port> erase-flash
+esptool --chip esp32p4 -p <usb-serial-jtag-port> write-flash 0 bpvm_esp32p4x_merged.bin
+```
+
+After the erase, the board boots without partitions: as a new one
+([above](#instalar-primera-vez)), *Proponer defaults* → *Aplicar tamaños* in the
+IDE's **Gestión de placa**, and it restarts with its filesystem and its pack
+zone.
+
+### B. Building it (ESP-IDF v6.x)
+
+```sh
+cd bpgenvm-c/esp32p4
+idf.py -B build-p4x -D SDKCONFIG=sdkconfig.p4x -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.p4x" -DBPVM_P4_WIRE=usbjtag build
+idf.py -B build-p4x -D SDKCONFIG=sdkconfig.p4x -p <usb-serial-jtag-port> flash
+```
+
+What changes compared with the usual P4, with its reason, is in
+`sdkconfig.defaults.p4x`; the wire's cable is chosen by
+`-DBPVM_P4_WIRE=usbjtag`.
+
+---
+
 ## STM32 — two boards, two images
 
 | board | image | display |
@@ -428,8 +495,11 @@ Two options, simplest first:
 its display driver and the Nucleo one does not. Flashing the wrong one breaks nothing, but
 the board will not do what you expect.
 
-On both, a fatal system fault (a `HardFault`) leaves the board stopped: it does not restart
-by itself.
+On both, since V8, a fatal system fault (a `HardFault`, for instance) restarts the board, as
+on the Pico and the ESP32s: the report stays in the log (`log` in the console), the **Info**
+gives "fallo fatal" (fatal fault) as the cause of the last reset and that boot **does not
+launch the autorun**: you launch it by hand from the IDE. (Up to V7 the board stayed
+stopped.)
 
 ### B. Building it
 

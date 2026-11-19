@@ -5,8 +5,8 @@
 Cómo poner la imagen de la VM en cada placa soportada —y, en las que tienen
 pantalla, sus packs—. Hay dos caminos:
 
-- **A — Imagen precompilada** (el normal): **ya la tienes**. Las ocho
-  imágenes (diez placas) vienen dentro del paquete, en la carpeta
+- **A — Imagen precompilada** (el normal): **ya la tienes**. Las nueve
+  imágenes (once placas) vienen dentro del paquete, en la carpeta
   `firmware/`, y los packs, en `packs/`; se flashean con la herramienta de
   cada familia y no necesitas ningún toolchain. (Si no tienes el paquete, se
   descarga de la *release* de GitHub.)
@@ -23,10 +23,16 @@ pantalla, sus packs—. Hay dos caminos:
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 |
 | `bpvm_esp32c5_merged.bin` | ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) — *nueva en V7* |
 | `bpvm_esp32c6_merged.bin` | ESP32-C6 (y la Waveshare ESP32-C6-LCD-1.3, con su pantalla por packs) |
-| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
+| `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" (las dos, con la P4 de la revisión v1.x) |
+| `bpvm_esp32p4x_merged.bin` | ESP32-P4X-Function-EV (la P4 de la revisión v3.x) — *nueva en V8* |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
 | `bpvm_stm32_dk2.bin` | Discovery STM32U5G9J-DK2 |
 
+En la misma carpeta va un fichero más, que no es de BasicPlus:
+`p4_c6_esp_hosted_3.0.9_merged.bin`, el firmware de la ESP32-C6 que pone la
+radio en la P4 de Waveshare ([su WiFi y su Bluetooth](#p4-waveshare-radio)).
+
+<a id="instalar-primera-vez"></a>
 Tras flashear, el flujo es el mismo en todas: IDE → Explorer → **Connect**
 al puerto serie → Run on Device / consola / `autorun` (ver
 [QUICKSTART](QUICKSTART.md)). Y dos pasos más, sólo la primera vez:
@@ -316,7 +322,13 @@ esptool --chip esp32c5 merge-bin -o bpvm_esp32c5_merged.bin \
 
 ## ESP32-P4 (placas con pantalla) — `bpvm_esp32p4_merged.bin`
 
-**Una única imagen para las placas P4 soportadas** (ESP32-P4-Function-EV de
+*Desde V8, dos imágenes, del mismo código:* ésta, para el chip de la
+**revisión v1.x**, y `bpvm_esp32p4x_merged.bin`, para la **v3.x**, la ESP32-P4X
+(la sección [siguiente](#esp32-p4x)). El IDF no deja que una imagen sirva para
+las dos. La revisión la dice `esptool -p <puerto> read-mac` al conectar
+(«Chip type: ESP32-P4 (revision v1.3)»); una imagen de la otra no arranca.
+
+**Una única imagen para las placas P4 de la revisión v1.x** (ESP32-P4-Function-EV de
 7" 1024×600 y Waveshare Touch-LCD de 4.3" 480×800): el panel se elige en
 runtime desde el **ENV** de la placa (clave `display`: `ek79007` o `st7701`);
 sin clave, arranca con el perfil de la EV. En la Waveshare, una vez: botón
@@ -355,6 +367,7 @@ bootloader va en 0x2000 y la flash a 40 MHz, no como en el S3). Las notas
 del port (ESP-IDF 6.1, revisión del silicio, PSRAM) están en
 `bpgenvm-c/esp32p4/sdkconfig.defaults`.
 
+<a id="p4-waveshare-radio"></a>
 ### La WiFi y el Bluetooth de la Waveshare (desde V8)
 
 La P4 no tiene radio: en la Waveshare la pone su **ESP32-C6**, que habla con
@@ -392,6 +405,57 @@ el Entorno de la Waveshare,
 
 ---
 
+<a id="esp32-p4x"></a>
+## ESP32-P4X (la revisión v3.x) — `bpvm_esp32p4x_merged.bin`
+
+*Nueva en V8.* La **v3.x** de la P4, que Espressif llama **ESP32-P4X**, corrige
+errores del silicio de la v1.x y con el tiempo la sustituirá. El IDF no deja
+que una imagen sirva para las dos revisiones (*«Support of ESP32-P4 rev. <3.0
+and >=3.0 is mutually exclusive»*), así que la P4X tiene la suya, **del mismo
+código**: cambian la revisión, que el IDF acompaña de lo suyo (la CPU a
+400 MHz, sus arreglos para la v3), y el cable del wire. Probada en el kit
+**ESP32-P4X-Function-EV-Board** (la v3.2, 16 MB de flash y 32 MB de PSRAM).
+
+**El kit P4X no lleva puente USB-UART:** el wire (el IDE) va por su puerto
+**USB Serial/JTAG**, el USB del propio chip (GPIO24/25), que es también por
+donde se graba. El puerto **USB FS** no sirve para esto: sin una pila USB en el
+firmware no enumera (Windows lo ve como «dispositivo desconocido»), y sus pines,
+el 26 y el 27, son los de la pantalla.
+
+**La pantalla**, como en el kit de antes: la EK79007 de 7" (1024×600) con su
+placa adaptadora, por MIPI-DSI, y dos cables DuPont: del **J1 GPIO27** al
+**RST_LCD** del J6 (el reset del panel) y del **J1 GPIO26** al **PWM** (la luz).
+La placa adaptadora se alimenta por su propio USB, o con otros dos cables, 5 V y
+GND, del J1 al J6. La GUI, por el `Gui.pack` y un bloque de RAM en el Entorno
+(`SQLite=4`), como en la otra P4 ([Los packs de la placa](#packs)). El panel se
+pone en marcha la primera vez que un programa crea su pantalla, no al arrancar
+la placa.
+
+### A. Imagen precompilada (esptool)
+
+```sh
+esptool --chip esp32p4 -p <puerto-usb-serial-jtag> erase-flash
+esptool --chip esp32p4 -p <puerto-usb-serial-jtag> write-flash 0 bpvm_esp32p4x_merged.bin
+```
+
+Tras el borrado, la placa arranca sin particiones: como una nueva
+([arriba](#instalar-primera-vez)), *Proponer defaults* → *Aplicar tamaños* en la
+**Gestión de placa** del IDE, y se reinicia con su sistema de archivos y su
+zona de packs.
+
+### B. Compilarla (ESP-IDF v6.x)
+
+```sh
+cd bpgenvm-c/esp32p4
+idf.py -B build-p4x -D SDKCONFIG=sdkconfig.p4x -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.p4x" -DBPVM_P4_WIRE=usbjtag build
+idf.py -B build-p4x -D SDKCONFIG=sdkconfig.p4x -p <puerto-usb-serial-jtag> flash
+```
+
+Lo que cambia frente a la P4 de siempre, con su porqué, está en
+`sdkconfig.defaults.p4x`; el cable del wire lo elige `-DBPVM_P4_WIRE=usbjtag`.
+
+---
+
 ## STM32 — dos placas, dos imágenes
 
 | placa | imagen | pantalla |
@@ -420,8 +484,10 @@ Dos opciones, de más simple a más completa:
 lleva el driver de su pantalla y la de la Nucleo no. Flashear la que no es no rompe nada,
 pero la placa no hará lo que esperas.
 
-En las dos, un fallo fatal del sistema (un `HardFault`) deja la placa parada: no se
-reinicia sola.
+En las dos, desde V8, un fallo fatal del sistema (un `HardFault`, por ejemplo) reinicia la
+placa, como en la Pico y las ESP32: el informe queda en el log (`log` en la consola), el
+**Info** da «fallo fatal» como causa del último reset y ese arranque **no lanza el
+autorun**: se lanza a mano desde el IDE. (Hasta V7 la placa se quedaba parada.)
 
 ### B. Compilarla
 
