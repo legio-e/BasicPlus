@@ -69,6 +69,9 @@ public abstract class Symbol {
          *  valen sobre una interfaz); sus miembros, métodos sin cuerpo y properties; sus {@link #interfaces}, las de
          *  las que hereda. */
         public boolean isInterface;
+        /** #842 (19-nov) — `final class`: ninguna clase la puede extender. La de otro módulo la trae su interfaz
+         *  (`class X public final`, bpi 13). */
+        public boolean isFinal;
         /** V8 H7.3 — las interfaces de la cabecera, como se escriben (`Forma`, `Lib.Medible`); en una interfaz, las de
          *  las que hereda. */
         public final java.util.List<String> interfaceNames = new java.util.ArrayList<>();

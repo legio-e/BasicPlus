@@ -2572,6 +2572,7 @@ public final class Main {
                     // V8 H7.3 (#756) — una interfaz, y las interfaces de la cabecera (o de las que hereda), por su
                     // nombre: el semántico las enlaza a los stubs de su análisis (enlazarInterfacesImportadas)
                     stub.isInterface = cs.isInterface;
+                    stub.isFinal = cs.isFinal;   // #842: una clase final de otro módulo tampoco se extiende
                     stub.interfaceNames.addAll(cs.interfaces);
                     stub.tipoElemento = cs.element;   // V8/H8 (#793)
                     // L2 v3 — propaga layout binario para que subclasses

@@ -241,6 +241,7 @@ public final class EscritorJc {
     private void claseDef(ClassDef c, boolean enInterfaz) {
         if (clase != null) throw new NoSoportado("una clase dentro de otra", c);
         StringBuilder h = new StringBuilder(c.isPublic ? "public " : "");
+        if (c.isFinal) h.append("final ");   // #842: `public final class Base`
         if (c.isRoot) h.append("root ");
         h.append(c.isInterface ? "interface " : "class ").append(nombre(c.name, c));
         List<String> lista = new ArrayList<>();

@@ -18,7 +18,7 @@
 //   const PI:float=3.14159 public
 //   enum Color public / ROJO=0 / … / end enum
 //   prop nombre:tipo [public] [sync]   (property de MÓDULO)
-//   class Cosa public [extends Base]
+//   class Cosa public [final] [extends Base]   (`final`: #842, bpi 13)
 //     layout <nF> <nM> <fbm> <obm>
 //     field n:integer slot 0 [owner]                 (campos no privados, V7/H2)
 //     ctor(<params>) · ctor+(<params>)               (cadena EFECTIVA de ctors, V7/H2)
@@ -78,6 +78,9 @@ public final class ModuleInterface {
     public static final int VERSION_CON_GENERICOS = 11;
     /** V8/H7.4 — un módulo con parámetros `var` en su interfaz escribe la 12 (`var nombre:tipo`); los demás, la de siempre. */
     public static final int VERSION_CON_VAR = 12;
+    /** #842 (19-nov) — un módulo con una clase `final` escribe la 13 (`class X public final`); los demás, la de siempre:
+     *  su texto y su ifaceCrc no cambian. */
+    public static final int VERSION_CON_FINAL = 13;
     /** La versión que ESCRIBE este build: 9 con `--formato=9` (enlace tardío: las ranuras son del cargador,
      *  la interfaz no publica ninguna); 8 en MOD8 (`field … slot n`, `event … recv n`, `layout`). */
     static int versionQueSeEscribe() { return Main.FORMATO == 9 ? 9 : 8; }
@@ -328,6 +331,8 @@ public final class ModuleInterface {
         public List<String> interfaces = new ArrayList<>();
         /** V8/H8 (#793) — el tipo base de `@element{B}` (la directiva `element <tipo>`), o null. */
         public BpType element = null;
+        /** #842 (19-nov) — `final class` (`class X public final`, bpi 13): el importador no la deja extender. */
+        public boolean isFinal = false;
 
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
@@ -608,6 +613,7 @@ public final class ModuleInterface {
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
         // V8 H7.3 (#756) — una interfaz, y las interfaces de la cabecera (o de las que hereda), nombradas como el padre
         sig.isInterface = cls.isInterface;
+        sig.isFinal = cls.isFinal;        // #842
         sig.element = cls.tipoElemento;   // V8/H8 (#793)
         for (Symbol.ClassSymbol i : cls.interfaces) {
             if (i.isExternal) {
@@ -1178,6 +1184,7 @@ public final class ModuleInterface {
             if (ver == 9) for (ClassSig c : classes) if (c.isInterface || !c.interfaces.isEmpty()) ver = VERSION_CON_INTERFACES;
             if (ver >= 9 && usaGenericos()) ver = VERSION_CON_GENERICOS;   // V8/H8 (#793)
             if (ver >= 9 && usaVar()) ver = VERSION_CON_VAR;                // V8/H7.4
+            if (ver >= 9 && usaClaseFinal()) ver = VERSION_CON_FINAL;      // #842
             boolean conNumeros = ver < 9;   // bpi 9: la forma de una clase la decide el cargador; aquí no viaja ningún número
             pw.println("bpi " + ver);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
@@ -1229,6 +1236,7 @@ public final class ModuleInterface {
                     if (!c.interfaces.isEmpty()) hdr.append(" extends ").append(String.join(",", c.interfaces));
                 } else {
                     hdr.append("class ").append(c.name).append(" public");
+                    if (c.isFinal) hdr.append(" final");   // #842 (bpi 13)
                     if (c.baseClassName != null && !c.baseClassName.isEmpty())
                         hdr.append(" extends ").append(c.baseClassName);
                 }
@@ -1469,6 +1477,12 @@ public final class ModuleInterface {
     }
 
     /** V8/H8 (#793) — ¿la interfaz escribe algún genérico? Si no, el módulo sigue en su versión. */
+    /** #842 — ¿alguna clase `final` en lo que se publica? Si no, el módulo sigue en su versión. */
+    private boolean usaClaseFinal() {
+        for (ClassSig c : classes) if (c.isFinal) return true;
+        return false;
+    }
+
     /** V8/H7.4 — ¿algún parámetro `var` en lo que se publica? */
     private boolean usaVar() {
         for (FuncSig f : functions) for (ParamSig p : f.params) if (p.isVar) return true;
@@ -1620,6 +1634,7 @@ public final class ModuleInterface {
             List<FuncSig>  clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
             List<PropSig>  clsStaticProps   = new ArrayList<>();
             boolean        clsEsInterfaz    = false;               // V8 H7.3 (#756): `iface … end iface`
+            boolean        clsFinal         = false;               // #842: `class X public final` (bpi 13)
             List<String>   clsInterfaces    = new ArrayList<>();
             BpType         clsElement       = null;   // V8/H8 (#793)
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
@@ -1644,7 +1659,7 @@ public final class ModuleInterface {
                             + "compilador soporta v" + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION
                             + "). Regenéralo desde su fuente .bp.");
                     // N6 — versión más nueva: no abortamos; leemos best-effort.
-                    tolerant = ver > VERSION_CON_VAR;
+                    tolerant = ver > VERSION_CON_FINAL;
                     sawHeader = true;
                     continue;
                 }
@@ -1674,6 +1689,8 @@ public final class ModuleInterface {
                         ClassSig cs = new ClassSig(clsName, true, clsParent,
                                 clsCtorParams, clsProps, clsMethods);
                         cs.isInterface = clsEsInterfaz;   // V8 H7.3
+                        cs.isFinal = clsFinal;            // #842
+                        clsFinal = false;
                         cs.interfaces = clsInterfaces;
                         cs.element = clsElement;   // V8/H8 (#793)
                         clsElement = null;
@@ -1808,14 +1825,16 @@ public final class ModuleInterface {
                     iface.properties.add(parseProp(file, lineNo, trimmed.substring("prop ".length())));
                 } else if (trimmed.startsWith("class ")) {
                     String tail = trimmed.substring("class ".length()).trim();
-                    // "Name public [extends Parent]"
+                    // "Name public [final] [extends Parent]"
                     String[] toks = tail.split("\\s+");
                     if (toks.length < 1) throw new IOException(file + ":" + lineNo + ": class sin nombre");
                     clsName = toks[0];
                     clsParent = null;
+                    clsFinal = false;
                     boolean sawPub = false;
                     for (int i = 1; i < toks.length; i++) {
                         if ("public".equals(toks[i])) { sawPub = true; }
+                        else if ("final".equals(toks[i])) { clsFinal = true; }   // #842 (bpi 13)
                         else if ("extends".equals(toks[i]) && i + 1 < toks.length) {
                             clsParent = toks[++i];
                         } else {

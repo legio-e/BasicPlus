@@ -1299,9 +1299,9 @@ guau
   no tiene el <code>do … loop</code> sin condición de BP.
 </p>
 <p>
-  El <code>do</code>, con sus llaves: un nombre justo detrás de <code>do</code> es el nombre del bucle (§8.5), así que
-  <code>do i++; while (i &lt; 3);</code> toma <code>i</code> por el nombre y no compila. Con llaves,
-  <code>do { i++; } while (i &lt; 3);</code>, no hay duda.
+  Con una sola sentencia, el <code>do</code> también va sin llaves: <code>do i++; while (i &lt; 3);</code>. Si lleva
+  nombre (§8.5), el nombre va justo detrás de <code>do</code> y delante de la llave de su cuerpo:
+  <code>do vuelta { i++; } while (i &lt; 3);</code>.
 </p>
 <pre data-bp="jc"><code><span class="kw">module</span> Control
 {
@@ -1735,7 +1735,8 @@ Lua dice guau (2 años)
       de <code>Object</code>.</li>
   <li><strong>Todo método es virtual salvo los <code>private</code></strong>: no hay <code>virtual</code> ni
       <code>override</code>, y un método de la hija con la misma firma sustituye al del padre. Para dejarlo escrito,
-      la anotación <code>@override{}</code> (§11). Un método <code>final</code> no se puede redefinir.</li>
+      la anotación <code>@override{}</code> (§11). Un método <code>final</code> no se puede redefinir, y una clase
+      <code>final</code> (<code>public final class Base</code>) no se puede extender, tampoco desde otro módulo.</li>
   <li><strong>No hay</strong> clases dentro de clases, <code>abstract</code>, <code>struct</code> ni clases
       <code>static</code>. Para un tipo sin código, una interfaz.</li>
 </ul>
@@ -2533,9 +2534,9 @@ suma hasta 10 = 55</code></pre>
       línea, y no renombra nada.</li>
   <li><strong>Al revés, un nombre de JC que en BP es una palabra reservada</strong> —<code>step</code>,
       <code>next</code>, <code>end</code>, <code>then</code>, <code>loop</code>, <code>to</code>, <code>mod</code>,
-      <code>and</code>…, en mayúsculas o en minúsculas, porque las de BP no las distinguen— se traduce tal cual, y el BP
-      que sale no compila: lo dice el compilador de BP («'step' es una palabra reservada del lenguaje; elige otro
-      nombre»). Si piensas traducir, evítalos.</li>
+      <code>and</code>…, en mayúsculas o en minúsculas, porque las de BP no las distinguen—, tampoco: el traductor lo
+      dice, con su línea («el nombre «step», que en BP es una palabra reservada»), y no renombra nada. Si piensas
+      traducir, evítalos.</li>
   <li><strong>Lo de BP que JC no puede escribir</strong>: un <code>for</code> con el paso en una variable, un
       <code>do … loop</code> sin condición y un <code>inline</code> entre otras sentencias. El traductor lo dice.</li>
   <li><strong>Lo de JC que BP no puede escribir</strong>: <code>(Caja) x</code> cuando el constructor de

@@ -248,7 +248,9 @@ final class JcParser {
             throw error((isStatic ? "'static'" : "'protected'") + " sólo va en un miembro de una clase");
         if (es("class")) {
             if (clase != null) throw error("una clase dentro de otra: BP no las tiene");
-            defs.add(claseDef(isPublic, isRoot));
+            ClassDef cd = claseDef(isPublic, isRoot);
+            cd.isFinal = isFinal;   // #842: `public final class Base`, como en BP
+            defs.add(cd);
             return;
         }
         if (isRoot) throw error("'root' sólo va delante de 'class'");
@@ -920,7 +922,9 @@ final class JcParser {
     /** `do { … } while (c);` es el `do … loop c` de BP (punto 9). */
     private DoLoopStmt hacer() {
         Tok t = espera("do");
-        String n = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `do miLoop { … } while (c);`
+        // V8/H8: `do miLoop { … } while (c);`. #843 (19-nov): el nombre, sólo si detrás viene la llave —un `do` con
+        // nombre lleva su cuerpo entre llaves—; si no, `do i++; while (c);` tomaba `i` por el nombre del bucle.
+        String n = (esNombre() && mira(1).es("{")) ? nombre("el nombre del bucle") : null;
         List<IStmt> body = cuerpo();
         espera("while", "'while' tras el cuerpo del do");
         espera("(");

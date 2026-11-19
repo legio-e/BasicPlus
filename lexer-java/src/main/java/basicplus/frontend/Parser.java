@@ -461,7 +461,7 @@ public final class Parser {
                 return pd;
             }
             case EVENT:    return parseEventDef(isPublic);
-            case CLASS:    { ClassDef cd = parseClassDef(isPublic); if (cd != null) cd.isRoot = isRoot; return cd; }
+            case CLASS:    { ClassDef cd = parseClassDef(isPublic); if (cd != null) { cd.isRoot = isRoot; cd.isFinal = isFinal; } return cd; }   // #842: el `final` de la clase
             case INTERFACE:
                 // V8 H7.3 (#756) — una interfaz de clase. Lo que no le va, aquí y con su nombre: `root`
                 // (no desciende de nada: no es una clase), `final`, `private` (no hay nada que sobrescribir

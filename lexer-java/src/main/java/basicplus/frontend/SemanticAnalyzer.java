@@ -862,6 +862,7 @@ public final class SemanticAnalyzer {
             return;
         }
         ClassSymbol cls = new ClassSymbol(cd.name, cd.isPublic, cd.baseClass, cd, cd.line, cd.column);
+        cls.isFinal = cd.isFinal;   // #842
         if (!module.members.tryDefine(cls))
             err(cd.line, cd.column, "nombre duplicado: '" + cd.name + "'");
         info.declSymbols.put(cd, cls);
@@ -1226,6 +1227,10 @@ public final class SemanticAnalyzer {
                         Symbol obj = module.members.resolve("Object");   // y sigue como si no tuviera padre
                         if (obj instanceof ClassSymbol) cls.baseClass = (ClassSymbol) obj;
                     } else if (base != null) {
+                        // #842 (19-nov) — una clase `final` no se extiende (manual §9.6). Sigue con su base, para no
+                        // encadenar errores en lo que hereda.
+                        if (base.isFinal)
+                            err(cls.line, cls.column, "la clase '" + cls.baseClassName + "' es final: no se puede extender");
                         cls.baseClass = base;
                     } else {
                         // V6/#498 — el caso que de verdad se da: la clase viene de un modulo

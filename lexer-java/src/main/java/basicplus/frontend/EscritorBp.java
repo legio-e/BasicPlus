@@ -49,6 +49,12 @@ public final class EscritorBp {
             this.nodo = nombre(n);
             this.linea = lineaDe(n);
         }
+        /** #844 — con lo que no se puede escribir dicho, como el de EscritorJc. */
+        NoSoportado(String que, Object n) {
+            super("no soportado: " + que + " (línea " + lineaDe(n) + " del original)");
+            this.nodo = nombre(n);
+            this.linea = lineaDe(n);
+        }
         private static String nombre(Object n) { return n == null ? "null" : n.getClass().getSimpleName(); }
         private static int lineaDe(Object n) { return (n instanceof Node) ? ((Node) n).line : 0; }
     }
@@ -90,7 +96,7 @@ public final class EscritorBp {
         if (m.library != null && !m.library.isEmpty()) linea("library " + cadena(m.library));
         StringBuilder h = new StringBuilder("module ");
         if (m.isInterface) h.append("interface ");
-        h.append(m.name);
+        h.append(declarado(m.name, m));
         if (m.implementsName != null) h.append(m.isInterface ? " extends " : " implements ").append(m.implementsName);
         linea(h.toString());
         nivel++;
@@ -199,7 +205,7 @@ public final class EscritorBp {
             Param p = ps.get(i);
             if (i > 0) s.append(", ");
             if (p.isVar) s.append("var ");                  // V8/H7.4
-            s.append(p.name).append(": ").append(tipo(p.type));
+            s.append(declarado(p.name, p)).append(": ").append(tipo(p.type));
             if (p.defaultValue != null) s.append(" := ").append(expr(p.defaultValue));
         }
         return s.toString();
@@ -226,7 +232,7 @@ public final class EscritorBp {
             linea("endget");
         }
         if (p.setter != null) {
-            linea("set(" + p.setter.paramName + ")");
+            linea("set(" + declarado(p.setter.paramName, p) + ")");
             cuerpo(p.setter.body);
             linea("endset");
         }
@@ -236,6 +242,7 @@ public final class EscritorBp {
 
     private void clase(ClassDef c, boolean enInterfaz) {
         StringBuilder h = new StringBuilder(c.isPublic ? "public " : "");
+        if (c.isFinal) h.append("final ");   // #842
         if (c.isRoot) h.append("root ");
         // V8 H7.3 (#756) — una interfaz: `interface Forma extends Base`; una clase: `class C extends B implements I, J`.
         // En un árbol de JC, el primero de `: A, B` puede ser una interfaz: si lo es del módulo, va con las demás.
@@ -245,7 +252,7 @@ public final class EscritorBp {
             interfaces.add(0, base);
             base = null;
         }
-        h.append(c.isInterface ? "interface " : "class ").append(c.name);
+        h.append(c.isInterface ? "interface " : "class ").append(declarado(c.name, c));
         if (base != null) h.append(" extends ").append(base);
         if (!interfaces.isEmpty())
             h.append(c.isInterface ? " extends " : " implements ").append(String.join(", ", interfaces));
@@ -261,15 +268,26 @@ public final class EscritorBp {
     }
 
     private void enumerado(EnumDef e) {
-        linea((e.isPublic ? "public " : "") + "enum " + e.name);
+        linea((e.isPublic ? "public " : "") + "enum " + declarado(e.name, e));
         nivel++;
-        for (EnumValue v : e.values) linea(v.name + (v.explicitValue != null ? " := " + v.explicitValue : ""));
+        for (EnumValue v : e.values)
+            linea(declarado(v.name, e) + (v.explicitValue != null ? " := " + v.explicitValue : ""));
         nivel--;
         linea("end " + e.name);
     }
 
     private static String nombre(DeclName d) {
-        return d.classQualifier != null ? d.classQualifier + "." + d.name : d.name;
+        return d.classQualifier != null ? d.classQualifier + "." + declarado(d.name, d) : declarado(d.name, d);
+    }
+
+    /** #844 (19-nov) — un nombre que declara el programa. Si en BP es una palabra reservada (sin mayúsculas: `step`,
+     *  `Next`…), el escritor lo dice, sin renombrar nada: lo que hace EscritorJc con las de JC (§E2, «Lo que choca»).
+     *  Antes lo escribía tal cual y el BP que salía no compilaba. Lo que se nombra sin declararse aquí (de otro
+     *  módulo) lo dice la traducción de aquél. */
+    private static String declarado(String n, Object donde) {
+        if (n != null && Lexer.palabrasReservadas().contains(n.toLowerCase(java.util.Locale.ROOT)))
+            throw new NoSoportado("el nombre «" + n + "», que en BP es una palabra reservada", donde);
+        return n;
     }
 
     // ============================================================
@@ -371,15 +389,20 @@ public final class EscritorBp {
             enLinea(cab, w.body.get(0));
             return;
         }
-        linea(conNombre(cab, w.nombre));
+        linea(bucle(cab, w.nombre, w));
         cuerpo(w.body);
         linea("endwh");
     }
 
     private static String conNombre(String palabra, String nombre) { return nombre != null ? palabra + " " + nombre : palabra; }
 
+    /** El nombre de un bucle (V8/H8) que se declara en su cabecera: comprobado como los demás (#844). */
+    private static String bucle(String palabra, String nombre, Object donde) {
+        return conNombre(palabra, nombre != null ? declarado(nombre, donde) : null);
+    }
+
     private void hacer(DoLoopStmt d) {
-        linea(conNombre("do", d.nombre));
+        linea(bucle("do", d.nombre, d));
         cuerpo(d.body);
         linea(d.condition != null ? "loop " + expr(d.condition) : "loop");
     }
@@ -388,10 +411,10 @@ public final class EscritorBp {
         String cab;
         if (f.range instanceof ForNumericRange) {
             ForNumericRange r = (ForNumericRange) f.range;
-            cab = "for " + f.iteratorName + " := " + expr(r.from) + " to " + expr(r.to)
+            cab = "for " + declarado(f.iteratorName, f) + " := " + expr(r.from) + " to " + expr(r.to)
                     + (r.step != null ? " step " + expr(r.step) : "") + " do";
         } else if (f.range instanceof ForInRange) {
-            cab = "for " + f.iteratorName + " in " + expr(((ForInRange) f.range).iterable) + " do";
+            cab = "for " + declarado(f.iteratorName, f) + " in " + expr(((ForInRange) f.range).iterable) + " do";
         } else {
             throw new NoSoportado(f.range);
         }
@@ -400,7 +423,7 @@ public final class EscritorBp {
             enLinea(cab, f.body.get(0));
             return;
         }
-        linea(conNombre(cab, f.nombre));
+        linea(bucle(cab, f.nombre, f));
         cuerpo(f.body);
         linea("next");
     }
@@ -424,7 +447,7 @@ public final class EscritorBp {
         linea("parallel");
         nivel++;
         for (ParallelBranch b : p.branches) {
-            linea("case " + b.varName + " := Thread(" + expr(b.stackSizeExpr) + ")");
+            linea("case " + declarado(b.varName, b) + " := Thread(" + expr(b.stackSizeExpr) + ")");
             cuerpo(b.body);
         }
         if (p.defaultBody != null) {
@@ -446,7 +469,7 @@ public final class EscritorBp {
         cuerpo(t.body);
         for (CatchClause c : t.catches) {
             if (c.varName == null) linea("catch");
-            else linea("catch " + c.varName + (c.exceptionType != null ? ": " + c.exceptionType : ""));
+            else linea("catch " + declarado(c.varName, c) + (c.exceptionType != null ? ": " + c.exceptionType : ""));
             cuerpo(c.body);
         }
         List<IStmt> fin = t.finallyBody;

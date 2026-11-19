@@ -7654,19 +7654,29 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   parentesco da primero «no define constructor» y después el error bueno. El volumen cita los mensajes sin el «(punto
   N)».
 
-#### 🔵 `#844` — traducir JC → BP (`--escribir-bp`, «Traducir a BP») escribe sin avisar un nombre que en BP es reservado (`step`, `Next`…), y el BP que sale no compila; al revés, BP → JC, sí avisa (abierta el 18-nov, en el `D1`, del volumen de JC; V8 o V9, por decidir)
+#### ✅ `#844` — traducir JC → BP (`--escribir-bp`, «Traducir a BP») escribe sin avisar un nombre que en BP es reservado (`step`, `Next`…), y el BP que sale no compila; al revés, BP → JC, sí avisa (abierta el 18-nov, en el `D1`, del volumen de JC; **CERRADA el 19-nov**, el commit de `#842`–`#844`)
 
 - **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\NombresJc.jc`): `int step = 2;` compila en JC; su traducción, `var step: integer := 2`, da «'step' es
   una palabra reservada del lenguaje; elige otro nombre». El volumen de JC lo dice en «Lo que choca».
 - **18-nov, decidido: se arregla en V8**, el 19-nov (con `#842` y `#843`).
+- **19-nov, hecho:** como la traducción BP → JC con las de JC: `EscritorBp` comprueba cada nombre que el programa
+  declara —el módulo, las clases, las enumeraciones y sus valores, las constantes, las variables, las funciones, los
+  parámetros, los eventos, las properties y el parámetro del `set`, la variable del `for`, la de un `catch`, las del
+  `parallel` y el nombre de un bucle— contra las palabras reservadas de BP (las del lexer, sin mayúsculas), y si lo es,
+  para: «no soportado: el nombre «step», que en BP es una palabra reservada (línea 5 del original)». No renombra nada.
+  Lo que se nombra sin declararse aquí, de otro módulo, lo dice la traducción de aquél. El volumen de JC, al día
+  («Lo que choca»). La prueba, abajo, en `#842`.
 
-#### 🔵 `#843` — en JC, un `do` sin llaves no compila: `do i++; while (c);` da «en JC, ++ y -- van detrás»: desde los bucles con nombre, el parser toma la primera palabra por el nombre del bucle (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente, desde los bucles con nombre; V8 o V9, por decidir)
+#### ✅ `#843` — en JC, un `do` sin llaves no compila: `do i++; while (c);` da «en JC, ++ y -- van detrás»: desde los bucles con nombre, el parser toma la primera palabra por el nombre del bucle (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente, desde los bucles con nombre; **CERRADA el 19-nov**, el commit de `#842`–`#844`)
 
 - **Lo medido** (18-nov, a mano, `C:\tmp\v8_d1_18nov\DoSinLlaves.jc`): no compila. La gramática de JC (`V8_IDEAS` §E2,
   el punto 9) admite una sentencia sin llaves. El volumen de JC enseña el `do` con sus llaves.
 - **18-nov, decidido: se arregla en V8**, el 19-nov (con `#842` y `#844`).
+- **19-nov, hecho:** `JcParser.hacer()` toma el nombre del bucle sólo si detrás viene su llave: un `do` con nombre lleva
+  su cuerpo entre llaves (`do vuelta { i++; } while (i < 3);`), y uno sin nombre, una sola sentencia sin ellas
+  (`do i++; while (i < 3);`). El volumen de JC, al día. La prueba, abajo, en `#842`.
 
-#### 🔵 `#842` — una clase `final` se puede extender: el compilador no lo impide (ni en BP ni en JC), y el manual §9.6 dice «`final` en clase: no extensible» (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente; V8 o V9, por decidir)
+#### ✅ `#842` — una clase `final` se puede extender: el compilador no lo impide (ni en BP ni en JC), y el manual §9.6 dice «`final` en clase: no extensible» (abierta el 18-nov, en el `D1`, del volumen de JC; preexistente; **CERRADA el 19-nov**, el commit de `#842`–`#844`; Eduardo: *«A mi lo de clase final no le veo sentido pero bueno, lo demás me parece bien»*)
 
 - **Lo medido** (18-nov, a mano, en `C:\tmp\v8_d1_18nov\`): `FinalClase.bp` —`public final class Base` y `class Hija extends Base`— compila y
   corre en las dos VMs («base hija»). Un método `final` redefinido, en cambio, sí da error (`FinalMetodo.bp`: «compilación
@@ -7680,6 +7690,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   properties), así que la clase ni lo sabe; la base se resuelve en `SemanticAnalyzer`, en el bloque de
   `resolveBaseClassName` (donde ya se rechaza extender una interfaz). Por mirar: una base `final` de OTRO módulo, que
   llega por su interfaz (`.bpi`): si la marca no viaja en ella, hace falta.
+- **19-nov, hecho** (el análisis, con su OK: *«lo demás me parece bien»*): los dos parsers guardan el `final` en la
+  clase (`ClassDef.isFinal`); el símbolo (`ClassSymbol.isFinal`) lo toma de ella, o de la interfaz si es de otro
+  módulo; y al resolver la base, «la clase 'Base' es final: no se puede extender» (con la base puesta, para no encadenar
+  errores). **La interfaz:** la línea `class X public final`, con su versión, la 13 (`VERSION_CON_FINAL`), que sólo
+  escribe un módulo con una clase `final`, como se hizo con las interfaces (10), los genéricos (11) y los `var` (12): los
+  demás escriben lo de siempre, y su texto y su `ifaceCrc` no cambian. Antes, el lector rechazaba una marca desconocida
+  en la línea `class`. Los dos traductores la escriben (`public final class Base`), y la ida y vuelta la compara
+  (`ComparaAst` mira todos los campos). Nadie usaba `final class`: ni la stdlib, ni los samples, ni JC.
+- **La prueba:** `FinalDoNombresTest`, seis casos, cada uno con su control: la clase `final` en su módulo, desde otro (por
+  su interfaz) y en JC; la traducción BP → JC → BP, que la conserva; el `do` sin llaves y el `do` con nombre (`#843`); y
+  `step` y `Next` al traducir a BP, y un nombre que sí vale (`#844`). Con los fuentes de antes, **las seis fallan**; con
+  los nuevos, las seis pasan. La suite del compilador, **402/402** (eran 396). **Lo que ya había, igual:** el corpus
+  (765 fuentes) con el jar de antes y con el nuevo, **763 `.mod` iguales** byte a byte, ninguno que compile en uno solo y
+  de lo que no compila, los mismos errores; la stdlib como proyecto, sus 35 `.mod` y sus `.dbg` iguales, y el
+  `Stdlib.pack`, igual salvo los 3 bytes de su hora (dos builds con el mismo jar difieren en esos mismos 3). **La red,
+  VERDE** (paridad 217; MOD8, 209 y 8 SKIP; dos workers, 217; C, 117; cápsula, 59; sim y sombra, 15; norma, 9) y
+  **`check-jc`, 215 PASS, 0 FAIL** y los 2 SKIP declarados. Los ensayos, en `C:\tmp\d1_842\`. El manual §9.6 ya decía
+  «no extensible»; el volumen de JC, al día.
 
 #### ✅ `#841` — el `RESET_REPLY` de la Pico 2 «no llegaba al PC»: **sí llega**, a los 0,08 s; lo perdía el cliente de las pruebas, `wire_serie.lines()`, que lee con `read(4096)` y un plazo de 0,2 s: al irse el USB de la Pico, pyserial lanza y tira lo que ya había llegado (abierta el 18-nov, en el lote; **corregida el mismo día**, medida en la Pico 2; la red de seguridad de la tanda, hecha —Eduardo: *«La 1»*—; y los dos lectores, arreglados: **CERRADA el 18-nov**, el commit de `#841`, Eduardo: *«1) si 2) OK»*)
 

@@ -549,6 +549,9 @@ public final class Ast {
          *  «'root' o algo similar para indicar que no desciende de nada»). Sólo la raíz (Core) puede
          *  escribirlo: `Object` y `Thread`. Sin `root` y sin `extends`, la base es Object. */
         public boolean isRoot = false;
+        /** #842 (19-nov) — `public final class Base`: no se puede extender (manual §9.6). Hasta aquí el parser leía el
+         *  `final` y lo tiraba, y una clase podía heredar de una `final` sin que nadie lo dijera. */
+        public boolean isFinal = false;
         /** V8 H7.3 (`#756`) — una INTERFAZ (`interface Forma … end Forma`; en JC, `interface IForma { … }`): se
          *  guarda como una clase con su marca (Eduardo: «una clase y una interfaz se guardan igual o casi igual»).
          *  Sus miembros, métodos sin cuerpo y properties en forma corta; `baseClass`, null; y `interfaces`, las
