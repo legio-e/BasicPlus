@@ -155,6 +155,15 @@ single file, to be flashed at offset 0):
 esptool --chip esp32s3 -p <bridge-port> write-flash 0 bpvm_esp32_merged.bin
 ```
 
+⚠️ **When moving from V7 to V8, erase the whole flash, once.** For the WiFi,
+the S3's application grows from 1 to 2 MB, and the new partition table does not
+match the old one: the board's Environment, file system and packs are lost,
+and are put back afterwards. Before the `write-flash`:
+
+```sh
+esptool --chip esp32s3 -p <bridge-port> erase-flash
+```
+
 ### B. Building it (ESP-IDF v6.x)
 
 ```sh
@@ -265,6 +274,15 @@ esptool --chip esp32c5 -p <port> write-flash 0 bpvm_esp32c5_merged.bin
 
 When done, press **RESET** (alone).
 
+⚠️ **When moving from V7 to V8, erase the whole flash, once**, as on the S3:
+the application grows from 1 to 2 MB for the WiFi, and the Environment, the
+file system and the packs are lost. In download mode, before the
+`write-flash`:
+
+```sh
+esptool --chip esp32c5 -p <port> erase-flash
+```
+
 ### B. Building it (ESP-IDF v6.x)
 
 ```sh
@@ -343,6 +361,42 @@ To regenerate the merged image, the exact build offsets are in
 bootloader goes at 0x2000 and the flash runs at 40 MHz, unlike the S3). The
 port notes (ESP-IDF 6.1, silicon revision, PSRAM) are in
 `bpgenvm-c/esp32p4/sdkconfig.defaults`.
+
+### The WiFi and Bluetooth of the Waveshare board (since V8)
+
+The P4 has no radio: on the Waveshare board it comes from its **ESP32-C6**,
+which talks to the P4 over SDIO. For BasicPlus to use it, two things are
+needed, once:
+
+1. **The C6's firmware.** The factory one does not work: it needs the
+   **ESP-Hosted 3.0.9** coprocessor (WiFi and Bluetooth LE), the same version
+   the P4 image carries inside. It ships in the ZIP:
+   `firmware/p4_c6_esp_hosted_3.0.9_merged.bin`. It is flashed through the
+   C6's **P1** connector, which comes on the board without pins: they have to
+   be soldered on. Through it, the C6's UART0 (TX, RX and GND) to a 3.3 V
+   USB-serial adapter, and its **IO9 to ground** with a jumper. On pressing
+   **RESET**, the C6 boots in download mode:
+
+   ```sh
+   esptool --chip esp32c6 -p <adapter-port> read-flash 0 0x400000 c6_factory.bin   # a copy of the factory one
+   esptool --chip esp32c6 -p <adapter-port> erase-flash
+   esptool --chip esp32c6 -p <adapter-port> write-flash 0 p4_c6_esp_hosted_3.0.9_merged.bin
+   ```
+
+   Remove the jumper and press **RESET**. The copy of the factory firmware
+   (4 MB) lets you go back to how it came, should you ever need to.
+2. **In the board's Environment, `radio=c6`** ([reference, appendix A](referencia.html#env)).
+   Without that line the P4 has no WiFi or Bluetooth, and the SDIO pins belong
+   to the program.
+
+After that, the WiFi is set up as on the S3 and the C5 ([IDE guide
+§6](guia-ide.html#placa)), and a program uses it with `Air` ([reference
+§14.19](referencia.html#stdlib-air)). The C6 firmware is Espressif's, under
+the Apache 2.0 license.
+
+**Sound** (since V8, [reference §14.18](referencia.html#stdlib-sound)): in the
+Waveshare board's Environment,
+`audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53`.
 
 ---
 

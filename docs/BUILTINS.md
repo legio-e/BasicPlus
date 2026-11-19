@@ -623,7 +623,7 @@ de cada origen.
 | 286 | `__freadLineI` (y en `IO`) | `(st: byte[], ignorarError: boolean): string` | `TextFile.readLine(true)` |
 
 La regla de Eduardo (22-oct): un string es un invariante; lo de fuera se DESCODIFICA al nacer la cadena. Con
-`ignorarError` = `false`, como los de un argumento (120, 38 y 249): `EncodingError` (hija de `RuntimeError`, en `Core`)
+`ignorarError` = `false`, como los de un argumento (120, 38 y 249): `EncodingError` (hija de `IOError`, desde V8/H7.5; en `Core`)
 con dónde, `<que>: UTF-8 mal formado en el byte N (0xNN)`. Con `true`, cada trozo malo pasa a U+FFFD («�», `EF BF BD`),
 uno por «subparte máxima», como dice el estándar de Unicode (§3.9): `61 F1 6F` → `a�o`; `ED A0 80` (un sustituto en tres
 bytes) → tres. La rutina, la misma en las dos VMs (`bpvm_internal.h` `utf8_paso`…, miVM `Utf8`), probada contra la tabla

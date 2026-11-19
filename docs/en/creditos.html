@@ -155,8 +155,17 @@
   </tr>
   <tr>
     <td><a href="https://github.com/espressif/esp-idf">ESP-IDF</a> (Espressif)</td>
-    <td>The base of the <strong>ESP32-S3 and ESP32-P4</strong> firmware:
-        partition system, PSRAM, MIPI-DSI and the rest of the platform.</td>
+    <td>The base of the <strong>ESP32</strong> firmware (S3, C3, C5, C6 and P4):
+        partition system, PSRAM, MIPI-DSI and the rest of the platform; and, since
+        V8, the WiFi with its TCP/IP stack (lwIP) and the Bluetooth (NimBLE).</td>
+    <td class="lic">Apache-2.0</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/espressif/esp-hosted-mcu">ESP-Hosted</a> (Espressif)</td>
+    <td>On the <strong>Waveshare P4</strong>, since V8, the WiFi and Bluetooth
+        through the board's ESP32-C6: the host goes inside the P4 image, and the
+        C6's coprocessor firmware (version 3.0.9) in the ZIP, in
+        <code>firmware/</code>.</td>
     <td class="lic">Apache-2.0</td>
   </tr>
   <tr>

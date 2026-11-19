@@ -2799,8 +2799,10 @@ sb.appendStr(<span class="str">"Humidity: "</span> + h)
   says so in the log and on the console (<code>Machine.resetCause()</code> gives
   <code>panic/exception</code> or <code>int-watchdog</code>). The task watchdog, the one the
   <code>Wdt</code> module arms, is not a fatal failure: after it, the autorun is launched. On the
-  STM32 boards, a HardFault leaves the report in the log and the board stopped. Keeping the
-  failure of one run from bringing the whole board down is for V8.
+  STM32 boards, since V8, the same: a HardFault leaves the report in the log, the IWDG reboots the
+  board after two seconds and the next boot does not launch the autorun (<code>#839</code>;
+  before, they stayed stopped). Keeping the failure of one run from bringing the whole board down
+  is for V9.
 </p>
 
 <h2 id="eventos">15. Events</h2>
@@ -2973,13 +2975,13 @@ with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
       since V2, with the B1 race (<a href="#conc-gc">§14.4</a>). By default it runs with one; on
       the board, the two cores are used by the C VM (<a href="#conc-nucleos">§14.6</a>).</li>
   <li>With the RP2350's dual-core image —the default one on the Pico&nbsp;2 and the Metro—, a
-      single-threaded program runs slower than it should: on the Metro, by 35&nbsp;% (also with
-      <code>vm.cores=1</code>: it is the image, not the other core); on the Pico&nbsp;2, one that
-      prints a lot (<code>PrintBench</code>) takes 1&nbsp;270&nbsp;ms against 817 with the single-core image, and
-      pure computation 1.8&nbsp;% more. And strings gain nothing with two threads
-      (<a href="#conc-nucleos">§14.6</a>). It is being investigated in V8 (<code>#665</code>).</li>
+      single-threaded program runs somewhat slower than with the single-core image (measured on
+      15 Nov: computation, 3.5&nbsp;% on the Metro and 7.7&nbsp;% on the Pico&nbsp;2), and on the
+      Pico&nbsp;2 one that prints a lot, quite a bit more (<code>PrintBench</code>, 1&nbsp;321&nbsp;ms
+      against 745). With two threads, the dual-core image wins on both (<a href="#conc-nucleos">§14.6</a>).
+      Why printing is so slow on the Pico&nbsp;2 is being investigated in V9 (<code>#665</code>).</li>
   <li>Keeping the fatal failure of one run from bringing the whole board down
-      (<a href="#conc-nucleos">§14.6</a>): in V8.</li>
+      (<a href="#conc-nucleos">§14.6</a>): in V9.</li>
   <li>Generics / type parameters in user classes.</li>
   <li>Explicit versioning of library contracts (covered in practice by each library's
       generation and late binding: <a href="#imports">§10.3</a>).</li>

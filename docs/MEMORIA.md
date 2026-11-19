@@ -14,7 +14,10 @@
 >
 > **El 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día (§7). Lo que se puede
 > recortar —sobre todo, las pilas de los hilos BP, del heap: 48 KB más en la C3 y la C6—, en `#740`. **El 29-oct**, las
-> pilas, del heap, en el código (las dos VMs); medirlo en las placas, en el lote siguiente.
+> pilas, del heap, en el código (las dos VMs); medirlo en las placas, en el lote siguiente. **Medido el 18-nov**, en el
+> lote final (`compat/informes/lote_v8_18nov.md`, el `vmHeapBytes` del `INFO`): el heap de BP, que ya lleva dentro las
+> pilas de los hilos, es de 96 KB en la C3 (eran 48), 112 en la C6 (61), 288 en la Pico 2, 496 en la Nucleo y 1 008 en
+> la DK2. Las tablas de este documento son de antes (cada una dice de cuándo).
 
 ## 1. Dos memorias que no hay que confundir
 
