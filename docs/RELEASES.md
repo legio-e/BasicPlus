@@ -205,7 +205,9 @@ Y en cada una:
   tiempo la sustituirá. El IDF no deja que una imagen sirva para las dos revisiones, así que tiene la suya,
   `bpvm_esp32p4x_merged.bin`, **del mismo código**: cambian la revisión —con ella, lo que pone el IDF: la CPU a 400 MHz
   y sus arreglos para la v3— y el cable del wire, que va por el USB-Serial-JTAG del chip, porque su kit no lleva puente
-  USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7".
+  USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7". Frente a la P4 de
+  Waveshare, los programas de `samples/benchmarks` tardan entre un 8 y un 10 % menos, lo del reloj; y, con el cable
+  por USB, imprimir 2 000 líneas cuesta 0,3 s en vez de 20,5 por la UART.
 - **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes, con la tanda de V7 sin un cambio (0 de 250
   pruebas). En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
 - **La S3 y la C5**, para la WiFi, pasan de 1 a 2 MB de aplicación: la tabla de particiones nueva obliga a borrar la

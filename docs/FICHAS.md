@@ -7701,6 +7701,14 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   —`GuiWinJson` IGUAL y `GuiShot` sin petar, con la pantalla— y las dos de `lastModified`, como en las demás placas. En
   `dist/firmware`, ésa (la app de su `_merged`, `9aecd6ef`), con el firmware de la C6: diez ficheros, `sha256sum -c`,
   10 OK, y las ocho de ayer con su misma suma.
+- **El rendimiento, frente a la P4** (19-nov, noche; Eduardo: *«Lo que gustaría es una prueba de rendimiento entre P4X
+  y P4 a ver que tal. Por el reloj debería ser un 10% mas rápida»*; la P4 de Waveshare, la que eligió, con la imagen de
+  V8 del lote y su radio encendida): los doce programas de `samples/benchmarks`, dos pasadas en cada una, a la vez
+  (`compat/informes/rendimiento_p4_p4ws_p4x.md`). La P4X tarda entre un 8 y un 10 % menos en todo lo que es CPU y
+  memoria —el reloj: 400 frente a 360 MHz, un 11 % más—: lo que cabe en la caché (ordenar, los arrays), el 10; las
+  llamadas (`fib`), el 8; lo nativo, igual que lo interpretado. `AllocBench`, un 15 %, sin explicar (el silicio v3 o la
+  radio de la Waveshare). Y el RUN entero de `PrintBench` (2 000 líneas, 121 KB) no es la CPU sino el cable: 20,5 s por
+  la UART de la Waveshare y 0,28 s por el USB de la P4X.
 - **En la documentación:** `INSTALAR_FIRMWARE` (los dos idiomas: la sección de la P4X, la tabla de las imágenes y el
   firmware de la C6 en `firmware/`), la referencia (la fila de la P4 y la cuenta de imágenes), las portadas, los dos
   README, `PUBLICAR` (la receta, su `merge-bin` y contar diez ficheros), las notas de v8.0 y la nota del ZIP
