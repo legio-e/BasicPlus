@@ -8,31 +8,43 @@
 
 ## v8.0 — noviembre 2026
 
-> **Borrador de la introducción: la escribe o la corrige Eduardo.**
+En esta versión hemos añadido el soporte de la WiFi y el Bluetooth a la familia de micros ESP32: a las placas con
+PSRAM, la S3, la C5 y la P4 de Waveshare, que lleva la radio en su ESP32-C6. La placa se conecta sola a la red al
+arrancar, y el IDE trabaja con ella sin cable: sube los ficheros, graba los packs y ejecuta los programas. Del
+Bluetooth hemos hecho, de momento, lo que más falta hacía en una placa: el teclado y el ratón. Las dos radios están
+apagadas de normal, y se apagan solas tras diez minutos sin uso.
 
-En esta versión nos hemos centrado en tres puntos:
+También hemos añadido un nuevo lenguaje, **JC**, una mezcla de Java y C# con algunas limitaciones, para facilitar el
+desarrollo de aplicaciones a los programadores que trabajan habitualmente con esos lenguajes. No hemos pretendido hacer
+ni un Java ni un C#, y las librerías no son las de esos lenguajes sino las nuestras. Por dentro es el mismo lenguaje que
+BasicPlus, con el mismo compilador y el mismo bytecode, y un programa se traduce de uno a otro con una orden del IDE.
 
-- **La WiFi y el Bluetooth.** Eran el tema de la versión. En la P4, la S3 y la C5 la placa se conecta sola a la red
-  al arrancar, y el IDE trabaja con ella sin cable: sube los ficheros, graba los packs, ejecuta un programa y lo para.
-  Un programa enciende y apaga la WiFi y abre conexiones con `Net`. Del Bluetooth hemos hecho, de momento, lo que más
-  falta hacía en una placa: el teclado y el ratón. Se emparejan una vez y vuelven solos, y en un programa con pantalla
-  el ratón mueve una flecha y el teclado escribe en los campos, sin escribir una línea de código. Las dos radios están
-  apagadas de normal y se apagan solas tras diez minutos sin uso. El bajo consumo, que iba con ellas, lo hemos pasado a
-  V9: es demasiado complejo y depende mucho del hardware.
-- **JC.** BasicPlus con la ropa de Java y C#: llaves, punto y coma y el tipo delante del nombre, pero el mismo
-  lenguaje, el mismo compilador y el mismo bytecode, y un programa se traduce de uno a otro con una orden del IDE. Para
-  probarlo hemos pasado a JC las pruebas del compilador de C# de Mono: 848 funcionan, y desde ahora son una prueba de
-  caja negra de los dos lenguajes. Por el camino, BasicPlus ha ganado lo que esas pruebas pedían y tenía sentido para
-  nosotros —las interfaces, los genéricos como una orden al compilador, los errores con su tipo— y han salido a la luz
-  fallos del compilador que llevaban ahí mucho tiempo.
-- **La fiabilidad.** Un dispositivo puede pasar días funcionando sin que nadie lo mire. Hemos tenido cuatro placas 48
-  horas seguidas con un programa que lo toca todo, sin un error ni un reinicio, y la prueba encontró dos fallos de
-  verdad que ya están arreglados. Hemos repasado qué hace la placa en cada situación que se puede dar en el campo y
-  arreglado lo sencillo; lo demás, a V9. Las cadenas, que eran lo más lento del lenguaje, han dejado de ser
-  cuadráticas. Y una página nueva de la documentación cuenta todas las pruebas que pasa BasicPlus.
+Con el fin de verificar el compilador y la máquina virtual, hemos aprovechado la batería de pruebas de C# de Mono y
+hemos intentado traducirlas, compilarlas y ejecutarlas. De las 2 322 pruebas funcionan 848; el resto no se pueden
+traducir por las limitaciones del lenguaje. En general el resultado ha sido muy positivo: han aparecido algunos bugs,
+que hemos corregido, y hemos aprovechado para ampliar un poco el lenguaje, tanto BP como JC: algunos operadores (`*=`,
+`/=`, `mod=`… y el ternario `iif`), las interfaces —una clase puede implementar varias: la herencia múltiple de tipos,
+no de código— y los genéricos, principalmente. Esas 848 pruebas se quedan como una prueba más de los dos lenguajes, de
+caja negra.
 
-En resumen, V8 empezó como una versión para experimentar, sin obligaciones: lo que ha funcionado es lo que publicamos,
-y lo que no, o no ha dado tiempo, pasa a V9.
+También hemos aprovechado para arreglar algunas cosas que teníamos pendientes de la versión 7, y pequeñas cosas que
+han ido apareciendo durante el desarrollo de esta versión.
+
+Hemos optimizado y mejorado las operaciones con cadenas, que eran lentas: en la Pico 2, por ejemplo, recorrer una
+cadena de 2 KB ha pasado de 535 a 20 ms.
+
+Y hemos puesto a prueba la fiabilidad: cuatro placas, 48 horas seguidas con un programa que lo toca todo, sin un error
+ni un reinicio. El objetivo de la prueba era sobre todo que no hubiera una merma de recursos, como la memoria, que con
+el tiempo pudiera hacer que un micro se bloquease o se reiniciase. La prueba encontró dos fallos de verdad, que ya están
+arreglados. Una página nueva de la documentación cuenta todas las pruebas que pasa BasicPlus.
+
+Para terminar, hemos añadido una imagen para el **ESP32-P4X**, la nueva revisión del P4, que corrige errores del
+silicio. Es casi idéntica a la del ESP32-P4, pero una imagen del P4 no corre en el P4X ni al revés, así que tenemos una
+imagen para cada uno de los micros. Con su reloj, 400 MHz frente a 360, los programas tardan entre un 8 y un 10 %
+menos.
+
+Poco a poco el proyecto va entrando en su madurez, así que los cambios ya no son tan drásticos, y nos centramos más en
+ampliar las librerías y el soporte de más micros.
 
 Lo que no cambia es el invariante de siempre: el mismo bytecode, la misma salida
 byte a byte en las dos VMs, y todo verificado en placa.
