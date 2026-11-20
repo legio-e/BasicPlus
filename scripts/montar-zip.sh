@@ -217,7 +217,9 @@ done
 #    pinta nada en una publicacion (reproducciones minimas, diagnostico de GC).
 #    Hace falta ELEGIR. Lo que no puede ser es que olvidarse sea SILENCIOSO —
 #    por eso, debajo, el guardian.
-PUBLICAR_DIRS="benchmarks errores external formdemo imageproject packlib plugins sampleproject"
+PUBLICAR_DIRS="benchmarks errores external formdemo imageproject overlay packlib plugins sampleproject"
+#    overlay/ entra en V8 (20-nov): el ejemplo de los overlays (H9, #786), que el
+#    manual cita en los dos idiomas («Un ejemplo completo, en samples/overlay»).
 #    packlib/ entra en V5 (decidido el 20-ago): es el caso MINIMO de un pack
 #    ejecutable (#365), y los packs son una de las cabeceras de esta version.
 #    La referencia los documenta entera (§15) y quien lea eso quiere el ejemplo.

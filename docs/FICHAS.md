@@ -7710,7 +7710,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (fusionada, en el 0): el `HELLO`, `9aecd6ef`; el `INFO`, 400 MHz; el heap, el texto y el rodata, en la misma página de
   64 KB que la probada (el `nm` de los dos `.elf`), así que la zona de packs sigue en `0x4015c000` y el `Gui.pack`,
   vivo, sin regrabarlo. La tanda de 24, con ella (`C:\tmp\p4x_repro\tanda_p4x_repro.md`): 22 iguales o sin petar
-  —`GuiWinJson` IGUAL y `GuiShot` sin petar, con la pantalla— y las dos de `lastModified`, como en las demás placas. En
+  —`GuiWinJson` IGUAL y `GuiShot` sin petar, con la pantalla— y las dos de `lastModified`, como en las demás placas.
+  ⚠️ **Pero con el `Gui.pack` de V7** (720 896 B en la zona; el de V8, 729 088): lo grabé desde `packs/`, que seguía
+  con los de la GUI del 12-oct —`#817` los rehízo el 13-nov en `bpstdlib/gui/…/out/`, y nadie los copió—. Lo cazó el
+  20-nov el guardián del empaquetador (`#679`: «packs/Gui.pack … NO es el de la compilación»); `packs/` ya está al día
+  (`Gui` y `GuiMini`; los otros tres eran los de su compilación). **Por repetir**, con el de V8: borrar el `Gui` de V7
+  de la P4X, grabar el de V8, y las dos de la GUI y la pantalla de un minuto. En
   `dist/firmware`, ésa (la app de su `_merged`, `9aecd6ef`), con el firmware de la C6: diez ficheros, `sha256sum -c`,
   10 OK, y las ocho de ayer con su misma suma.
 - **El rendimiento, frente a la P4** (19-nov, noche; Eduardo: *«Lo que gustaría es una prueba de rendimiento entre P4X
