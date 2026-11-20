@@ -43,7 +43,7 @@ cuyos números se ponen al día con los de esta tabla).
 |---|---|
 | Suite `lexer-java` · suite `miVM` | 18-nov: **396/396** · **66/66**; 19-nov, la del compilador tras `#842`–`#844`: **402/402** (el corpus, con el jar de antes y el nuevo, los mismos `.mod` byte a byte) |
 | `samples_sweep.py` (corpus entero) | 18-nov: **415 OK, 0 FALLO** (los 2 avisos de import omitido de siempre: `fromtest.bp` y `hello.bp`) |
-| `doc_frags.py` (todos los fragmentos de docs/, BP y JC) | |
+| `doc_frags.py` (todos los fragmentos de docs/, BP y JC) | 20-nov, con `jc.html` y `pruebas.html` en los dos idiomas: **0 FALLO** en 29 documentos —860 bloques; 377 de BP compilados (207 OK, 167 trozos, 3 errores esperados) y **78** módulos de JC—. Los enlaces internos (`bpgenvm-c/tools/enlaces_docs.py`, nuevo: en V7 el script no se guardó): **1 392**, en 86 documentos, y 0 rotos en lo que se publica (3 en `V4_IDEAS.md`, el cuaderno de V4, a fuentes que cambiaron de nombre) |
 | `h13-errores.sh` | 18-nov: **151/151** |
 | `compat/compat.sh check` | 18-nov, sobre el árbol final: **VERDE** — paridad 217/217 en MOD9, 209 y 8 SKIP en MOD8, 217/217 con dos workers; C 117/117; cápsula V6 59/59; sim 15/15, sombra 15/15, norma 9/9; estrés, `packs-abi` y stdlib embebida; ninguna línea `!! stderr:` |
 | Guarda de las 4 portadas (tamaño + encabezados) | |
@@ -206,7 +206,9 @@ vez**.
       12-oct: 0 FALLO en 25 documentos (314 compilados), y los enlaces internos.
       Desde V8 compila también los módulos de JC de `jc.html` (`<pre data-bp="jc">`, un
       módulo entero, como `X.jc`; un fragmento, `data-bp="jc-trozo"`, no se compila): la
-      línea `JC:` del final, **0 FALLO**.
+      línea `JC:` del final, **0 FALLO**. Y los enlaces internos, desde V8 con su script:
+      `python -I -X utf8 bpgenvm-c/tools/enlaces_docs.py`, 0 rotos en lo que se publica
+      (los cuadernos viejos, como `V4_IDEAS.md`, pueden apuntar a fuentes que ya no existen).
 - [ ] **`pruebas.html` con los números de ESTE pre-flight** (desde V8; idea de Eduardo,
       15-nov: *«que los usuarios vean que se está probando a fondo todo el sistema»*): las
       suites de Maven, la red (sus casos y sus pruebas de C), el barrido de samples, los

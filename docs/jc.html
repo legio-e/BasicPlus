@@ -558,8 +558,8 @@ cuenta: 25 pi: 3.5</code></pre>
       cuentan: una sentencia puede ocupar varias líneas.</li>
   <li><strong>Los bloques van entre llaves.</strong> Una llave suelta, sin el <code>if</code>, el bucle o la
       función a la que pertenece, es un error: «un bloque suelto». Con una sola sentencia, las llaves de un
-      <code>if</code>, un <code>while</code>, un <code>for</code> o un <code>foreach</code> se pueden omitir; las del
-      <code>do</code>, mejor no (§8.1).</li>
+      <code>if</code>, un <code>while</code>, un <code>do</code>, un <code>for</code> o un <code>foreach</code> se
+      pueden omitir (§8.1).</li>
   <li><strong>Los comentarios</strong>: <code>//</code> hasta el final de la línea, como en BP, y además
       <code>/* … */</code>, que puede ocupar varias líneas.</li>
   <li><strong>Los nombres</strong>, como en BP: una letra o <code>_</code>, y después letras, dígitos o
@@ -858,7 +858,7 @@ false Ana 3</code></pre>
 café con leche
 dijo "hola" y se fue
 3 3</code></pre>
-<p>Un real con valor entero se escribe sin decimales: <code>3</code>, no <code>3.0</code>, como en BP.</p>
+<p>Un real con valor entero se imprime sin decimales: <code>3</code>, no <code>3.0</code>, como en BP.</p>
 
 <h3 id="arrays">6.4 Arrays</h3>
 <table>
@@ -1076,8 +1076,8 @@ es azul</code></pre>
   <tr><td><code>obj::metodo</code></td><td>igual</td><td>un método de un objeto, como valor (§13, §15)</td></tr>
 </table>
 <p>
-  No hay <code>~</code>, el no de bits (en BP tampoco: se escribe <code>x ^ -1</code>), ni <code>??</code> ni
-  <code>?.</code>: cada uno da un error que lo dice.
+  No hay <code>~</code>, el no de bits (en BP tampoco: en JC se escribe <code>x ^ -1</code>, y en BP,
+  <code>x xor -1</code>), ni <code>??</code> ni <code>?.</code>: cada uno da un error que lo dice.
 </p>
 
 <h3 id="precedencia">7.2 La precedencia, la de C#</h3>
@@ -1557,7 +1557,7 @@ aviso: fin</code></pre>
   <code>objeto::property</code>, del mismo tipo y que quien llama pueda leer y escribir, u otro parámetro
   <code>var</code> por su nombre; una variable o un campo, no. Sin valor por defecto, y no en un constructor, un evento
   ni una <code>native</code>. Las properties de un módulo y las estáticas, todavía no
-  (<a href="manual.html#var">manual §8.1b</a>).
+  (<a href="manual.html#param-var">manual §8.1b</a>).
 </p>
 
 <h3 id="native">9.3 <code>native</code> e <code>inline</code></h3>
@@ -2652,7 +2652,7 @@ hola 2</code></pre>
       lo dice antes de tocar nada.</li>
   <li><strong>Edit → «Traducir a JC» y «Traducir a BP»</strong> guardan el fichero activo y abren su traducción en una
       pestaña nueva, sin guardar. Lo que no se traduce lo dice la consola, con su motivo.</li>
-  <li><strong>«Nuevo proyecto» crea el main en BP.</strong> Para tenerlo en JC: «Traducir a JC», guardar la pestaña como
+  <li><strong>Project → New Project crea el main en BP.</strong> Para tenerlo en JC: «Traducir a JC», guardar la pestaña como
       <code>src/&lt;main&gt;.jc</code> y borrar el <code>.bp</code>.</li>
 </ul>
 
@@ -2678,7 +2678,7 @@ hola 2</code></pre>
 <table>
   <tr><th>Quiero…</th><th>Mira</th></tr>
   <tr><td>las funciones de <code>Core</code>, <code>List</code>, <code>Map</code>, ficheros, <code>Json</code>, <code>Math</code>…</td><td><a href="referencia.html#stdlib">Referencia, §13</a></td></tr>
-  <tr><td>los pines, los buses, la red, el Bluetooth, la tarjeta SD, el sonido</td><td><a href="referencia.html#stdlib-hw-policy">Referencia, §14</a></td></tr>
+  <tr><td>los pines, los buses, la red, el Bluetooth, la tarjeta SD, el sonido</td><td><a href="referencia.html#dispositivos">Referencia, §14</a></td></tr>
   <tr><td>la interfaz gráfica: pantallas, widgets, eventos, formularios</td><td><a href="gui.html">Interfaz gráfica</a></td></tr>
   <tr><td>SQLite y el ORM</td><td><a href="basedatos.html">Bases de datos</a></td></tr>
   <tr><td>el IDE, las placas, los packs, depurar</td><td><a href="guia-ide.html">Guía del IDE</a></td></tr>

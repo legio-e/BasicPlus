@@ -523,8 +523,9 @@ end Main
 - **El compilador**: **402** pruebas propias, y **66** de la VM-Java; **39** programas de `samples/errores/` que
   tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7, 19 y 50); y los **415** samples
   compilan con el compilador de V8 (en V7, 399). Y un `.mod` compilado con V7 carga y corre en las dos VMs de V8.
-- **Los ejemplos de la documentación**: los **343** fragmentos de código de 26 páginas compilan, y una línea que el
-  manual enseña como un error lo da (`#832`) *(por confirmar en el pre-flight)*.
+- **Los ejemplos de la documentación**: los **377** fragmentos de BP y los **78** módulos de JC de 29 páginas compilan,
+  y una línea que el manual enseña como un error lo da (`#832`); y ningún enlace interno de la ayuda está roto (el
+  20-nov).
 - **JC**: el corpus, pasado a JC, da la misma salida (`check-jc`, **215**, el 19-nov); y las
   **848** pruebas de Mono que funcionan, la caja negra de los dos lenguajes (repetido el 20-nov con el compilador que
   se publica: las mismas 848, y fallan las mismas 6).
@@ -715,7 +716,7 @@ release y en `dist/BasicPlus-8.0-win.zip.sha256`). Dentro: `BpIde-8.0.jar` y `bp
 con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con los módulos nuevos), **`packs/`** con los
 **cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
 `samples/` (y el de JC, en `samplesJC/`), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
-volúmenes nuevos, `jc.html` y `pruebas.html` *(por confirmar: su versión inglesa)*), `bpgenvm-c/` (cabeceras y fuentes
+volúmenes nuevos, `jc.html` y `pruebas.html`, en los dos idiomas), `bpgenvm-c/` (cabeceras y fuentes
 que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre, la de la RP2350 con sus dos
 firmwares, y la nueva de la P4X—, el firmware de la C6 de la P4 de Waveshare (el coprocesador de ESP-Hosted 3.0.9, de
 Espressif, para su WiFi y su Bluetooth), su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del
