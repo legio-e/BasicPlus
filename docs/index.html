@@ -440,20 +440,22 @@
   <strong>Metro RP2350B</strong> comparte la imagen de firmware con la Pico —un solo
   <code>.uf2</code> para las dos; la variante se detecta en el arranque—. En V6 se sumaron el
   <strong>ESP32-C3</strong> y el <strong>ESP32-C6</strong> (y el UART ganó un anillo de recepción
-  de 512 bytes), y en V7 la <strong>ESP32-C5</strong>. La ronda de pruebas de V7 pasó en
-  <strong>diez placas y tres arquitecturas</strong>: la Pico 2, la Metro, la S3, la C3, la C5,
-  la C6, las dos P4 (el kit Function-EV y la de Waveshare), la Nucleo y la DK2.
+  de 512 bytes), en V7 la <strong>ESP32-C5</strong> y en V8 la <strong>ESP32-P4X</strong>. La
+  ronda de pruebas de V8 pasó, con las imágenes que se publican, en <strong>las once placas y
+  tres arquitecturas</strong>: la Pico 2, la Metro, la S3, la C3, la C5, la C6, las tres P4 (el
+  kit Function-EV, la de Waveshare y el kit de la P4X), la Nucleo y la DK2.
 </p>
 
 <p>
   <strong>Placas con pantalla (desde V3).</strong> La GUI (LVGL) se ha verificado en placa en las
-  cinco: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + táctil GT911),
-  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600), <strong>Waveshare ESP32-P4</strong>
+  seis: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + táctil GT911),
+  <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600), desde V8 la
+  <strong>ESP32-P4X-Function-EV</strong> (el mismo panel), <strong>Waveshare ESP32-P4</strong>
   (ST7701 480×800), <strong>Waveshare ESP32-C6-LCD-1.3</strong> (ST7789 240×240 por SPI) y, desde
   V7, <strong>Waveshare ESP32-C5-Touch-LCD-2.8</strong> (ST7789 240×320 por SPI + táctil)
   — catálogo de widgets, color, formularios <code>.win</code>, táctil y captura de pantalla
-  (<code>Gui.shot</code>), con el mismo bytecode en todas. En V7, con LVGL desde un pack, en
-  las cinco. La pantalla del programa mide lo que mide el panel.
+  (<code>Gui.shot</code>), con el mismo bytecode en todas. Desde V7, con LVGL desde un pack.
+  La pantalla del programa mide lo que mide el panel.
 </p>
 
 <h2>Créditos</h2>

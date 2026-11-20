@@ -217,9 +217,9 @@ Y en cada una:
   tiempo la sustituirá. El IDF no deja que una imagen sirva para las dos revisiones, así que tiene la suya,
   `bpvm_esp32p4x_merged.bin`, **del mismo código**: cambian la revisión —con ella, lo que pone el IDF: la CPU a 400 MHz
   y sus arreglos para la v3— y el cable del wire, que va por el USB-Serial-JTAG del chip, porque su kit no lleva puente
-  USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7". Frente a la P4 de
-  Waveshare, los programas de `samples/benchmarks` tardan entre un 8 y un 10 % menos, lo del reloj; y, con el cable
-  por USB, imprimir 2 000 líneas cuesta 0,3 s en vez de 20,5 por la UART.
+  USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7", táctil
+  incluido. Frente a la P4 de Waveshare, los programas de `samples/benchmarks` tardan entre un 8 y un 10 % menos, lo
+  del reloj; y, con el cable por USB, imprimir 2 000 líneas cuesta 0,3 s en vez de 20,5 por la UART.
 - **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes de entonces, con la tanda de V7 sin un cambio (0
   de 250 pruebas); la de la P4X, nueva, también con él. En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
 - **La S3 y la C5**, para la WiFi, pasan de 1 a 2 MB de aplicación: la tabla de particiones nueva obliga a borrar la
@@ -248,7 +248,8 @@ Y en cada una:
   de 87,5 a 13,2 µs; un `gc()`, de 2,13 a 0,94 ms).
 
 Las nueve placas del lote final —las diez de V7 menos la P4 del kit— han pasado la tanda de V8 con la imagen que se
-publica (abajo, «Pruebas»); y el kit de la P4X, con la suya, el 19-nov.
+publica (abajo, «Pruebas»); el kit de la P4X, con la suya, el 19-nov; y la P4 del kit, el 20-nov, con la de la P4 de
+Waveshare: **las once**.
 
 ### La robustez en el campo
 
@@ -530,10 +531,10 @@ end Main
 - **JC**: el corpus, pasado a JC, da la misma salida (`check-jc`, **215**, el 19-nov); y las
   **848** pruebas de Mono que funcionan, la caja negra de los dos lenguajes (repetido el 20-nov con el compilador que
   se publica: las mismas 848, y fallan las mismas 6).
-- **En las placas**: la tanda de V8, **24** pruebas —la prueba de fuego y lo nuevo de V8— en las **nueve** placas del
-  lote final y en la P4X, con las imágenes que se publican y la salida comparada con la del PC: igual, salvo lo que
-  difiere a propósito —`lastModified`, que el sistema de ficheros de las placas no tiene, y la GUI en las placas sin
-  pantalla—. Y la prueba de resistencia: **48 horas** en cuatro placas, **61 360** vueltas, sin un
+- **En las placas**: la tanda de V8, **24** pruebas —la prueba de fuego y lo nuevo de V8— en las **once** placas —las
+  nueve del lote final, la P4X y la P4 del kit—, con las imágenes que se publican y la salida comparada con la del
+  PC: igual, salvo lo que difiere a propósito —`lastModified`, que el sistema de ficheros de las placas no tiene, y la
+  GUI en las placas sin pantalla—. Y la prueba de resistencia: **48 horas** en cuatro placas, **61 360** vueltas, sin un
   error ni un reinicio (arriba).
 
 ### Bugs de V7 corregidos
@@ -712,10 +713,11 @@ sigue compilando.
 
 ### Artefactos de la release
 
-**Un solo adjunto**: `BasicPlus-8.0-win.zip` (su `sha256`: *(se anota al montar el ZIP)*; va en la página de la
-release y en `dist/BasicPlus-8.0-win.zip.sha256`). Dentro: `BpIde-8.0.jar` y `bpide.bat`, `bin/` (el micro simulado,
+**Un solo adjunto**: `BasicPlus-8.0-win.zip` (su `sha256` va en la página de la release y en
+`dist/BasicPlus-8.0-win.zip.sha256`). Dentro: `BpIde-8.0.jar` y `bpide.bat`, `bin/` (el micro simulado,
 con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con los módulos nuevos), **`packs/`** con los
-**cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
+**cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`, cada uno, byte a
+byte, el de su compilación (`#679`)—, `bpdevices/`,
 `samples/` (y el de JC, en `samplesJC/`), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
 volúmenes nuevos, `jc.html` y `pruebas.html`, en los dos idiomas), `bpgenvm-c/` (cabeceras y fuentes
 que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre (la de la RP2350, con sus dos

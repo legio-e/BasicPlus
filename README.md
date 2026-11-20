@@ -206,18 +206,20 @@ validated on the board with real sensors: GPIO, **SPI** (BME688), **UART**
 those **same four buses** were validated on the board with real sensors
 (BME688 over SPI, BME280 over I2C, GPIO and UART loopbacks) — the **three
 non-graphical families are on par**. The **Metro RP2350B** shares the firmware
-image with the Pico. The **ESP32-C3** and **ESP32-C6** joined in V6, and the
-**ESP32-C5** in V7, with the same shared code. The V7 test round passed on
-ten boards: Pico 2, Metro, S3, C3, C5, C6, both P4s (the Function-EV kit and the
-Waveshare), Nucleo and DK2.
+image with the Pico. The **ESP32-C3** and **ESP32-C6** joined in V6, the
+**ESP32-C5** in V7 and the **ESP32-P4X** in V8, with the same shared code. The
+V8 test round passed on all eleven boards, with the images being released:
+Pico 2, Metro, S3, C3, C5, C6, the three P4s (the Function-EV kit, the Waveshare
+and the P4X kit), Nucleo and DK2.
 
 **The boards with a screen (since V3).** The GUI (LVGL) has been verified on the
-board on all five: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
-**ESP32-P4-Function-EV** (EK79007 1024×600), **Waveshare ESP32-P4** (ST7701
-480×800), **Waveshare ESP32-C6-LCD-1.3** (ST7789 240×240, no touch) and
-**Waveshare ESP32-C5-Touch-LCD-2.8** (ST7789 240×320 + touch) — widget
-catalog, color, `.win` forms and touch, the same bytecode on all of them. In
-V7, with LVGL from a pack, on all five.
+board on all six: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
+**ESP32-P4-Function-EV** (EK79007 1024×600), **ESP32-P4X-Function-EV** (the
+same panel, since V8), **Waveshare ESP32-P4** (ST7701 480×800), **Waveshare
+ESP32-C6-LCD-1.3** (ST7789 240×240, no touch) and **Waveshare
+ESP32-C5-Touch-LCD-2.8** (ST7789 240×320 + touch) — widget catalog, color,
+`.win` forms and touch, the same bytecode on all of them. Since V7, with LVGL
+from a pack.
 
 ## The IDE
 
@@ -303,23 +305,21 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V7** (October 2026). V1 proved the idea; V2 hardened and
+**V8** (November 2026). V1 proved the idea; V2 hardened and
 broadened it; V3 gave it a face; V4 fixed its foundations; V5 gave it somewhere to
-put things; V6 put the microcontroller code in order; **V7 leaves one image per
-micro**: the screen joins SQLite in a pack, and the user decides what goes on top,
-without building images or compiling C. It also finishes a huge number of pending
-items — `native` functions now cover practically the whole language, and a
-program's objects release their resources when it ends — and turns on the second
-core of the dual-core boards. A new board comes in, the **ESP32-C5**, with a touch
-screen. Eight images for ten boards and three architectures; verified on real
-hardware on **all ten**.
+put things; V6 put the microcontroller code in order; V7 left one image per
+micro; **V8 connects it**: WiFi and Bluetooth on the ESP32s with PSRAM, and the
+IDE works with the board without a cable. It also brings JC, a second language
+with the look of Java and C# over the same compiler and the same bytecode, tested
+with Mono's C# tests; and a 48-hour reliability test on four boards. A new board
+comes in, the **ESP32-P4X**, the new revision of the P4. Nine images for eleven
+boards and three architectures; verified on real hardware on **all eleven**.
 
 Downloads and full detail: the
-**[v7.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v7.0)** and the
-**[release notes](docs/RELEASES.md)** *(Spanish)*; what V6 brought — the shared
-microcontroller code, the C3 and the C6, the GUI in its own thread, screen
-capture — is in the
-**[v6.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v6.0)**.
+**[v8.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v8.0)** and the
+**[release notes](docs/RELEASES.md)** *(Spanish)*; what V7 brought — one image per
+micro, the screen and SQLite in packs, the second core, the ESP32-C5 — is in the
+**[v7.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v7.0)**.
 
 ## License
 

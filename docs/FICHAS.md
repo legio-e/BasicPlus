@@ -7666,7 +7666,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `.mdn` de V7, sin probar (mejor recompilarlo); el firmware de la C6, en el ZIP. **El lote de Mono, repetido**
   (Eduardo: *«Sí, repetirlo»*): 848 de 2 322, las mismas 6 que fallan, ningún veredicto cambia frente al del 7-nov.
   `samplesJC/` va en el ZIP (*«Sí, en el ZIP»*). El micro simulado, con LVGL (2 075 `lv_`) y SQLite (305). **La P4 del
-  kit, por la tarde** (Eduardo: *«Estoy en una sesión remota así que no puedo conectar nada»*).
+  kit, por la tarde** (Eduardo: *«Estoy en una sesión remota así que no puedo conectar nada»*). Y por la mañana,
+  además: `jc.html` en inglés y lo que vio su traductor en el español, el último `doc_frags` (0 FALLO en 29 documentos)
+  y un script para los enlaces, `bpgenvm-c/tools/enlaces_docs.py` (0 rotos en lo que se publica) (`9309d53d`); el
+  watchdog, «perro guardián» o «watchdog», nunca «perro» a secas (`fd19abb1`; Eduardo: *«Perro referido a Watchdog
+  suena un poco raro en español»*); el cuerpo de la release (`dist/release-v8.0.md`, fuera del repositorio como los de
+  V6 y V7) y lo que no cuadraba en las notas (`20dc67fe`); y el ZIP de ensayo, que paró tres veces, las tres por sus
+  guardianes (`7a3b13da`: los packs de la GUI de `packs/` eran los de V7). **Por la tarde, con las placas** (Eduardo:
+  *«OK, graba lo que necesites»*): la P4X, con el `Gui` de V8 y su táctil (`#846`); y **la P4 del kit**, la prueba a
+  mano de las pruebas finales. Grabada con la imagen de `dist/`, la de la P4 de Waveshare (el `HELLO`, del 18-nov; su
+  CRC, el de la compilada en el PC); lo de su `/lib` que viene de la imagen, repuesto solo al arrancar (19 módulos); su
+  zona de packs, formateada, con el `Stdlib`, el `SQLite` y el `Gui` de V8; y las copias sueltas de V7 que quedaban en
+  `/lib` (`Collections`, `Gui`, `Json` y `Str`, de una tanda o del IDE), quitadas, porque taparían al pack. La tanda de
+  24 (`compat/informes/lote_v8_20nov_p4kit.md`), como en el lote: 20 iguales, 2 sin petar y las dos de `lastModified`,
+  con el mismo diff; la captura de `GuiShot`, buena; y la pantalla de un minuto (Eduardo: *«El panel OK»*). Con ella,
+  **las once placas** en la tanda de V8, y así en las notas, `pruebas.html` (los dos idiomas), el cuerpo de la
+  release, los dos README (el «Verificado en hardware real» y el «Estado», de V7 a V8) y las dos portadas. Eduardo,
+  probando el IDE: *«todo OK»*.
 
 #### ✅ `#846` — la ESP32-P4X (la P4 de la revisión v3.x): su imagen, del mismo código que la de la P4 (abierta y **CERRADA el 19-nov**, el commit de `#846`, con el kit nuevo de Eduardo, el ESP32-P4X-Function-EV; Eduardo: *«la ESP32-P4X es la corrección de un bug de Expressif. Con el tiempo la versión 1.x desaparece así que esta imagen es necesaria. Lo de si va ahora en V8 o en V9, yo creo que es razonable meterla ya y no esperar a la V9»*)
 
@@ -7714,8 +7730,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   ⚠️ **Pero con el `Gui.pack` de V7** (720 896 B en la zona; el de V8, 729 088): lo grabé desde `packs/`, que seguía
   con los de la GUI del 12-oct —`#817` los rehízo el 13-nov en `bpstdlib/gui/…/out/`, y nadie los copió—. Lo cazó el
   20-nov el guardián del empaquetador (`#679`: «packs/Gui.pack … NO es el de la compilación»); `packs/` ya está al día
-  (`Gui` y `GuiMini`; los otros tres eran los de su compilación). **Por repetir**, con el de V8: borrar el `Gui` de V7
-  de la P4X, grabar el de V8, y las dos de la GUI y la pantalla de un minuto. En
+  (`Gui` y `GuiMini`; los otros tres eran los de su compilación). **Repetido el 20-nov**, con el de V8 (Eduardo: *«OK,
+  graba lo que necesites»*): borrado el `Gui` de V7 y grabado el de V8 (729 088 B; el bloque de RAM, en el mismo
+  `0x48001000`); las dos de la GUI (`C:\tmp\p4x\tanda_p4x_gui_v8.md`), `GuiWinJson` IGUAL y `GuiShot` sin petar, con
+  la captura buena; la pantalla de un minuto (Eduardo: *«El panel OK»*); y el táctil, que no se había probado:
+  `TactilP4X` (una copia de `samples/C5Touch.bp` que se para a la quinta pulsación), las cinco pulsaciones contadas. En
   `dist/firmware`, ésa (la app de su `_merged`, `9aecd6ef`), con el firmware de la C6: diez ficheros, `sha256sum -c`,
   10 OK, y las ocho de ayer con su misma suma.
 - **El rendimiento, frente a la P4** (19-nov, noche; Eduardo: *«Lo que gustaría es una prueba de rendimiento entre P4X
