@@ -103,6 +103,27 @@ public final class AotMain {
         }
     }
 
+    /** #847 — ¿tiene el módulo alguna función que el AOT traduzca? Las mismas que recoge
+     *  {@link AotCEmitter#emitModule} en su primera pasada: las funciones del módulo y los métodos
+     *  de sus clases, `native` y no `intrinsic`. Si las dos preguntas divergieran, un módulo con
+     *  natives se quedaría sin traducir: por eso es la misma, y la prueban AotImportsTest y el
+     *  `.mdn` de cada pack en la red. */
+    static boolean tieneNative(Ast.ModuleNode module) {
+        for (Ast.ITopLevelDecl d : module.defs) {
+            if (d instanceof Ast.FuncDef) {
+                Ast.FuncDef f = (Ast.FuncDef) d;
+                if (f.isNative && !f.isIntrinsic) return true;
+            } else if (d instanceof Ast.ClassDef) {
+                for (Ast.ITopLevelDecl m : ((Ast.ClassDef) d).members) {
+                    if (!(m instanceof Ast.FuncDef)) continue;
+                    Ast.FuncDef f = (Ast.FuncDef) m;
+                    if (f.isNative && !f.isIntrinsic) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /** El `.bp` no parsea (no debería ocurrir si el `.mod` ya compiló). */
     public static final class ParseFailedException extends Exception {
         ParseFailedException(String m) { super(m); }
@@ -164,6 +185,16 @@ public final class AotMain {
                 for (ParserError e : parser.getErrors()) sb.append("\n  ").append(e);
                 throw new ParseFailedException(sb.toString());
             }
+        }
+
+        // #847 (20-nov) — un módulo sin `native` no necesita sus imports: no hay C que generar.
+        // Hasta hoy los resolvía igual, y uno que sólo viaja en un pack —SQLite, que el AOT no
+        // mira (el compilador sí)— daba «falta el modulo 'SQLite'» en el Run de SqlDemo, que no
+        // tiene ninguna native y corría bien. Lo que sale es lo de siempre para un módulo sin
+        // native: sin C y sin avisos (abajo, `csrc.isEmpty()`). Un módulo CON native sigue
+        // resolviendo sus imports, y uno que falta sigue siendo un error con su nombre (#542).
+        if (!tieneNative(module)) {
+            return new AotResult(null, module.name, new java.util.ArrayList<>());
         }
 
         // 2.5 Semántico + resolución de imports (igual que Main.compileFull): sin

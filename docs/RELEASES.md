@@ -522,7 +522,7 @@ end Main
   ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más delicado con su **sabotaje**: un
   interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y el micro simulado, **15** casos;
   la sombra, **15**; la norma de versiones, **9**.
-- **El compilador**: **402** pruebas propias, y **66** de la VM-Java; **39** programas de `samples/errores/` que
+- **El compilador**: **404** pruebas propias, y **66** de la VM-Java; **39** programas de `samples/errores/` que
   tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7, 19 y 50); y los **415** samples
   compilan con el compilador de V8 (en V7, 399). Y un `.mod` compilado con V7 carga y corre en las dos VMs de V8.
 - **Los ejemplos de la documentación**: los **377** fragmentos de BP y los **78** módulos de JC de 29 páginas compilan,
@@ -586,7 +586,9 @@ end Main
   (`#694`); una línea del cable que se estancaba 300 ms se tiraba en silencio —así se perdió un KILL— (`#693`); dos
   Run seguidos con la VM local dejaban la primera dando vueltas, y ni el Stop ni cerrar el IDE la paraban (`#822`); y
   con la VM local, un error daba la posición y no la línea (`#788`). **En la placa, un error no decía su línea**
-  (`#582`): ahora la dice, salvo dentro de una `native`.
+  (`#582`): ahora la dice, salvo dentro de una `native`. Y al ejecutar en la placa un programa que importa `SQLite`
+  sin una sola `native`, como `SqlDemo`, el AOT avisaba «falta el modulo 'SQLite'» y el programa corría bien: un
+  módulo sin `native` ya no le pide sus imports (`#847`).
 
 ### Qué implica al actualizar desde V7
 
@@ -703,6 +705,8 @@ sigue compilando.
 - **La C3 va justa de memoria**, con sus 96 KB de heap: optimizarla, en V9. Y en las ESP32 con PSRAM, pasar a la PSRAM
   lo que la VM aún tiene en la RAM interna (`#710`), también.
 - **La S3 no tiene AOT** (Xtensa): sus natives corren interpretadas.
+- **El AOT no mira los packs** (`#847`, a V9): una `native` de un módulo que importa `SQLite` —que sólo viaja en su
+  pack— corre interpretada, con un aviso; el compilador sí lo encuentra, y el programa funciona.
 - **El `Wdt` de las STM32 lanza**: su IWDG no se puede parar por software. Y las STM32 siguen sin `Neopixel` ni SD.
 - **`input()`** sigue funcionando sólo en la VM Java.
 - **Para V9, también**: los conjuntos, como en Pascal; los recursos grandes, fuera del bloque de datos del módulo

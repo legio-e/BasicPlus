@@ -2,6 +2,7 @@ package basicplus.frontend;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -97,6 +98,53 @@ class AotImportsTest {
         AotMain.AotResult r = AotMain.emitAotC(bp, work, true, out, java.util.Collections.<String>emptyList());
         assertNotNull(r.cFile, "con los .mod de la app a la vista, X debe emitir C");
         assertTrue(r.cFile.startsWith(work), "el C va a target/, no al outDir: " + r.cFile);
+    }
+
+    /** #847 (20-nov) — un módulo SIN native no necesita sus imports para el AOT. Hasta hoy los resolvía
+     *  igual, y en el Run de {@code SqlDemo} (importa SQLite, que sólo viaja en un pack, y el AOT no mira
+     *  los packs) salía «[aot] omitido SqlDemo.bp: … falta el modulo 'SQLite'», con el programa corriendo
+     *  bien. Ahora sale como siempre ha salido un módulo sin native: sin C y sin avisos. */
+    @Test @DisplayName("#847: un módulo sin native no resuelve sus imports — ni Core ni uno que no existe")
+    void sinNativeNoMiraLosImports(@TempDir Path tmp) throws Exception {
+        Main.STDLIB_DIR = null;   // ni la stdlib: no le hace falta
+        Path bp = escribe(tmp, "X", String.join("\n",
+            "module X",
+            "  import Core",
+            "  import Fantasma",
+            "  function Main()",
+            "    print 1",
+            "  end Main",
+            "end X", ""));
+        AotMain.AotResult r = AotMain.emitAotC(bp, tmp.resolve("out"), true);
+        assertNull(r.cFile, "sin native no hay C");
+        assertTrue(r.warnings.isEmpty(), "ni avisos: " + r.warnings);
+        assertFalse(Files.exists(tmp.resolve("out").resolve("aot_X.c")));
+    }
+
+    /** #847 — el control: la pregunta mira también los métodos de las clases (el aplanado de AotCEmitter).
+     *  Un módulo cuya única native es un método sigue resolviendo sus imports, y el que falta sigue siendo
+     *  un error con su nombre (#542). */
+    @Test @DisplayName("#847: una native que es un método — sigue mirando los imports, y el que falta es un error")
+    void nativeEnMetodoSigueMirandoLosImports(@TempDir Path tmp) throws Exception {
+        Main.STDLIB_DIR = StdlibDeTest.paraFormato(tmp).getAbsolutePath();
+        Path bp = escribe(tmp, "X", String.join("\n",
+            "module X",
+            "  import Core",
+            "  import Fantasma",
+            "  public class Caja",
+            "    public property n: integer",
+            "    public function Caja(v: integer)",
+            "      this.n := v",
+            "    end Caja",
+            "    public native function doble(): integer",
+            "      return this.n * 2",
+            "    end doble",
+            "  end Caja",
+            "end X", ""));
+        AotMain.ImportsFaltanException ex = assertThrows(AotMain.ImportsFaltanException.class,
+                () -> AotMain.emitAotC(bp, tmp.resolve("out"), true));
+        assertTrue(ex.getMessage().contains("'Fantasma'"), ex.getMessage());
+        assertFalse(Files.exists(tmp.resolve("out").resolve("aot_X.c")), "no debe emitir C a ciegas");
     }
 
     /** Un proyecto que usa una librería en pack ({@code "dependencies": ["../bpstdlib/sqlite/out"]}): el

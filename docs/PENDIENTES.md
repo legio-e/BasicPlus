@@ -424,6 +424,13 @@ escribir un programa.
   llevado a mano a una placa de otra familia, el programa corre igual, pero sus `native` van
   interpretadas (la placa tolera el bloque ajeno). El `.mod` multifamilia —el mismo fichero
   para varias familias— es de V9, y sólo dentro de un proyecto que diga qué familias lleva.
+- **El AOT no mira los packs** (`#847`). Al ejecutar en la placa, el IDE traduce a código
+  nativo las `native` de cada módulo, y para eso lee las interfaces de sus imports: en la
+  stdlib, junto al fuente y en el proyecto, pero no dentro de los packs, como hace el
+  compilador. Un módulo con `native` que importa `SQLite` —que sólo viaja en su pack— sale
+  con «[aot] omitido … falta el modulo 'SQLite'» y sus natives corren interpretadas: más
+  lentas, y bien. Un módulo sin `native`, como `SqlDemo`, ya no lo pide (V8). Que el AOT
+  busque en los packs: V9.
 - **El depurador no despliega los objetos** (`M5`). Un local que es un objeto sale como
   `@<valor>`, sin sus campos ni sus properties (heredadas o no). La información ya está en
   la interfaz de cada clase, en el módulo; usarla y una vista en árbol en el IDE: V9.

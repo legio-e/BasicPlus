@@ -7682,7 +7682,38 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   con el mismo diff; la captura de `GuiShot`, buena; y la pantalla de un minuto (Eduardo: *«El panel OK»*). Con ella,
   **las once placas** en la tanda de V8, y así en las notas, `pruebas.html` (los dos idiomas), el cuerpo de la
   release, los dos README (el «Verificado en hardware real» y el «Estado», de V7 a V8) y las dos portadas. Eduardo,
-  probando el IDE: *«todo OK»*.
+  probando el IDE: *«todo OK»*. El ZIP definitivo (`9a56339e…`), y en su pasada por él, en una carpeta limpia
+  (*«IDE OK. Ayuda OK. VM-C OK. Dispositivos OK.»*), un aviso falso del AOT en el Run de `SqlDemo` en la placa:
+  `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez.
+
+#### 🔵 `#847` — el AOT del IDE no ve los módulos que sólo viajan en un pack: `SqlDemo`, sin una `native`, sale con «[aot] omitido SqlDemo.bp: … falta el modulo 'SQLite' … ¿BpVM.cfg o --stdlibDir?, ¿compilado antes? (se ejecutará interpretado)» (abierta el 20-nov, en las pruebas finales: Eduardo, con el IDE del ZIP en una carpeta limpia; desde V7 · **(a), hecha el 20-nov, en V8; (b), a V9**)
+
+- **Lo visto** (el log de Eduardo, *Run on Device* de `samples/SqlDemo.bp` en la P4 del kit): «compilación OK», el aviso
+  de arriba, «AOT: sin funciones native que compilar», y el programa, entero y bien (`exit 0`). El aviso asusta y
+  apunta a una mala configuración que no hay.
+- **La causa** (leído el código): antes del RUN, el IDE pasa el AOT (`AotBuild` → `AotMain.emitAotC`) por cada `.bp`
+  del programa, y el AOT resuelve los imports con `Main.loadImportsForAnalyzer`, que busca la interfaz en la stdlib,
+  junto al fuente, en el `out/` y en las dependencias. El compilador, ANTES de eso, mira además los packs instalados
+  (`packsQueTraen`, el paso 2b de V5: la biblioteca de packs del IDE, o el `packsDir` del `BpVM.cfg`) y mete la
+  interfaz en su caché; el AOT no da ese paso. `SQLite` sólo viaja en `packs/SQLite.pack` —en el ZIP no hay `.mod` ni
+  `.bpi` suyo—, así que el compilador lo encuentra y el AOT no.
+- **Desde V7**: el ZIP de V7 ya traía `SQLite` sólo en su pack, y el AOT busca así desde `#542` (26-sep). No lo trae V8.
+- **Qué pasa**: (1) un programa SIN `native` que importa `SQLite`, sólo el aviso, falso; (2) uno CON `native` que lo
+  importa, sus natives corren interpretadas —más lentas, y bien—, con el mismo aviso.
+- **Arreglo posible, por partes**: (a) un módulo sin `native` no necesita sus imports para el AOT: mirarlo tras el
+  parseo y salir como hoy («sin funciones native»), sin resolverlos —lo que sale no cambia, porque no hay C que
+  generar; sólo se va el aviso falso—; (b) que el AOT busque en los packs como el compilador, para el caso (2).
+- **Decidido** (Eduardo, el mismo día: *«Arreglo pequeño en V8»*): (a) en V8, y (b) en V9.
+- **(a), hecha**: `AotMain.emitAotC` pregunta, tras el parseo, si el módulo tiene algo que traducir (`tieneNative`:
+  las funciones del módulo y los métodos de sus clases, `native` y no `intrinsic` —la misma pregunta que
+  `AotCEmitter.emitModule` en su primera pasada—), y sin nada sale como siempre ha salido un módulo sin native, sin C
+  y sin avisos, ya sin resolver sus imports. Dos pruebas en `AotImportsTest`, cada una con su sabotaje: un módulo sin
+  native, con `Core` sin stdlib y un import que no existe, sale sin C y sin avisos (anulada la salida, cae); y una
+  native que es un método sigue resolviendo sus imports, y el que falta es un error con su nombre (sin los métodos en
+  la pregunta, cae). La suite del compilador, **404/404**; el corpus con el jar de antes y el nuevo (765 fuentes): los
+  763 `.mod`, iguales byte a byte, y lo que no compila, con los mismos diagnósticos; y la red, **VERDE**, con las
+  cuentas de siempre (paridad 217/217; MOD8, 209 y los mismos 8 SKIP; dos workers, 217/217; C, 117/117; sim, sombra y
+  norma, enteras; `packs-abi` y stdlib embebida). Lo que queda, (b), en `PENDIENTES` («Para V9») y en las notas.
 
 #### ✅ `#846` — la ESP32-P4X (la P4 de la revisión v3.x): su imagen, del mismo código que la de la P4 (abierta y **CERRADA el 19-nov**, el commit de `#846`, con el kit nuevo de Eduardo, el ESP32-P4X-Function-EV; Eduardo: *«la ESP32-P4X es la corrección de un bug de Expressif. Con el tiempo la versión 1.x desaparece así que esta imagen es necesaria. Lo de si va ahora en V8 o en V9, yo creo que es razonable meterla ya y no esperar a la V9»*)
 
