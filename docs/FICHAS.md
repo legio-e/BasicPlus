@@ -39,8 +39,9 @@
 ## 🚀 V8 PUBLICADA — 20-nov-2026
 
 V8, la de la red y el Bluetooth, empezó el 14-oct en modo experimentar y cerró su alcance el 6-nov; la recta final
-—los pendientes de las pruebas finales, la documentación (`D1`) y las pruebas finales—, hecha. **V9, sin abrir**: lo que
-V8 le pasa, en su bloque de §ABIERTAS y en `PENDIENTES` («Para V9»).
+—los pendientes de las pruebas finales, la documentación (`D1`) y las pruebas finales—, hecha. **Lo siguiente, la
+suite (`#802`), como una V8.1** (Eduardo, el mismo día); **después, V9**: lo que V8 le pasa, en su bloque de §ABIERTAS y
+en `PENDIENTES` («Para V9»).
 
 | qué | dónde |
 |---|---|
@@ -9073,7 +9074,7 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Comprobado en la P4**, con los plazos de verdad: quieta 25 s y un programa callado 30 s, sin falsa alarma; parado en el depurador, contesta; y cuando la radio desaparece, el IDE lo dice a los 11 s y se vuelve a conectar. En la ventana, Eduardo: *«OK, todo funciona»*.
 - **Las placas:** la P4, la S3 y la C5, con la imagen nueva el 7-nov. Una placa con WiFi y una imagen anterior daría, con este IDE, «conexión perdida» con un programa callado más de 15 s.
 
-#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir · **14-nov: decidido el orden** —la suite, entre V8 y V9—)
+#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir · **14-nov: decidido el orden** —la suite, entre V8 y V9— · **20-nov: LO SIGUIENTE, como una V8.1**)
 
 - **La idea:** *«con JC llamar al proyecto BasicPlus se queda un poco corto»*: el nombre de un grupo de proyectos, y dos: el IDE, el compilador y la VM-Java, y la VM-C con las de los micros.
 - **Medido** (`V8_IDEAS` §E14): el código se separa limpio, por contratos; en medio quedan la stdlib, la red, el AOT, lo que usa el IDE y los documentos; y en V8, uno de cada tres commits de código toca Java y C a la vez.
@@ -9083,6 +9084,9 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   solamente la suite. Lo que si haremos antes de publicar es verificar que todo funciona antes de publicar.»*): V8 se
   publica como siempre; después, entre V8 y V9, una versión que sólo reorganiza en la suite, sin cambios ni mejoras,
   verificada entera antes de publicarla. Nada en GitHub sin su palabra.
+- **20-nov, con V8 publicada** (Eduardo: *«Antes de V9 tenemos que crear la Suite y publicarla. Será como una versión
+  V8.1. Pero por hoy es suficiente, a descansar y mañana empezaremos estudiando como hacerlo.»*): lo siguiente es la
+  suite, como una V8.1. La próxima sesión empieza estudiando cómo hacerla, sin tocar nada.
 
 #### ✅ `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi · **CERRADA el 13-nov** sin cambiar el código, el commit de `#801`; Eduardo: *«Yo haría a)»*, documentarlo)
 
