@@ -286,7 +286,7 @@ acabó un «No space in heap» falso (`#762`, `#829`); y un motor nativo que no 
 en cada `INFO` (`#798`).
 
 Lo que no es sencillo —contener el fallo en el run que lo tiene, el MPU, un contador de reinicios contra el bucle del
-autorun, un perro para el sistema y el informe del pánico de las ESP32— queda para V9 (abajo, «Lo que todavía no»).
+autorun, un perro guardián para el sistema y el informe del pánico de las ESP32— queda para V9 (abajo, «Lo que todavía no»).
 
 ### Las cadenas, mucho más rápidas
 
@@ -685,7 +685,7 @@ sigue compilando.
   de los dispositivos, la PIO del RP2350 programable desde BP, más UART en las ESP32 y el DMA de `Uart`. Mientras, con
   un run, un `Uart.read` que espera para a los demás hilos: el rodeo, `available()` y `sleep`.
 - **Que el fallo fatal de un run no tumbe la placa** (la tabla de la robustez): contenerlo en el run, el MPU de la M33,
-  un contador de reinicios contra el bucle del autorun, un perro del sistema que vigile a `io` y el informe del pánico
+  un contador de reinicios contra el bucle del autorun, un perro guardián del sistema que vigile a `io` y el informe del pánico
   de las ESP32 en el log, a V9.
 - **La imagen de dos núcleos de la RP2350 sigue siendo más lenta con un solo hilo** (`#665`, a V9): en la Pico 2,
   `PrintBench` tarda 1 321 ms frente a 745 con la de un núcleo, y el cálculo, un 7,7 % más; en la Metro, un 3,5 % (en

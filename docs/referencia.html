@@ -3639,13 +3639,13 @@ ra.onWheel := pant::rueda
   <strong>Tras un fallo fatal, sin autorun</strong> (V7). En el RP2350 con dos núcleos —la
   imagen de por defecto—, un fallo fatal (un HardFault, la memoria o la pila del sistema) deja su
   informe en el log y <strong>reinicia la placa</strong>; en las ESP32, un fallo así es un pánico
-  del IDF (o su perro de interrupciones), que da su informe por la consola y también
+  del IDF (o su perro guardián de las interrupciones), que da su informe por la consola y también
   <strong>reinicia la placa</strong>. El arranque siguiente lo dice —en el log, y como causa del
   reinicio: <code>Machine.resetCause()</code> es <code>"fallo fatal"</code> en el RP2350, y
   <code>"panic/exception"</code> o <code>"int-watchdog"</code> en las ESP32— y <strong>no lanza
   el autorun</strong> («<code>autorun: … NO arranca: el arranque anterior acabo en un fallo
   fatal</code>»; las ESP32 lo dicen también en la consola): un programa que falla al arrancar
-  sería un bucle de reinicios. Se arranca a mano desde el IDE. El perro del módulo
+  sería un bucle de reinicios. Se arranca a mano desde el IDE. El perro guardián del módulo
   <code>Wdt</code> no es un fallo fatal: tras él, el autorun se lanza. En las STM32, un HardFault
   deja su informe en el log y la placa <strong>parada</strong>: no se reinicia sola.
 </p>

@@ -408,12 +408,12 @@ escribir un programa.
   (`#839`; antes se quedaban paradas). La línea del autorun que no arranca («autorun: … NO
   arranca: el arranque anterior acabo en un fallo fatal…») y la causa de cada reinicio
   («boot: causa del reset = …») quedan en el log aunque esté apagado (`#837`, `#838`). El
-  perro de tareas del módulo `Wdt` no es un fallo fatal: tras él, el autorun sí se lanza (y
+  perro guardián de tareas del módulo `Wdt` no es un fallo fatal: tras él, el autorun sí se lanza (y
   si el programa vuelve a caer, la salida es la ventana del autorun: con el IDE conectado,
   al arrancar da unos segundos para pararlo con *Stop*). Para V9 (la tabla de la robustez,
   18-nov): terminar sólo el run que falla y que `io` siga, el MPU protegiendo la memoria
-  del sistema, un contador de reinicios contra el bucle del autorun, un perro del sistema
-  para `io` y el informe del *panic* de las ESP32 en el log.
+  del sistema, un contador de reinicios contra el bucle del autorun, un perro guardián del
+  sistema para `io` y el informe del *panic* de las ESP32 en el log.
 - **Dentro de una `native`, un error no dice su línea** (`#582`; una limitación conocida,
   Eduardo, 14-nov). Desde V8, un error sin atrapar en la placa trae su cadena de llamadas y
   el IDE la traduce a fichero y línea (la placa da direcciones y el PC pone los nombres,

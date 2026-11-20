@@ -1254,16 +1254,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   En la Pico&nbsp;2 y la Metro (la imagen de dos núcleos, la de por defecto) y en las
   STM32, un <strong>fallo fatal</strong> —no una excepción del programa, sino un fallo del
   sistema: un HardFault, una pila de tarea desbordada…— deja su informe en el log,
-  aunque esté apagado, y reinicia la placa (las STM32, desde V8, por su perro y a los
-  pocos segundos: antes se quedaban paradas); en las ESP32, un fallo así es un pánico
-  del IDF (o su perro de interrupciones), que da su informe por la consola y también
+  aunque esté apagado, y reinicia la placa (las STM32, desde V8, por su perro guardián y
+  a los pocos segundos: antes se quedaban paradas); en las ESP32, un fallo así es un pánico
+  del IDF (o su perro guardián de las interrupciones), que da su informe por la consola y también
   reinicia la placa. Y ese arranque <strong>no lanza el autorun</strong>: un programa
   que fallara al arrancar la tendría reiniciándose sin fin. El log lo dice, también si
   está apagado («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»;
   las ESP32, también la consola), el <em>Info</em> da la causa del reinicio —«fallo
   fatal» en la RP2350 y en las STM32; «panic/exception» o «int-watchdog» en las ESP32—,
   que el log de todas apunta también al arrancar («boot: causa del reset = …»), y el
-  programa se arranca a mano desde el IDE. El perro del módulo <code>Wdt</code> no es
+  programa se arranca a mano desde el IDE. El perro guardián del módulo <code>Wdt</code> no es
   un fallo fatal: tras él, el autorun se lanza.
 </p>
 
