@@ -64,7 +64,7 @@ al arrancar, y `wifi=0` la deja apagada diga lo que diga el fichero. **La radio 
 cuando hace falta y se apaga sola tras diez minutos sin actividad (una conexión abierta, del programa o del IDE, es
 actividad). La clave de la red va en claro en el fichero: la seguridad, de momento, no.
 
-En la P4 la WiFi va por la ESP32-C6 que la placa lleva al lado: su Entorno lo dice con `radio=c6`, y esos pines pasan
+En la P4 de Waveshare la WiFi va por la ESP32-C6 que la placa lleva al lado: su Entorno lo dice con `radio=c6`, y esos pines pasan
 a ser del sistema (sin la línea, no se toca ningún pin y la placa no tiene WiFi). Esa C6 necesita un firmware nuevo
 (abajo, «Qué implica»). La S3 y la C5 llevan la radio en su chip.
 
@@ -102,8 +102,8 @@ y la lista de redes desde un programa. Todo, en la referencia §14.19.
 
 ### El Bluetooth: el teclado y el ratón
 
-**El teclado y el ratón Bluetooth LE** (hito H2, `#697`), en la P4, la C5 y la S3 —en la P4, por la misma C6 que la
-WiFi—. Se emparejan una vez y, desde entonces, vuelven solos por su dirección cada vez que se enciende el Bluetooth.
+**El teclado y el ratón Bluetooth LE** (hito H2, `#697`), en la P4 de Waveshare, la C5 y la S3 —en la P4, por la misma
+C6 que la WiFi—. Se emparejan una vez y, desde entonces, vuelven solos por su dirección cada vez que se enciende el Bluetooth.
 Lo que mandan llega a un teclado y a un ratón del sistema, que juntan todos los aparatos conectados, y de ahí, a la
 GUI y al programa:
 
@@ -220,8 +220,8 @@ Y en cada una:
   USB-UART. Probada en el kit ESP32-P4X-Function-EV, con la tanda de V8 y la GUI en su panel de 7". Frente a la P4 de
   Waveshare, los programas de `samples/benchmarks` tardan entre un 8 y un 10 % menos, lo del reloj; y, con el cable
   por USB, imprimir 2 000 líneas cuesta 0,3 s en vez de 20,5 por la UART.
-- **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes, con la tanda de V7 sin un cambio (0 de 250
-  pruebas). En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
+- **La familia ESP32, al ESP-IDF 6.1** (`#707`): las cinco imágenes de entonces, con la tanda de V7 sin un cambio (0
+  de 250 pruebas); la de la P4X, nueva, también con él. En la S3, la C5 y la P4, el perro guardián de las interrupciones pasa de 300 a 800 ms.
 - **La S3 y la C5**, para la WiFi, pasan de 1 a 2 MB de aplicación: la tabla de particiones nueva obliga a borrar la
   flash una vez (abajo, «Qué implica»).
 - **La S3 dice la frecuencia a la que va** —160 MHz; decía 240— y se puede subir a 240 con la clave `cpu.mhz` del
@@ -231,7 +231,7 @@ Y en cada una:
 - **La P4**: su caché L2, de 128 a 256 KB (`#737`): un programa que mueve muchos datos en la PSRAM ya no echa al
   intérprete de la caché —interpretar después de leer 128 KB costaba un 97 % más; ahora, un 1 %—, a cambio de 128 KB
   de RAM interna.
-- **Las cinco ESP32**: `Machine.cpuFreqHz()` y el `INFO` dicen la frecuencia de verdad, y `setCpuFreqMHz` funciona
+- **Las ESP32**: `Machine.cpuFreqHz()` y el `INFO` dicen la frecuencia de verdad, y `setCpuFreqMHz` funciona
   —la S3 y la C5, 80, 160 o 240 MHz; la C3, 80 o 160; la C6, 80, 120 o 160; la P4, 360 fija, y la P4X, 400— (`#784`);
   `Machine.tempC()` lee el sensor del chip, que en V7 daba 0, y el `INFO` lo enseña también en las STM32 (`#826`); y
   el motivo del reinicio ya no sale «unknown» tras un reinicio por el USB (`#709`).
@@ -247,8 +247,8 @@ Y en cada una:
   su biblioteca de C hacía byte a byte, va mucho más deprisa en todo el firmware (`#785`: en la Nucleo, copiar 2 KB,
   de 87,5 a 13,2 µs; un `gc()`, de 2,13 a 0,94 ms).
 
-Las nueve placas del lote final —todas menos la P4 del kit— han pasado la tanda de V8 con la imagen que se publica
-(abajo, «Pruebas»); y el kit de la P4X, con la suya, el 19-nov.
+Las nueve placas del lote final —las diez de V7 menos la P4 del kit— han pasado la tanda de V8 con la imagen que se
+publica (abajo, «Pruebas»); y el kit de la P4X, con la suya, el 19-nov.
 
 ### La robustez en el campo
 
@@ -514,8 +514,9 @@ end Main
 - **Una página nueva, `docs/pruebas.html`** («Cómo se prueba BasicPlus»): todas las pruebas que pasa BasicPlus, qué
   comprueba cada una, cuántos casos tiene, un fallo real que cazó y cómo correrlas.
 - **La red de paridad dual-VM** pasa de 149 casos a **217**; los mismos compilados en MOD8, el formato anterior a
-  MOD9, **209**, y 8 que usan lo que sólo tiene el formato nuevo; y con dos workers, **217**. Las VMs de V8 siguen ejecutando byte a byte los
-  **59** `.mod` de V6 de la cápsula. (La red, en verde el 19-nov, con el compilador que se publica.)
+  MOD9, **209**, y 8 que usan lo que sólo tiene el formato nuevo; y con dos workers, **217**. Las VMs de V8 siguen
+  ejecutando los **59** `.mod` de V6 de la cápsula, con la salida de V6 salvo uno, que cambia a propósito (`#774`,
+  abajo, «Lo que no rompe»). (La red, en verde el 19-nov, con el compilador que se publica.)
 - **117 pruebas de C** de la VM en la red (en V7, 102) —el depurador, las natives contra su versión interpretada, los
   ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más delicado con su **sabotaje**: un
   interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y el micro simulado, **15** casos;
@@ -688,8 +689,8 @@ sigue compilando.
   un contador de reinicios contra el bucle del autorun, un perro guardián del sistema que vigile a `io` y el informe del pánico
   de las ESP32 en el log, a V9.
 - **La imagen de dos núcleos de la RP2350 sigue siendo más lenta con un solo hilo** (`#665`, a V9): en la Pico 2,
-  `PrintBench` tarda 1 321 ms frente a 745 con la de un núcleo, y el cálculo, un 7,7 % más; en la Metro, un 3,5 % (en
-  V7, un 35 %). Con dos hilos, la de dos núcleos gana: ×1,68 en la Pico 2 y ×1,75 en la Metro.
+  `PrintBench` tarda 1 321 ms frente a 745 con la de un núcleo, y el cálculo (`fib(26)`), un 7,7 % más; en la Metro,
+  el cálculo, un 3,5 % (en V7, un 35 %). Con dos hilos, la de dos núcleos gana: ×1,68 en la Pico 2 y ×1,75 en la Metro.
 - **Dentro de una `native`, un error no dice su línea**, sino la de quien la llamó (`#582`): para verla, quítale
   `native` y ejecútala interpretada.
 - **El `.mod` multifamilia** (`#584`), a V9, y sólo dentro de un proyecto que diga qué familias lleva.
@@ -717,8 +718,8 @@ con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con l
 **cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
 `samples/` (y el de JC, en `samplesJC/`), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
 volúmenes nuevos, `jc.html` y `pruebas.html`, en los dos idiomas), `bpgenvm-c/` (cabeceras y fuentes
-que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre, la de la RP2350 con sus dos
-firmwares, y la nueva de la P4X—, el firmware de la C6 de la P4 de Waveshare (el coprocesador de ESP-Hosted 3.0.9, de
+que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre (la de la RP2350, con sus dos
+firmwares) y la nueva de la P4X—, el firmware de la C6 de la P4 de Waveshare (el coprocesador de ESP-Hosted 3.0.9, de
 Espressif, para su WiFi y su Bluetooth), su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del
 RP2350 en `firmware/boards/`. Cómo instalar cada una, y qué packs lleva cada placa:
 **[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
