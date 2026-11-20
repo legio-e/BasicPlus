@@ -153,19 +153,12 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 ## Convenciones de trabajo
 
 - **Idioma:** español (código, docs, commits, conversación).
-- **Versión actual:** **V8, en curso desde el 14-oct-2026, en modo experimentar** (Eduardo:
-  se prueban cosas sin obligaciones; lo que funcione se sube al final y lo que no se aplaza).
-  **Su alcance se cerró el 6-nov:** no entran temas nuevos; se acaba lo que hay, y después los
-  pendientes, la documentación, las pruebas finales y publicar. Lo nuevo, a V9. Matiz del 13-nov:
-  los cambios pequeños que resuelven un problema sí entran, aunque sean algo nuevo (*«no abrir temas
-  completamente nuevos, pero si podemos hacer pequeños cambios»*); el código aún no está congelado.
-  **Y desde el 14-nov, repasados los pendientes, sólo lo que queda:** *«ya no hay temas nuevos, terminamos los
-  pendientes que tenemos de las pruebas finales y nada mas»*; el código sigue sin congelar de forma oficial, por si las
-  pruebas finales piden algún cambio, pero las VMs no se reorganizan (*«a estas alturas de V8 no vamos a cambiar las
-  VMs, demasiado arriesgado. Pero si lo podemos analizar»*): lo que salga, se analiza y va a V9.
-  Su tema: la red y el Bluetooth (el bajo consumo pasó a V9 el 6-nov). Su cuaderno, `docs/V8_IDEAS.md`. V7 se
-  publicó el 13-oct (tag `v7.0`; su ZIP en `dist/` es el oráculo de «¿lo he roto yo hoy?»).
-  Qué hay abierto, en `docs/FICHAS.md` §ABIERTAS, bloque V8.
+- **Versión actual:** **V8, publicada el 20-nov-2026** (tag `v8.0`; su ZIP en `dist/` es el
+  oráculo de «¿lo he roto yo hoy?»). Su tema fue la red y el Bluetooth, y con ella llegaron JC
+  (BasicPlus con la ropa de Java y C#) y la ESP32-P4X: nueve imágenes, once placas. **Lo
+  siguiente, V9, sin abrir**: sus hitos los nombra Eduardo. Lo que V8 le pasa, en
+  `docs/FICHAS.md` §ABIERTAS (lo que queda abierto en el bloque V8) y en `docs/PENDIENTES.md`
+  («Para V9»); el cuaderno de V8, `docs/V8_IDEAS.md`. V7 se publicó el 13-oct (tag `v7.0`).
 - **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):
   *«Estado y pendientes son ficheros de trabajo tuyos. Pero el que dice realmente
   cuál es la situación es Fichas.»* Al abrir una ficha, una línea allí; al cerrarla,

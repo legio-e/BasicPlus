@@ -36,6 +36,28 @@
 
 ---
 
+## 🚀 V8 PUBLICADA — 20-nov-2026
+
+V8, la de la red y el Bluetooth, empezó el 14-oct en modo experimentar y cerró su alcance el 6-nov; la recta final
+—los pendientes de las pruebas finales, la documentación (`D1`) y las pruebas finales—, hecha. **V9, sin abrir**: lo que
+V8 le pasa, en su bloque de §ABIERTAS y en `PENDIENTES` («Para V9»).
+
+| qué | dónde |
+|---|---|
+| commit publicado | `690746f6` (el tag) · el del traspaso, después |
+| etiqueta | `v8.0` (anotada, «BasicPlus v8.0») |
+| release | https://github.com/legio-e/BasicPlus/releases/tag/v8.0 |
+| artefacto **único** | `BasicPlus-8.0-win.zip` — 33.702.616 B, `sha256 c6648f46…f421` |
+| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `690746f6` |
+| lo que va dentro | el compilador (BP y JC), las dos VMs, el IDE (`BpIde-8.0.jar`), el micro simulado **con LVGL y SQLite**, la stdlib (35 módulos MOD9), los **cinco packs** (`Stdlib`, `SQLite`, `Gui`, `GuiMini`, `DriverSpi`), las **nueve imágenes** de las once placas y el firmware de la C6 de la P4 de Waveshare, los samples (y `samplesJC/`) y la documentación en los dos idiomas, con `jc.html` y `pruebas.html` |
+
+**Verificado, no supuesto:** el ZIP se **descargó desde la propia release** y es, byte a byte, el de `dist` (el digest
+de GitHub, el mismo `sha256`), el que probó Eduardo en una carpeta limpia (*«IDE OK. Ayuda OK. VM-C OK. Dispositivos
+OK.»*; y después de `#847`, `SqlDemo` en la placa sin el aviso). Pages, `built`: las dos portadas con lo de V8, la
+captura, los volúmenes en ES y EN —también `jc` y `pruebas`— y los anexos, todos con 200. Las **once placas** pasaron la
+tanda de V8 con las imágenes del ZIP (el lote del 18-nov, la P4X el 19, la P4 del kit el 20), y la red, verde con el
+compilador que se publica. Pasan a V9 las abiertas del bloque de V8, entre ellas `#845` y la parte (b) de `#847`.
+
 ## 🚀 V7 PUBLICADA — 13-oct-2026
 
 El plan de la recta final (H12 → las SUELTAS → `D1` → 🧊 → `F1`), hecho en su orden. **El congelado de V7 queda
@@ -7062,6 +7084,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 
 ### ═══ V8 — LA WIFI, EL BLUETOOTH Y EL BAJO CONSUMO (decidido el 24-sep-2026) ═══
 
+> 🚀 **V8 PUBLICADA EL 20-NOV-2026** (el registro, arriba del todo): lo que queda abierto en este bloque pasa a V9.
+>
 > 🚀 **V8 EMPEZÓ EL 14-OCT-2026, en modo experimentar** (Eduardo, 13-oct: *«V8 es para probar cosas nuevas, para
 > experimentar, sin ponernos obligaciones. Probaremos cosas y lo que funcione lo subiremos al final y lo que no funcione
 > se puede aplazar para más adelante.»*). El diseño, en `V8_IDEAS.md`. Las fichas nuevas de V8 van aquí, debajo de la
@@ -7565,7 +7589,7 @@ Agrupa, no duplica: el detalle de cada apartado está en su ficha (`#698`, `#700
 - **Y su documentación, en la final de V8** (Eduardo, 18-oct): la de JC y las dos opciones de traducción en la guía
   del IDE. Están en `D1`, aquí abajo.
 
-#### 📚 `D1` — LA DOCUMENTACIÓN DE V8 (abierto el 18-oct, para el final de la versión, como el `D1` de V6 y el de V7)
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V8 (abierto el 18-oct, para el final de la versión, como el `D1` de V6 y el de V7 · ✅ **CERRADO el 20-nov: V8 PUBLICADA**, tag `v8.0`)
 
 Lo que ya se sabe que tiene que llevar. Eduardo, 18-oct: *«En la documentación final de la V8 habrá que añadir la
 documentación de JC. En el IDE las 2 opciones de traducción nuevas también habrá que añadirlas.»*

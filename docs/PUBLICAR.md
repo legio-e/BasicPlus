@@ -33,7 +33,13 @@ decisión.
 
 ---
 
-## ⏳ PRE-FLIGHT DE V8 — F1 (en curso desde el 18-nov)
+## ✅ PRE-FLIGHT DE V8 — F1 (pasado del 18 al 20-nov; V8 publicada el 20-nov)
+
+⚠️ **Desde V8, este fichero viaja en el ZIP**: `pruebas.html` lo enlaza, y el empaquetador copia cada `.md` que enlaza
+una página. Lo que se escriba aquí después de montar el ZIP ya no es lo de dentro: la tabla de abajo, completa, entró en
+el commit de después del tag (el árbol del tag, `690746f6`, lleva la de dentro del ZIP, byte a byte). Y el guardián del
+empaquetador mira que el micro simulado lleve LVGL, no SQLite: el del ZIP, con `make LVGL=1 SQLITE=1 sim`; y después,
+`make` y `make sim` devuelven `bpgenvm-c/build` al sabor de la red.
 
 La tabla de V7, para rellenar con el resultado MEDIDO de cada casilla. Lo nuevo de V8: el volumen de JC
 (`jc.html`, cuyos módulos JC compila también `doc_frags`: `data-bp="jc"`) y la página de las pruebas (`pruebas.html`,
@@ -52,9 +58,9 @@ cuyos números se ponen al día con los de esta tabla).
 | `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. 19-nov, la **P4X** (`#846`), con la suya y el `Gui.pack`: 22 iguales o sin petar, con las dos de la GUI, y las dos de `lastModified`, como las demás —pero con el `Gui.pack` de V7, que seguía en `packs/`; repetidas el 20-nov con el de V8, y el táctil, que no se había probado—. 20-nov, **la P4 del kit**, con la imagen de `dist/` y los packs de V8 (la zona, formateada): la tanda de 24, como en el lote (`compat/informes/lote_v8_20nov_p4kit.md`), y la pantalla de un minuto, mirada por Eduardo. **Las once**. Queda comprobar que las del ZIP son esas mismas |
 | Micro simulado con LVGL y SQLite | 20-nov: `make sim LVGL=1 SQLITE=1`, tras la red del 19-nov (sin cambios en las VMs desde entonces): `strings` da **2 075** `lv_` (V7: 2 024) y **305** `sqlite3_` |
 | El lote de Mono (la caja negra de BP y JC, `cs2jc --lote`) | 20-nov, con el compilador que se publica: **848** de 2 322 funcionan, y fallan las mismas 6; comparado prueba a prueba con el del 7-nov (`t11`), ningún veredicto cambia |
-| ZIP montado y verificado por dentro | 20-nov, tras la P4 del kit: `BasicPlus-8.0-win.zip`, 33 MB, sha256 **`9a56339e…`**, 799 ficheros. Sus guardianes, en verde: el `Stdlib.pack`, los 35 módulos byte a byte; el paquete compila con su propia stdlib; los proyectos de ejemplo abren. Dentro, `firmware/` con los diez ficheros, byte a byte los de `dist/firmware` (`sha256sum -c`, 10 OK: las imágenes que pasaron la tanda); los cinco packs, los de su compilación; `jc.html` y `pruebas.html` en los dos idiomas, con los textos de la tarde; `samplesJC/` y `samples/overlay/`; el IDE 8.0. Entre el ensayo de la mañana y éste, en el repositorio sólo han cambiado documentos (`a3e7b9fc`) |
+| ZIP montado y verificado por dentro | 20-nov, tras `#847`: `BasicPlus-8.0-win.zip`, 33 MB, sha256 **`c6648f46…`**, 799 ficheros; el IDE, con el arreglo (`AotMain.tieneNative` dentro de su jar), y el micro simulado, el de la mañana salvo la hora de compilación (7 bytes; LVGL y SQLite). El de antes de `#847`, tras la P4 del kit: `9a56339e…`, con lo mismo. Sus guardianes, en verde: el `Stdlib.pack`, los 35 módulos byte a byte; el paquete compila con su propia stdlib; los proyectos de ejemplo abren. Dentro, `firmware/` con los diez ficheros, byte a byte los de `dist/firmware` (`sha256sum -c`, 10 OK: las imágenes que pasaron la tanda); los cinco packs, los de su compilación; `jc.html` y `pruebas.html` en los dos idiomas, con los textos de la tarde; `samplesJC/` y `samples/overlay/`; el IDE 8.0. Entre el ensayo de la mañana y éste, en el repositorio sólo han cambiado documentos (`a3e7b9fc`) |
 | `pruebas.html`, con los números de esta tabla (ES y EN) | 20-nov: los de esta tabla, en los dos idiomas (la versión inglesa, cifra a cifra con la española); la tanda, en las once placas |
-| Desplegado en carpeta limpia y probado allí | |
+| Desplegado en carpeta limpia y probado allí | 20-nov, Eduardo, con el IDE del ZIP en una carpeta limpia: *«IDE OK. Ayuda OK. VM-C OK. Dispositivos OK.»* —y en su log, el aviso falso del AOT en el Run de `SqlDemo` en la placa: `#847`, arreglado—; y con el ZIP de después (`c6648f46…`), otra vez en una carpeta limpia, `SqlDemo` en la P4 del kit: «AOT: sin funciones native que compilar», sin el aviso, y el programa entero (`exit 0`) |
 
 ## ✅ PRE-FLIGHT DE V7 — F1 (pasado el 12 y el 13-oct; V7 publicada el 13-oct)
 
