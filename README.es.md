@@ -34,44 +34,39 @@ end Blink
 En un PC sin GPIO los builtins de hardware loggean por stdout; en la placa
 mueven pines de verdad. El programa es el mismo byte a byte.
 
-## Nuevo en V7
+## Nuevo en V8
 
-V7 se ha centrado en tres puntos:
+V8 trae tres cosas grandes:
 
-- **Los packs: una imagen por micro.** La zona de packs es una zona fija de la
-  flash donde se graban los packs, que se usan allí mismo, sin cargarse en RAM.
-  Se pensó primero para los módulos y luego se extendió al código nativo —el
-  primer gran logro fue SQLite—, y V7 la extiende a **LVGL**, el motor de la
-  interfaz gráfica, que ya no va en ninguna imagen. Hay una imagen por
-  micro, y **el usuario** decide si incorpora SQLite y la pantalla, sin crear
-  imágenes ni compilar código C: graba el pack desde el IDE (*Placa* →
-  *Packs*).
-- **Terminar lo pendiente**: una ingente cantidad de cosas. Entre ellas, las
-  funciones nativas: los casos que no se podían convertir a `native` se han
-  reducido prácticamente a cero. Una `native` llama a cualquier builtin, cede,
-  se para con Stop y admite `try`/`catch`/`finally`; y en las **ESP32-C3, C5 y
-  C6** (RISC-V sin FPU) ahora también se compila y acelera.
-- **El segundo núcleo.** En las placas de dos núcleos —la Pico 2, la Metro, la
-  S3 y la P4— dos hilos BP corren a la vez. Con dos hilos trabajando a la vez,
-  la ESP32-P4 consigue el 200 % del rendimiento de un núcleo (en las cadenas,
-  el 133 %), y el RP2350, entre el 113 % (Metro) y el 168 % (Pico 2). Una
-  limitación conocida, que queda para V8: en el RP2350 la imagen de dos núcleos
-  hace más lento un programa de un solo hilo (hasta un 35 % en la Metro), y
-  allí las cadenas no escalan con dos hilos.
+- **La WiFi y el Bluetooth** en las ESP32 con PSRAM —la S3, la C5 y la P4 de
+  Waveshare, que lleva la radio en su ESP32-C6—. La placa se conecta sola a la
+  red al arrancar, y el IDE trabaja con ella sin cable: sube los ficheros, graba
+  los packs y ejecuta los programas. Del Bluetooth, de momento, el teclado y el
+  ratón. Las dos radios están apagadas de normal, y se apagan solas tras diez
+  minutos sin uso.
+- **JC**, un lenguaje nuevo: una mezcla de Java y C# para quien trabaja con esos
+  lenguajes, sin pretender ser ninguno de los dos, y con nuestras librerías. Por
+  dentro es BasicPlus —el mismo compilador y el mismo bytecode—, y un programa se
+  traduce de uno a otro desde el IDE. Para probarlo, las pruebas de C# de Mono:
+  de 2 322, funcionan 848, y se quedan como prueba de caja negra de los dos
+  lenguajes. Por el camino, BP y JC ganaron los operadores compuestos y el
+  ternario (`iif`), las interfaces y los genéricos.
+- **La fiabilidad.** Cuatro placas, 48 horas seguidas con un programa que lo
+  toca todo, sin un error ni un reinicio, buscando sobre todo que ningún recurso
+  —la memoria— se fuera perdiendo con el tiempo; la prueba encontró dos fallos de
+  verdad, ya arreglados. Todo lo que se prueba, en **[Cómo se prueba
+  BasicPlus](docs/pruebas.html)**.
 
-Y lo que se nota al usarla: una placa nueva, la **ESP32-C5** (Waveshare
-ESP32-C5-Touch-LCD-2.8: pantalla táctil de 2,8", 8 MB de PSRAM, 32 MB de flash
-y ranura TF); **el destructor** (`function ~Clase()`), y al acabar un programa
-—bien, con un error o con un Stop— sus objetos se destruyen y cada uno suelta
-lo que tomó: un PWM se para, las salidas vuelven a su estado de reset;
-`import Core` es implícito; los módulos nuevos `Time` (fechas) y `Heap`
-(memoria), e `IO.File`; y mientras un programa corre, el IDE puede listar y
-leer los ficheros de la placa.
+Y además: lo pendiente de V7 y lo que ha ido saliendo, arreglado; las cadenas,
+mucho más rápidas (en la Pico 2, recorrer una de 2 KB, de 535 a 20 ms); los
+errores de la VM, con su tipo (`ArithmeticError`, `IndexError`…); el sonido en
+la P4 de Waveshare; y una placa más, la **ESP32-P4X**, la nueva revisión del P4,
+con su imagen, del mismo código.
 
-Para actualizar desde V6: graba la imagen de V7, regraba los packs con los de
-V7 (cambia la ABI del código nativo) y recompila tus programas y librerías (el
-formato de los `.mod` pasa a MOD9). Detalle completo en las **[notas de
-versión](docs/RELEASES.md)**.
+Para actualizar desde V7: graba la imagen de V8 antes que nada, y después la
+stdlib y los packs de V8; la S3 y la C5 se borran enteras una vez (su aplicación
+pasa a 2 MB por la WiFi); y recompila tus programas. Detalle completo en las
+**[notas de versión](docs/RELEASES.md)**.
 
 ## Interfaces gráficas (desde V3)
 

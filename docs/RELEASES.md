@@ -203,7 +203,7 @@ once placas**: las de V7 (la tabla de v7.0, abajo) y el kit de la P4X. Lo que ca
 | placa | WiFi | Bluetooth (teclado y ratón) | sonido |
 |---|---|---|---|
 | ESP32-P4 de Waveshare | sí, por su C6 (`radio=c6`) | sí, por la misma C6 | sí (`audio=`) |
-| ESP32-P4 de Espressif (el kit) | sin probar en V8 *(por confirmar)* | sin probar *(por confirmar)* | sin probar *(por confirmar)* |
+| ESP32-P4 de Espressif (el kit) | sin probar | sin probar | sin probar |
 | ESP32-P4X de Espressif (el kit), nueva | sin probar | sin probar | sin probar |
 | ESP32-S3 | sí | sí | — |
 | ESP32-C5 | sí | sí | en V9 |
@@ -506,33 +506,32 @@ end Main
   127 bytes, con un error si no cabe (`#764`).
 - **El rendimiento frente a V7**, medido el 31-oct con una herramienta nueva que compara en la placa con una versión
   publicada, `bpgenvm-c/tools/rendimiento_versiones.py` (`#743`): en la Metro, `AllocBench` tarda un 38 % menos y
-  `PrintBench`, la mitad; y el cálculo puro, entre un 2 y un 7 % más (`fib(28)`, un 4 % en la Metro y en la P4),
-  probablemente por mirar la pila antes de cada instrucción (`#740`) *(por confirmar en el pre-flight)*.
+  `PrintBench`, la mitad; y el cálculo puro, entre un 2 y un 7 % más (`fib(28)`, un 4 % en la Metro y en la P4); la
+  causa probable, mirar la pila antes de cada instrucción (`#740`), sin medir aparte.
 
 ### Pruebas
 
 - **Una página nueva, `docs/pruebas.html`** («Cómo se prueba BasicPlus»): todas las pruebas que pasa BasicPlus, qué
   comprueba cada una, cuántos casos tiene, un fallo real que cazó y cómo correrlas.
-- **La red de paridad dual-VM** pasa de 149 casos a **217** *(por confirmar en el pre-flight)*; los mismos en el
-  formato de V6, MOD8, **209**, y 8 que usan lo que sólo tiene el formato nuevo *(por confirmar en el pre-flight)*; y
-  con dos workers, **217** *(por confirmar en el pre-flight)*. Las VMs de V8 siguen ejecutando byte a byte los **59**
-  `.mod` de V6 de la cápsula *(por confirmar en el pre-flight)*.
-- **117 pruebas de C** de la VM en la red (en V7, 102) *(por confirmar en el pre-flight)* —el depurador, las natives
-  contra su versión interpretada, los ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más
-  delicado con su **sabotaje**: un interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y
-  el micro simulado, **15** casos; la sombra, **15**; la norma de versiones, **9** *(por confirmar en el pre-flight)*.
-- **El compilador**: **402** pruebas propias, y **66** de la VM-Java *(por confirmar en el pre-flight)*; **39**
-  programas de `samples/errores/` que tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7,
-  19 y 50) *(por confirmar en el pre-flight)*; y los **415** samples compilan con el compilador de V8 (en V7, 399)
-  *(por confirmar en el pre-flight)*.
+- **La red de paridad dual-VM** pasa de 149 casos a **217**; los mismos compilados en MOD8, el formato anterior a
+  MOD9, **209**, y 8 que usan lo que sólo tiene el formato nuevo; y con dos workers, **217**. Las VMs de V8 siguen ejecutando byte a byte los
+  **59** `.mod` de V6 de la cápsula. (La red, en verde el 19-nov, con el compilador que se publica.)
+- **117 pruebas de C** de la VM en la red (en V7, 102) —el depurador, las natives contra su versión interpretada, los
+  ficheros y la SD, el GC, los hilos, los packs, la memoria justa—, las de lo más delicado con su **sabotaje**: un
+  interruptor que deshace el arreglo, para comprobar que la prueba se pone en rojo. Y el micro simulado, **15** casos;
+  la sombra, **15**; la norma de versiones, **9**.
+- **El compilador**: **402** pruebas propias, y **66** de la VM-Java; **39** programas de `samples/errores/` que
+  tienen que fallar, con **151** comprobaciones de lo que dice cada error (en V7, 19 y 50); y los **415** samples
+  compilan con el compilador de V8 (en V7, 399). Y un `.mod` compilado con V7 carga y corre en las dos VMs de V8.
 - **Los ejemplos de la documentación**: los **343** fragmentos de código de 26 páginas compilan, y una línea que el
   manual enseña como un error lo da (`#832`) *(por confirmar en el pre-flight)*.
-- **JC**: el corpus, pasado a JC, da la misma salida (`check-jc`, **215**) *(por confirmar en el pre-flight)*; y las
-  **848** pruebas de Mono que funcionan, la caja negra de los dos lenguajes *(por confirmar en el pre-flight)*.
+- **JC**: el corpus, pasado a JC, da la misma salida (`check-jc`, **215**, el 19-nov); y las
+  **848** pruebas de Mono que funcionan, la caja negra de los dos lenguajes (repetido el 20-nov con el compilador que
+  se publica: las mismas 848, y fallan las mismas 6).
 - **En las placas**: la tanda de V8, **24** pruebas —la prueba de fuego y lo nuevo de V8— en las **nueve** placas del
-  lote final, con las imágenes que se publican y la salida comparada con la del PC *(por confirmar en el pre-flight)*:
-  igual, salvo lo que difiere a propósito —`lastModified`, que el sistema de ficheros de las placas no tiene, y la GUI
-  en las placas sin pantalla—. Y la prueba de resistencia: **48 horas** en cuatro placas, **61 360** vueltas, sin un
+  lote final y en la P4X, con las imágenes que se publican y la salida comparada con la del PC: igual, salvo lo que
+  difiere a propósito —`lastModified`, que el sistema de ficheros de las placas no tiene, y la GUI en las placas sin
+  pantalla—. Y la prueba de resistencia: **48 horas** en cuatro placas, **61 360** vueltas, sin un
   error ni un reinicio (arriba).
 
 ### Bugs de V7 corregidos
@@ -604,11 +603,12 @@ reparte sola), el Entorno, los packs y tus programas.
 
 📌 **La P4 de Waveshare, para la WiFi y el Bluetooth**: su C6 necesita el firmware ESP-Hosted 3.0.9 —el de fábrica no
 vale para la WiFi—; en V8 se grabó por el conector P1 de la placa, con un adaptador USB-serie (`V8_IDEAS` §E3, «Paso
-1»). *(Por decidir: cómo se le da al usuario, y si ese firmware va en el ZIP.)* Y en su Entorno, `radio=c6` —sin esa
+1»). Va en el ZIP, `firmware/p4_c6_esp_hosted_3.0.9_merged.bin`, y cómo grabarlo —los pines del conector P1, que
+hay que soldar, y la copia de la de fábrica antes—, en `INSTALAR_FIRMWARE`. Y en su Entorno, `radio=c6` —sin esa
 línea, ni WiFi ni Bluetooth— y, para el sonido, la línea `audio=…`.
 
-📌 **Recompila los `.mod`.** El formato no cambia (MOD9), así que un `.mod` de V7 carga *(por confirmar: la red no
-tiene una cápsula de V7)*, pero con la VM de V8 debajo: un campo, una property o una global `string` sin valor es para
+📌 **Recompila los `.mod`.** El formato no cambia (MOD9), así que un `.mod` de V7 carga (comprobado en el PC con tres
+programas compilados con V7, en las dos VMs de V8 y su stdlib), pero con la VM de V8 debajo: un campo, una property o una global `string` sin valor es para
 él `null`, y se para con «referencia nula: strlen de un string null» si llega a un builtin (`#774`; recompilado, nace
 `""`); y lo que lee texto de fuera ya es estricto (`#711`), recompilado o no. El IDE recompila en cada Run; lo que
 hay que mirar es lo que quedó en `/app` —el programa del autorun, sobre todo—. Y recompila las natives para tener los
@@ -662,8 +662,8 @@ arreglos del AOT (`#790`, `#791`): un `.mdn` ya compilado sigue como estaba.
   un `\n` dentro de lo que se imprime es LF en las dos VMs (`#755`).
 
 📌 **Lo que no rompe:** `catch e: RuntimeError` sigue atrapando todos los errores de la VM, que ahora son sus hijas;
-el formato del `.mod` sigue siendo MOD9 y la ABI del nativo, la 9 *(por confirmar: que los `.mdn` de V7 cargan en la
-imagen de V8)*; las VMs de V8 siguen ejecutando los 59 `.mod` de V6 de la cápsula, con su stdlib de entonces, y sólo
+el formato del `.mod` sigue siendo MOD9 y la ABI del nativo, la 9 (un `.mdn` de V7 está hecho para cargar en la
+imagen de V8, pero no lo hemos probado: mejor recompilarlo, que además trae los arreglos del AOT); las VMs de V8 siguen ejecutando los 59 `.mod` de V6 de la cápsula, con su stdlib de entonces, y sólo
 uno cambia, por `#774` (`GuiWinJson`, que mide un `string` sin valor de su `Gui` de V6); e `import Core`, escrito,
 sigue compilando.
 
@@ -671,7 +671,8 @@ sigue compilando.
 
 - **El bajo consumo** (`#490`) pasa a V9 entero: el micro nunca duerme, y un programa a batería no puede ahorrar hoy.
   Lo que sí hay: las radios, apagadas de normal y apagadas solas sin uso.
-- **La WiFi**, sólo en la P4 de Waveshare, la S3 y la C5 (en la P4 del kit, sin probar *(por confirmar)*); no en la
+- **La WiFi**, sólo en la P4 de Waveshare, la S3 y la C5 (en los kits de Espressif, el de la P4 y el de la P4X, sin
+  probar); no en la
   C3, la C6, las STM32 ni la Pico 2 W. Y no hay servidor (`listen`/`accept`), ni UDP, ni TLS, ni la placa como punto
   de acceso, ni la hora por NTP. Un módulo de radio externo para las demás placas, y un STM32 con WiFi, de V9 o más
   adelante.
@@ -713,7 +714,7 @@ sigue compilando.
 release y en `dist/BasicPlus-8.0-win.zip.sha256`). Dentro: `BpIde-8.0.jar` y `bpide.bat`, `bin/` (el micro simulado,
 con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería, con los módulos nuevos), **`packs/`** con los
 **cinco packs** de V8 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`, `GuiMini.pack` y `DriverSpi.pack`—, `bpdevices/`,
-`samples/` (y los de JC, `samplesJC/` *(por confirmar)*), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
+`samples/` (y el de JC, en `samplesJC/`), `docs/` (la ayuda que abre el IDE, ES y EN, con los dos
 volúmenes nuevos, `jc.html` y `pruebas.html` *(por confirmar: su versión inglesa)*), `bpgenvm-c/` (cabeceras y fuentes
 que necesita el AOT) y **`firmware/`** con las **nueve imágenes** —las ocho de siempre, la de la RP2350 con sus dos
 firmwares, y la nueva de la P4X—, el firmware de la C6 de la P4 de Waveshare (el coprocesador de ESP-Hosted 3.0.9, de

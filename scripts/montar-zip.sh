@@ -298,6 +298,18 @@ if [ -n "$DESCONOCIDAS" ]; then
     exit 1
 fi
 
+# --- samplesJC: los ejemplos de JC (V8), los del REPO, como los de samples/ ----
+# Eduardo (20-nov): «Sí, en el ZIP». El volumen de JC cita samplesJC/JsonDemo.jc,
+# probado en placa; sin esto, el ZIP no lo llevaba. Sólo lo que está en git.
+mkdir -p "$OUT/samplesJC"
+(cd "$RAIZ" && git ls-files -z -- 'samplesJC/*') | while IFS= read -r -d '' f; do
+    case "${f#samplesJC/}" in */*) continue ;; esac
+    cp "$RAIZ/$f" "$OUT/samplesJC/"
+done
+if [ -z "$(ls "$OUT/samplesJC" 2>/dev/null)" ]; then
+    echo "  ERROR: samplesJC/ salió vacío (el volumen de JC cita samplesJC/JsonDemo.jc)"; exit 1
+fi
+
 
 # --- red: ni un solo .mod caducado dentro del paquete ------------------------
 # En H13 (a1 Pico) el IDE subió a la placa un L2Lib.mod v5 y el sample l2app murió

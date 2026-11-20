@@ -33,44 +33,39 @@ end Blink
 On a PC with no GPIO the hardware builtins log to stdout; on the board they
 drive real pins. The program is the same, byte for byte.
 
-## New in V7
+## New in V8
 
-V7 centres on three things:
+V8 brings three big things:
 
-- **Packs: one image per micro.** The pack zone is a fixed area of the flash
-  where packs are burned and used in place, without being loaded into RAM. It
-  started with modules, then native code — SQLite was the first big win — and
-  V7 extends it to **LVGL**, the engine behind the graphical interface, which
-  no firmware image carries any more. There is one image per micro,
-  and **you** decide whether to add SQLite and the screen, without building
-  images or compiling any C: you burn the pack from the IDE (*Placa* →
-  *Packs*).
-- **Finishing what was pending** — a huge number of items. Among them, native
-  functions: the cases that could not be turned into `native` are practically
-  down to zero. A `native` can call any builtin, yield, be stopped with Stop
-  and hold a `try`/`catch`/`finally`; and on the **ESP32-C3, C5 and C6**
-  (RISC-V without FPU) it is now compiled and accelerated too.
-- **The second core.** On the dual-core boards — Pico 2, Metro, S3 and P4 —
-  two BP threads run at the same time. With two threads working at once, the
-  ESP32-P4 reaches 200 % of one core's performance (133 % on strings), and the
-  RP2350 between 113 % (Metro) and 168 % (Pico 2). A known limitation, left
-  for V8: on the RP2350 the dual-core image slows down a single-threaded
-  program (by up to 35 % on the Metro), and strings don't scale there with two
-  threads.
+- **WiFi and Bluetooth** on the ESP32s with PSRAM — the S3, the C5 and the
+  Waveshare P4, which carries its radio in its ESP32-C6. The board joins the
+  network by itself at boot, and the IDE works with it without a cable: it
+  uploads the files, burns the packs and runs the programs. From Bluetooth, for
+  now, the keyboard and the mouse. Both radios are off by default, and switch
+  themselves off after ten minutes unused.
+- **JC**, a new language: a mix of Java and C# for those who work with those
+  languages, without trying to be either of them, and with our own libraries.
+  Inside it is BasicPlus — the same compiler and the same bytecode — and a
+  program is translated from one to the other from the IDE. To test it, Mono's
+  C# test suite: of 2,322 tests, 848 run, and they stay as a black-box test of
+  both languages. Along the way, BP and JC gained the compound operators and the
+  ternary (`iif`), interfaces and generics.
+- **Reliability.** Four boards, 48 hours in a row with a program that touches
+  everything, without a single error or restart, looking above all for any
+  resource — memory — that might be slowly lost over time; the test found two
+  real bugs, now fixed. Everything that is tested, in **[How BasicPlus is
+  tested](docs/en/pruebas.html)**.
 
-And what you'll notice: a new board, the **ESP32-C5** (Waveshare
-ESP32-C5-Touch-LCD-2.8: a 2.8" touch screen, 8 MB of PSRAM, 32 MB of flash and
-a TF slot); **destructors** (`function ~Class()`), and when a program ends —
-normally, with an error or with a Stop — its objects are destroyed and each one
-releases what it took: a PWM stops, the outputs go back to their reset state;
-`import Core` is implicit; the new `Time` (dates) and `Heap` (memory) modules,
-and `IO.File`; and while a program runs, the IDE can list and read the board's
-files.
+And also: what was pending from V7 and what came up along the way, fixed;
+strings, much faster (on the Pico 2, walking a 2 KB one went from 535 to
+20 ms); the VM's errors, with their type (`ArithmeticError`, `IndexError`…);
+sound on the Waveshare P4; and one more board, the **ESP32-P4X**, the new
+revision of the P4, with its own image, from the same code.
 
-Upgrading from V6: flash the V7 image, burn the V7 packs (the ABI of native
-code changed) and recompile your programs and libraries (the `.mod` format is
-now MOD9). Full detail in the **[release notes](docs/RELEASES.md)**
-*(Spanish)*.
+Upgrading from V7: flash the V8 image first, then the V8 stdlib and packs; the
+S3 and the C5 are fully erased once (their application grows to 2 MB for the
+WiFi); and recompile your programs. Full detail in the **[release
+notes](docs/RELEASES.md)** *(Spanish)*.
 
 ## Graphical interfaces (since V3)
 
@@ -286,6 +281,8 @@ Documentation is available in **English** (`docs/en/`) and
   board with a screen needs.
 - **[Language manual](docs/en/manual.html)** — lexicon, types, classes,
   modules, exceptions, concurrency.
+- **[JC, BasicPlus with braces](docs/en/jc.html)** — the Java and C# syntax on
+  the same compiler and the same bytecode, and how to translate between them.
 - **[Reference](docs/en/referencia.html)** — the complete standard library,
   command line and on-disk artifacts.
 - **[GUI guide](docs/en/gui.html)** — the `Gui` module: widgets, colors and
@@ -296,6 +293,8 @@ Documentation is available in **English** (`docs/en/`) and
   the architecture: compiler, bytecode, the two VMs, GC, AOT and firmwares.
 - [Project philosophy](docs/PHILOSOPHY.md) *(Spanish)* — what it is and what
   it does not want to be.
+- **[How BasicPlus is tested](docs/en/pruebas.html)** — every test each
+  version passes, on the PC and on the boards, with its numbers.
 - Specs *(Spanish)*: [.mod format](docs/MOD_FORMAT.md),
   [opcodes](docs/OPCODES.md), [heap layout](docs/HEAP_LAYOUT.md),
   [builtins](docs/BUILTINS.md), [wire protocol](docs/BPVM_WIRE_PROTOCOL.md).

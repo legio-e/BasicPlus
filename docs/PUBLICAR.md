@@ -50,7 +50,8 @@ cuyos números se ponen al día con los de esta tabla).
 | Las **9** imágenes en `dist/firmware/` (y el firmware de la C6: 10 ficheros), del mismo árbol, `SHA256SUMS.txt` | 18-nov: **8**, de los builds del lote (sin recompilar); `sha256sum -c`, 8 OK. En las cinco ESP32, la app de dentro de cada `_merged`, byte a byte la del build, y su CRC32, el `imageCrc` de cada placa en el lote; la Pico y las STM32, de los mismos `.uf2` y `.elf`. 19-nov: **10** —la P4X (`#846`), de la receta del repo, la app de su `_merged` con el CRC32 `9aecd6ef`, el `imageCrc` de su placa en su tanda; y el firmware de la C6 de la P4 de Waveshare—; las ocho de ayer, con su misma suma; `sha256sum -c`, 10 OK |
 | Los **5** packs | |
 | `tanda.py` en las placas | 18-nov, el lote final: **las nueve**, grabadas con la imagen final y sus packs, la tanda de 24 (`compat/informes/lote_v8_18nov.md`); el `imageCrc` de cada una, el de la imagen compilada. 19-nov, la **P4X** (`#846`), con la suya y el `Gui.pack`: 22 iguales o sin petar, con las dos de la GUI, y las dos de `lastModified`, como las demás. Queda comprobar que las del ZIP son esas mismas |
-| Micro simulado con LVGL y SQLite | |
+| Micro simulado con LVGL y SQLite | 20-nov: `make sim LVGL=1 SQLITE=1`, tras la red del 19-nov (sin cambios en las VMs desde entonces): `strings` da **2 075** `lv_` (V7: 2 024) y **305** `sqlite3_` |
+| El lote de Mono (la caja negra de BP y JC, `cs2jc --lote`) | 20-nov, con el compilador que se publica: **848** de 2 322 funcionan, y fallan las mismas 6; comparado prueba a prueba con el del 7-nov (`t11`), ningún veredicto cambia |
 | ZIP montado y verificado por dentro | |
 | `pruebas.html`, con los números de esta tabla (ES y EN) | |
 | Desplegado en carpeta limpia y probado allí | |

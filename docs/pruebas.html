@@ -51,6 +51,7 @@
   <a href="referencia.html">Referencia</a>
   <a href="gui.html">Interfaz gráfica</a>
   <a href="guia-ide.html">Guía del IDE</a>
+  <a href="en/pruebas.html">🇬🇧 English</a>
 </p>
 
 <h1>Cómo se prueba BasicPlus</h1>
@@ -68,15 +69,16 @@
 
 <h2>En números</h2>
 <p>
-  Medido el 18 de noviembre de 2026, en la comprobación previa de V8. Los números se rehacen al
-  publicar cada versión.
+  Medido el 18 y el 19 de noviembre de 2026, en la comprobación previa de V8 (las pruebas del
+  compilador y la red, el 19, tras sus últimos arreglos). Los números se rehacen al publicar cada
+  versión.
 </p>
 <table>
   <tr><th>Prueba</th><th>Qué comprueba</th><th>Resultado</th></tr>
   <tr><td>El corpus, en las dos VMs</td>
       <td>217 programas: la misma salida, byte a byte</td><td class="num">217 de 217</td></tr>
-  <tr><td>… en el formato de V6</td>
-      <td>los mismos, en el formato de módulo anterior</td>
+  <tr><td>… en MOD8</td>
+      <td>los mismos, compilados en MOD8, el formato de módulo anterior a MOD9</td>
       <td>209 de 209 (8 usan lo que sólo tiene el formato nuevo)</td></tr>
   <tr><td>… con dos hilos de trabajo</td>
       <td>los mismos, con dos hilos de trabajo a la vez</td><td class="num">217 de 217</td></tr>
@@ -98,7 +100,7 @@
       <td>cada fragmento de código de los manuales, compilado</td>
       <td class="num">343 de 343</td></tr>
   <tr><td>La tanda en las placas</td>
-      <td>24 programas en nueve placas, con la imagen que se publica</td>
+      <td>24 programas en nueve placas y en la P4X, con la imagen que se publica</td>
       <td>como en el PC, salvo lo que difiere a propósito; y un cuelgue de la ESP32-P4, una vez (el
           15 de noviembre), que no se ha vuelto a ver en 400 ejecuciones seguidas y 500 capturas</td></tr>
   <tr><td>La prueba de resistencia</td>
@@ -136,9 +138,9 @@
 <h3>El corpus, en las dos VMs</h3>
 <p>
   217 programas —los ejemplos, y muchos escritos al arreglar un fallo, para que no vuelva— se
-  compilan y se ejecutan en las dos VMs, y su salida tiene que ser idéntica. Y dos veces más: en el
-  formato de módulo de V7, porque los programas ya compilados tienen que seguir corriendo en las
-  VMs nuevas, y con dos hilos de trabajo a la vez, porque el mismo programa tiene que decir lo
+  compilan y se ejecutan en las dos VMs, y su salida tiene que ser idéntica. Y dos veces más:
+  compilados en MOD8, el formato de módulo anterior a MOD9, porque las VMs siguen cargándolo, y
+  con dos hilos de trabajo a la vez, porque el mismo programa tiene que decir lo
   mismo con uno que con dos. Y el corpus crece con cada versión: en V7 eran 149 programas; hoy,
   217.
 </p>
@@ -159,8 +161,8 @@
       sin sus funciones nativas en todas las placas. Desde entonces la red lo mira, y no puede
       volver a pasar sin ponerse en rojo.</li>
   <li><strong>La biblioteca dentro del firmware.</strong> Cada imagen lleva dentro la biblioteca
-      estándar y la repone al arrancar; la red comprueba que es la misma que la de la biblioteca
-      (18 módulos en las RP2350 y en las ESP32, 17 en las STM32).</li>
+      estándar y la repone al arrancar; la red comprueba que es la misma que la que se publica, la
+      de <code>bpstdlib/</code> (18 módulos en las RP2350 y en las ESP32, 17 en las STM32).</li>
 </ul>
 
 <h3>La VM-C por dentro</h3>
@@ -175,8 +177,9 @@
   <li><strong>El estrés:</strong> la tabla de objetos que crece sin parar, el heap justo con uno,
       dos y cuatro hilos de trabajo en las dos VMs, y los hilos que se ceden el turno. El 15 de
       noviembre cazó una carrera: dos hilos se quedaban a la vez sin sitio en la tabla de objetos;
-      uno recogía la basura, y cuando el otro volvía, los demás ya habían gastado el sitio
-      liberado y se rendía con un «no queda memoria» falso. Ahora recoge él antes de rendirse.</li>
+      uno de ellos recogía la basura, y cuando el otro volvía a intentarlo, los demás hilos ya
+      habían gastado el sitio liberado, y se rendía con un «no queda memoria» falso. Ahora, antes
+      de rendirse, ese hilo recoge la basura él mismo.</li>
   <li><strong>El micro simulado,</strong> el que usa el IDE cuando no hay placa: se construye y se
       prueba con sus 15 casos.</li>
   <li><strong>La sombra:</strong> el orden en que se buscan los módulos (la carpeta del programa,
@@ -225,7 +228,7 @@
   que difiere a propósito (un sistema de ficheros sin fecha de modificación, o una prueba de
   pantalla en una placa que no la tiene). Para V7, 50 programas en diez placas; para V8, en el lote
   final del 18 de noviembre, los 24 programas nuevos en nueve placas de tres arquitecturas: ARM,
-  Xtensa y RISC-V.
+  Xtensa y RISC-V; y el 19, en la placa nueva, la ESP32-P4X.
 </p>
 <p>
   Lo que caza la tanda no lo ve el PC. En el lote del 15 de noviembre, la imagen nueva de la ESP32-C6 había
@@ -336,7 +339,7 @@ python bpgenvm-c/tools/doc_frags.py        # los ejemplos de la documentación</
 </p>
 
 <footer>
-  Medido el 18 de noviembre de 2026, para V8. Los números se rehacen en la comprobación previa de
+  Medido el 18 y el 19 de noviembre de 2026, para V8. Los números se rehacen en la comprobación previa de
   cada versión.
 </footer>
 

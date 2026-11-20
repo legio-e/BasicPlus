@@ -237,37 +237,33 @@
 
 
 <p style="margin-top:1.4rem">
-  <strong>New in V7.</strong> This version centres on three things:
+  <strong>New in V8.</strong> This version brings three big things:
 </p>
 <ul>
-  <li><strong>Packs.</strong> What SQLite already did — an engine that does not live inside the
-  VM but in a pack that runs from flash — <strong>LVGL</strong>, the engine behind the graphical
-  interface, now does too: no image carries it any more. There is <strong>one image per
-  micro</strong>, and it is the user who decides whether to add SQLite and the graphical
-  environment, without building images or compiling any C: you burn the pack from the IDE.</li>
-  <li><strong>Finishing what was pending</strong>: a huge number of items. Among them,
-  <code>native</code> functions: the cases that could not be turned into one are practically
-  down to zero — they call any builtin, yield, stop with Stop and hold a
-  <code>try</code>/<code>catch</code>/<code>finally</code> —, and on the <strong>ESP32-C3, C5 and
-  C6</strong> (RISC-V without FPU) they are compiled and accelerated too.</li>
-  <li><strong>The second core.</strong> On the dual-core boards — Pico 2, Metro, S3 and P4 — two
-  BP threads run at the same time: with two threads working at once, the ESP32-P4 reaches
-  200 % of one core's performance (133 % on strings), and the RP2350 between 113 % (Metro) and
-  168 % (Pico 2). A known limitation, left for V8: on the RP2350 the dual-core image slows down
-  a single-threaded program (by up to 35 % on the Metro), and strings don't scale there with two
-  threads.</li>
+  <li><strong>WiFi and Bluetooth</strong> on the ESP32s with PSRAM — the S3, the C5 and the
+  Waveshare P4, which carries its radio in its ESP32-C6: the board joins the network by itself at
+  boot and the IDE works with it without a cable; from Bluetooth, for now, the keyboard and the
+  mouse. Both radios are off by default, and switch themselves off after ten minutes unused.</li>
+  <li><strong>JC</strong>, a new language, a mix of Java and C# for those who work with those
+  languages: without trying to be either of them, and with our own libraries. Inside it is
+  BasicPlus, with the same compiler and the same bytecode, and a program is translated from one
+  to the other from the IDE (<a href="jc.html">the JC volume</a>). To test it, Mono's C# test
+  suite: of 2,322 tests, 848 run, and along the way both languages gained operators, interfaces
+  and generics.</li>
+  <li><strong>Reliability.</strong> Four boards, 48 hours in a row with a program that touches
+  everything, without a single error or restart, looking above all for any resource — memory —
+  that might be slowly lost over time; the test found two real bugs, now fixed. Everything that
+  is tested, in <a href="pruebas.html">How BasicPlus is tested</a>.</li>
 </ul>
 <p>
-  And what you'll notice: a new board, the <strong>ESP32-C5</strong>, with its touch screen;
-  <strong>destructors</strong> (<code>~Class()</code>), and when a program ends — normally, with
-  an error or with a Stop — each object releases what it took: a PWM stops, the outputs go back
-  to their reset state; the <code>Time</code> and <code>Heap</code> modules; and the IDE lists and
-  reads the board's files while a program runs. Eight images for ten boards; the V7 test round,
-  green on all ten, across three architectures. Details in the
-  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v7.0">v7.0 release</a> and the
-  <a href="../RELEASES.md">release notes</a> <em>(Spanish)</em>; what V6 brought — the shared
-  microcontroller code, the C3 and the C6, the GUI in its own thread, screen capture — is in the
-  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v6.0">v6.0 release</a>.
+  And also: what was pending from V7 and what came up along the way, fixed; strings, much faster
+  (on the Pico 2, walking a 2 KB one went from 535 to 20 ms); sound on the Waveshare P4; and an
+  image for the <strong>ESP32-P4X</strong>, the new revision of the P4, from the same code. Nine
+  images for eleven boards. Details in the
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v8.0">v8.0 release</a> and the
+  <a href="../RELEASES.md">release notes</a> <em>(Spanish)</em>; what V7 brought — packs, one
+  image per micro and the second core — is in the
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v7.0">v7.0 release</a>.
 </p>
 
 <h2>Getting started</h2>
@@ -292,6 +288,10 @@
   <a class="card" href="manual.html">
     <span class="t">Language manual →</span>
     <span class="d">Lexicon, types, classes, modules, exceptions, concurrency and <code>native</code> (AOT) functions.</span>
+  </a>
+  <a class="card" href="jc.html">
+    <span class="t">JC, BasicPlus with braces →</span>
+    <span class="d">The Java and C# syntax on the same compiler and the same bytecode: each construct, in JC and in BP, and how to translate from one to the other.</span>
   </a>
   <a class="card" href="referencia.html">
     <span class="t">Reference →</span>
@@ -329,13 +329,17 @@
     <span class="t">Project philosophy → <small>(Spanish)</small></span>
     <span class="d">What BasicPlus is and what it does not want to be.</span>
   </a>
+  <a class="card" href="pruebas.html">
+    <span class="t">How BasicPlus is tested →</span>
+    <span class="d">Every test each version passes, on the PC and on the boards: what each one checks, its numbers and the bugs they caught.</span>
+  </a>
   <a class="card" href="../PENDIENTES.md">
     <span class="t">Known limitations → <small>(Spanish)</small></span>
     <span class="d">What the language does not do yet, said plainly, and why.</span>
   </a>
   <a class="card" href="../RELEASES.md">
     <span class="t">Release notes → <small>(Spanish)</small></span>
-    <span class="d">What v7.0 brings, what changes when upgrading from v6, the downloadable artifacts and what is not there yet.</span>
+    <span class="d">What v8.0 brings, what changes when upgrading from v7, the downloadable artifacts and what is not there yet.</span>
   </a>
 </div>
 

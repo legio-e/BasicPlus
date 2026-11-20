@@ -236,37 +236,33 @@
 </p>
 
 <p style="margin-top:1.4rem">
-  <strong>Nuevo en V7.</strong> Esta versión se ha centrado en tres puntos:
+  <strong>Nuevo en V8.</strong> Esta versión trae tres cosas grandes:
 </p>
 <ul>
-  <li><strong>Los packs.</strong> Lo que ya hacía SQLite —un motor que no va dentro de la VM,
-  sino en un pack que se ejecuta desde la flash— lo hace ahora también <strong>LVGL</strong>, el
-  motor de la interfaz gráfica, que ya no va en ninguna imagen. Hay <strong>una imagen por
-  micro</strong>, y es el usuario el que decide si incorpora SQLite y el entorno gráfico, sin
-  crear imágenes ni compilar código C: graba el pack desde el IDE.</li>
-  <li><strong>Terminar lo pendiente</strong>: una ingente cantidad de cosas. Entre ellas, las
-  funciones <code>native</code>: los casos que no se podían convertir se han reducido
-  prácticamente a cero —llaman a cualquier builtin, ceden, se paran con Stop y admiten
-  <code>try</code>/<code>catch</code>/<code>finally</code>—, y en la <strong>ESP32-C3, la C5 y
-  la C6</strong> (RISC-V sin FPU) también se compilan y aceleran.</li>
-  <li><strong>El segundo núcleo.</strong> En las placas de dos núcleos —la Pico 2, la Metro, la
-  S3 y la P4— dos hilos BP corren a la vez: con dos hilos trabajando a la vez, la ESP32-P4
-  consigue el 200 % del rendimiento de un núcleo (en las cadenas, el 133 %), y el RP2350, entre
-  el 113 % (Metro) y el 168 % (Pico 2). Una limitación conocida, que queda para V8: en el RP2350
-  la imagen de dos núcleos hace más lento un programa de un solo hilo (hasta un 35 % en la
-  Metro), y allí las cadenas no escalan con dos hilos.</li>
+  <li><strong>La WiFi y el Bluetooth</strong> en las ESP32 con PSRAM —la S3, la C5 y la P4 de
+  Waveshare, que lleva la radio en su ESP32-C6—: la placa se conecta sola a la red al arrancar y
+  el IDE trabaja con ella sin cable; del Bluetooth, de momento, el teclado y el ratón. Las dos
+  radios están apagadas de normal, y se apagan solas tras diez minutos sin uso.</li>
+  <li><strong>JC</strong>, un lenguaje nuevo, una mezcla de Java y C# para quien trabaja con esos
+  lenguajes: sin pretender ser ninguno de los dos, y con nuestras librerías. Por dentro es
+  BasicPlus, con el mismo compilador y el mismo bytecode, y un programa se traduce de uno a otro
+  desde el IDE (<a href="jc.html">el volumen de JC</a>). Para probarlo, las pruebas de C# de
+  Mono: de 2 322, funcionan 848, y por el camino los dos lenguajes ganaron operadores, las
+  interfaces y los genéricos.</li>
+  <li><strong>La fiabilidad.</strong> Cuatro placas, 48 horas seguidas con un programa que lo
+  toca todo, sin un error ni un reinicio, buscando sobre todo que ningún recurso —la memoria— se
+  fuera perdiendo con el tiempo; la prueba encontró dos fallos de verdad, ya arreglados. Todo lo
+  que se prueba, en <a href="pruebas.html">Cómo se prueba BasicPlus</a>.</li>
 </ul>
 <p>
-  Y lo que se nota al usarla: una placa nueva, la <strong>ESP32-C5</strong>, con su pantalla
-  táctil; el <strong>destructor</strong> (<code>~Clase()</code>), y al acabar un programa —bien,
-  con un error o con un Stop— cada objeto suelta lo que tomó: un PWM se para, las salidas vuelven
-  a su estado de reset; los módulos <code>Time</code> y <code>Heap</code>; y el IDE lista y lee
-  los ficheros de la placa mientras el programa corre. Ocho imágenes para diez placas; la ronda
-  de pruebas de V7, verde en las diez, en tres arquitecturas. Detalle en la
-  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v7.0">release v7.0</a> y las
-  <a href="RELEASES.md">notas de versión</a>; lo que trajo V6 —el código común de los micros, la
-  C3 y la C6, la GUI en su propio hilo, la captura de pantalla—, en la
-  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v6.0">release v6.0</a>.
+  Y además: lo pendiente de V7 y lo que ha ido saliendo, arreglado; las cadenas, mucho más
+  rápidas (en la Pico 2, recorrer una de 2 KB, de 535 a 20 ms); el sonido en la P4 de Waveshare;
+  y una imagen para la <strong>ESP32-P4X</strong>, la nueva revisión del P4, del mismo código.
+  Nueve imágenes para once placas. Detalle en la
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v8.0">release v8.0</a> y las
+  <a href="RELEASES.md">notas de versión</a>; lo que trajo V7 —los packs, una imagen por micro y
+  el segundo núcleo—, en la
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v7.0">release v7.0</a>.
 </p>
 
 <h2>Empezar</h2>

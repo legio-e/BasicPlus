@@ -7655,6 +7655,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   compilador ya son 402. **Lo que queda**, igual que ayer salvo lo hecho: que Eduardo lea las notas; `jc.html` y
   `pruebas.html` en inglés; el «Nuevo en V8» de las cuatro portadas y el cuerpo de la release; el último `doc_frags` y
   la guarda de las portadas; y la P4 del kit, la prueba a mano de las pruebas finales.
+- **20-nov.** La introducción de las notas, la de Eduardo (`bcb5e766`; *«Está muy bién»*, con su párrafo de la
+  fiabilidad). El «Nuevo en V8» de las cuatro portadas (de la introducción), las tarjetas de JC y de las pruebas en la
+  portada inglesa, y JC y las pruebas en la lista del README inglés. `pruebas.html` en inglés (un editor; las 98
+  cifras, una a una), y lo que vio en el español, arreglado en los dos: MOD8 no es «el formato de V6» —V6 es MOD7, y
+  MOD8 nació el 15-sep, en V7, antes del enlace tardío: es «el formato anterior a MOD9»; lo cambié yo mal el 18-nov—,
+  la fecha de las medidas (el 18 y el 19), y dos frases que no se entendían. Las marcas «por confirmar» de las notas,
+  resueltas: lo medido en el pre-flight (la red del 19-nov, las suites, los errores, el barrido, `check-jc`); un `.mod`
+  de V7 carga en las dos VMs de V8 (comprobado en el PC con tres programas compilados con el compilador de V7); un
+  `.mdn` de V7, sin probar (mejor recompilarlo); el firmware de la C6, en el ZIP. **El lote de Mono, repetido**
+  (Eduardo: *«Sí, repetirlo»*): 848 de 2 322, las mismas 6 que fallan, ningún veredicto cambia frente al del 7-nov.
+  `samplesJC/` va en el ZIP (*«Sí, en el ZIP»*). El micro simulado, con LVGL (2 075 `lv_`) y SQLite (305). **La P4 del
+  kit, por la tarde** (Eduardo: *«Estoy en una sesión remota así que no puedo conectar nada»*).
 
 #### ✅ `#846` — la ESP32-P4X (la P4 de la revisión v3.x): su imagen, del mismo código que la de la P4 (abierta y **CERRADA el 19-nov**, el commit de `#846`, con el kit nuevo de Eduardo, el ESP32-P4X-Function-EV; Eduardo: *«la ESP32-P4X es la corrección de un bug de Expressif. Con el tiempo la versión 1.x desaparece así que esta imagen es necesaria. Lo de si va ahora en V8 o en V9, yo creo que es razonable meterla ya y no esperar a la V9»*)
 
