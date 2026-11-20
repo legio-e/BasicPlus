@@ -7684,7 +7684,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   release, los dos README (el «Verificado en hardware real» y el «Estado», de V7 a V8) y las dos portadas. Eduardo,
   probando el IDE: *«todo OK»*. El ZIP definitivo (`9a56339e…`), y en su pasada por él, en una carpeta limpia
   (*«IDE OK. Ayuda OK. VM-C OK. Dispositivos OK.»*), un aviso falso del AOT en el Run de `SqlDemo` en la placa:
-  `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez.
+  `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez
+  (`c6648f46…`), y la pasada de Eduardo por él: `SqlDemo`, sin el aviso. **El pre-flight de V8, pasado.**
 
 #### 🔵 `#847` — el AOT del IDE no ve los módulos que sólo viajan en un pack: `SqlDemo`, sin una `native`, sale con «[aot] omitido SqlDemo.bp: … falta el modulo 'SQLite' … ¿BpVM.cfg o --stdlibDir?, ¿compilado antes? (se ejecutará interpretado)» (abierta el 20-nov, en las pruebas finales: Eduardo, con el IDE del ZIP en una carpeta limpia; desde V7 · **(a), hecha el 20-nov, en V8; (b), a V9**)
 
@@ -7714,6 +7715,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   763 `.mod`, iguales byte a byte, y lo que no compila, con los mismos diagnósticos; y la red, **VERDE**, con las
   cuentas de siempre (paridad 217/217; MOD8, 209 y los mismos 8 SKIP; dos workers, 217/217; C, 117/117; sim, sombra y
   norma, enteras; `packs-abi` y stdlib embebida). Lo que queda, (b), en `PENDIENTES` («Para V9») y en las notas.
+  Comprobado por Eduardo con el ZIP de después (`c6648f46…`), en una carpeta limpia: `SqlDemo` en la P4 del kit da
+  «AOT: sin funciones native que compilar», sin el aviso, y el programa, entero (`exit 0`).
 
 #### ✅ `#846` — la ESP32-P4X (la P4 de la revisión v3.x): su imagen, del mismo código que la de la P4 (abierta y **CERRADA el 19-nov**, el commit de `#846`, con el kit nuevo de Eduardo, el ESP32-P4X-Function-EV; Eduardo: *«la ESP32-P4X es la corrección de un bug de Expressif. Con el tiempo la versión 1.x desaparece así que esta imagen es necesaria. Lo de si va ahora en V8 o en V9, yo creo que es razonable meterla ya y no esperar a la V9»*)
 
