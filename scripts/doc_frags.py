@@ -2,12 +2,12 @@
 """doc_frags.py — compila TODOS los fragmentos de BasicPlus de la documentacion.
 
 USO
-    python bpgenvm-c/tools/doc_frags.py                    # docs/*.html, docs/en/*.html
-                                                           # y los .md de usuario
-    python bpgenvm-c/tools/doc_frags.py --solo docs/gui.html [--solo docs/en/gui.html]
-    python bpgenvm-c/tools/doc_frags.py --work DIR         # conserva los .bp generados
-    python bpgenvm-c/tools/doc_frags.py -v                 # lista tambien lo saltado
-    python bpgenvm-c/tools/doc_frags.py --json informe.json
+    python scripts/doc_frags.py                    # docs/*.html, docs/en/*.html
+                                                   # y los .md de usuario
+    python scripts/doc_frags.py --solo docs/gui.html [--solo docs/en/gui.html]
+    python scripts/doc_frags.py --work DIR         # conserva los .bp generados
+    python scripts/doc_frags.py -v                 # lista tambien lo saltado
+    python scripts/doc_frags.py --json informe.json
 
     Codigo de salida: 0 si ningun fragmento BP falla (un TROZO no es un fallo,
     ver abajo), 1 si alguno falla, 2 si falta el frontend o algun fichero
@@ -114,7 +114,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-RAIZ = os.path.abspath(os.path.join(AQUI, "..", ".."))
+RAIZ = os.path.abspath(os.path.join(AQUI, ".."))   # V8.1: en scripts/ (antes, en bpgenvm-c/tools/)
 JAR = os.path.join(RAIZ, "lexer-java", "target", "basicplus-frontend.jar")
 STDLIB = os.path.join(RAIZ, "bpstdlib")
 PACKS = os.path.join(RAIZ, "packs")

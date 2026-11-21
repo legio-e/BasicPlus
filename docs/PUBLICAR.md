@@ -184,7 +184,7 @@ vez**.
       Desde el 28-sep corre el corpus también con **dos workers** en las dos VMs
       (`check-smp`, #599): si sólo esa pasada sale roja, el fallo es del modo de
       dos núcleos, y lo que no vería nadie con un worker.
-- [ ] **Barrido de TODOS los samples**: `python bpgenvm-c/tools/samples_sweep.py`
+- [ ] **Barrido de TODOS los samples**: `python scripts/samples_sweep.py`
       → código de salida **0** y `N OK, 0 FALLO`. Compila cada `samples/**/*.bp`
       con el frontend actual, `bpstdlib/*.mod` y `packs/*.pack` al lado (la misma
       receta que `compat.sh`); salta `errores/` (fallan a propósito: los vigila
@@ -193,7 +193,7 @@ vez**.
       fallo pero léelo.
       ⚠️ No sustituye a `scripts/h13-lista.sh`: aquél además EJECUTA su lista.
 - [ ] **Ningún fragmento de la documentación falla**:
-      `python bpgenvm-c/tools/doc_frags.py` → código de salida **0** y `0 FALLO`.
+      `python scripts/doc_frags.py` → código de salida **0** y `0 FALLO`.
       Extrae los `<pre>` de `docs/*.html` y `docs/en/*.html` y los ```` ```basic ````
       de los .md de usuario, envuelve los trozos sueltos en `module/main` (con
       `import Core` y el import de cada módulo de la stdlib que nombren) y los
@@ -213,7 +213,7 @@ vez**.
       Desde V8 compila también los módulos de JC de `jc.html` (`<pre data-bp="jc">`, un
       módulo entero, como `X.jc`; un fragmento, `data-bp="jc-trozo"`, no se compila): la
       línea `JC:` del final, **0 FALLO**. Y los enlaces internos, desde V8 con su script:
-      `python -I -X utf8 bpgenvm-c/tools/enlaces_docs.py`, 0 rotos en lo que se publica
+      `python -I -X utf8 scripts/enlaces_docs.py`, 0 rotos en lo que se publica
       (los cuadernos viejos, como `V4_IDEAS.md`, pueden apuntar a fuentes que ya no existen).
 - [ ] **`pruebas.html` con los números de ESTE pre-flight** (desde V8; idea de Eduardo,
       15-nov: *«que los usuarios vean que se está probando a fondo todo el sistema»*): las

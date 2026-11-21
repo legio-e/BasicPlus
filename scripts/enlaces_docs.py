@@ -7,14 +7,14 @@
 # existe y, si lleva #ancla, a un id/name que exista en el destino (en un .md, vale también el ancla que GitHub saca
 # de un título). Sólo lee. Sale con 1 si hay alguno roto.
 #
-#   python -I -X utf8 bpgenvm-c/tools/enlaces_docs.py
+#   python -I -X utf8 scripts/enlaces_docs.py
 import glob
 import os
 import re
 import sys
 import unicodedata
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # V8.1: en scripts/ (antes, en bpgenvm-c/tools/)
 FUENTES = (glob.glob(os.path.join(RAIZ, "docs", "*.html")) + glob.glob(os.path.join(RAIZ, "docs", "en", "*.html"))
            + glob.glob(os.path.join(RAIZ, "docs", "*.md")) + glob.glob(os.path.join(RAIZ, "docs", "en", "*.md"))
            + [os.path.join(RAIZ, "README.md"), os.path.join(RAIZ, "README.es.md")])

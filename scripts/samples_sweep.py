@@ -2,11 +2,11 @@
 """samples_sweep.py — compila TODOS los samples/**/*.bp con el frontend actual.
 
 USO
-    python bpgenvm-c/tools/samples_sweep.py               # el corpus entero
-    python bpgenvm-c/tools/samples_sweep.py --solo samples/Blink.bp [--solo ...]
-    python bpgenvm-c/tools/samples_sweep.py --work DIR    # conserva los .mod
-    python bpgenvm-c/tools/samples_sweep.py -v            # lista tambien los OK
-    python bpgenvm-c/tools/samples_sweep.py --json informe.json
+    python scripts/samples_sweep.py               # el corpus entero
+    python scripts/samples_sweep.py --solo samples/Blink.bp [--solo ...]
+    python scripts/samples_sweep.py --work DIR    # conserva los .mod
+    python scripts/samples_sweep.py -v            # lista tambien los OK
+    python scripts/samples_sweep.py --json informe.json
 
     Codigo de salida: 0 si todo compila, 1 si algo falla, 2 si falta el frontend.
 
@@ -55,7 +55,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-RAIZ = os.path.abspath(os.path.join(AQUI, "..", ".."))
+RAIZ = os.path.abspath(os.path.join(AQUI, ".."))   # V8.1: en scripts/ (antes, en bpgenvm-c/tools/)
 JAR = os.path.join(RAIZ, "lexer-java", "target", "basicplus-frontend.jar")
 STDLIB = os.path.join(RAIZ, "bpstdlib")
 PACKS = os.path.join(RAIZ, "packs")
