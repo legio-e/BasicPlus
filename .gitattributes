@@ -8,9 +8,8 @@ compat/**/*.win text eol=lf
 # como parte del nombre y da FALLO en todas, justo cuando se va a restaurar.
 dist/**/SHA256SUMS.txt text eol=lf
 
-# V8 #730 (3-nov) — el catalogo de UTF-8 de Markus Kuhn lleva a proposito bytes que no son UTF-8: las pruebas de
-# bpgenvm-c/bpstr lo leen byte a byte, y un CRLF de mas lo cambiaria. Tal cual, siempre.
-bpgenvm-c/third_party/utf8-kuhn/UTF-8-test.txt binary
+# V8.1 (#802): toolchain/ y bpgenvm-c/ llevan su propio .gitattributes (con la suite son submódulos y éste
+# no les llega); el del catálogo UTF-8 de Kuhn (#730) está en el de bpgenvm-c/.
 
 # Los artefactos binarios de BasicPlus, digan lo que digan las heuristicas: sin conversion de finales de linea nunca.
 *.mod binary
