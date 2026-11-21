@@ -169,14 +169,13 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 ## Convenciones de trabajo
 
 - **Idioma:** español (código, docs, commits, conversación).
-- **Versión actual:** **V8, publicada el 20-nov-2026** (tag `v8.0`; su ZIP en `dist/` es el
-  oráculo de «¿lo he roto yo hoy?»). Su tema fue la red y el Bluetooth, y con ella llegaron JC
-  (BasicPlus con la ropa de Java y C#) y la ESP32-P4X: nueve imágenes, once placas. **Lo
-  siguiente, antes de V9: la suite** (`#802`, «Micro32 Suite»), **como una V8.1** —sólo
-  reorganizar, sin cambios ni mejoras, y verificada entera antes de publicarla—; se empieza
-  estudiando cómo hacerla. Después, V9 (sus hitos los nombra Eduardo): lo que V8 le pasa, en
-  `docs/FICHAS.md` §ABIERTAS (lo que queda abierto en el bloque V8) y en `docs/PENDIENTES.md`
-  («Para V9»); el cuaderno de V8, `docs/V8_IDEAS.md`. V7 se publicó el 13-oct (tag `v7.0`).
+- **Versión actual:** **V8.1, publicada el 21-nov-2026: la suite** (`#802`; tag `v8.1` en los tres
+  repositorios de `micro32-suite`; su ZIP, `dist/Micro32-Suite-8.1-win.zip`, es el oráculo de «¿lo he
+  roto yo hoy?»). No cambió nada del producto de V8 (20-nov, tag `v8.0`): la red y el Bluetooth, JC
+  (BasicPlus con la ropa de Java y C#) y la ESP32-P4X; nueve imágenes, once placas. **Lo siguiente,
+  V9, sin abrir** (sus hitos los nombra Eduardo): lo que V8 le pasa, en `docs/FICHAS.md` §ABIERTAS
+  (lo que queda abierto en el bloque V8) y en `docs/PENDIENTES.md` («Para V9»); el cuaderno de V8,
+  `docs/V8_IDEAS.md`. V7 se publicó el 13-oct (tag `v7.0`).
   **El proyecto entra en su madurez** (Eduardo, 20-nov): cada vez menos cambios internos;
   mejorar librerías y soportar más dispositivos, poco a poco, sin prisas.
 - **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):

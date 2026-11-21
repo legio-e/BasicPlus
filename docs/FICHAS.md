@@ -36,6 +36,29 @@
 
 ---
 
+## 🚀 V8.1 PUBLICADA — 21-nov-2026 · la suite (`#802`)
+
+No cambia nada del producto: reorganiza el proyecto. BasicPlus pasa a la organización `micro32-suite`, con `toolchain`
+(lo de Java) y `runtime` (lo de C) como submódulos en `toolchain/` y `bpgenvm-c/`, cada uno con su historia. **V9, sin
+abrir**: lo que V8 le pasa, en su bloque de §ABIERTAS y en `PENDIENTES` («Para V9»).
+
+| qué | dónde |
+|---|---|
+| repositorios | `micro32-suite/BasicPlus` (transferido de `legio-e`: sus 4 estrellas, sus releases y Pages se fueron con él), `micro32-suite/toolchain` (788 commits) y `micro32-suite/runtime` (1212) |
+| commits publicados | BasicPlus `a505c608`, `toolchain` `42f4b80`, `runtime` `6f71c41` · el del traspaso, después |
+| etiquetas | `v8.1` (anotada, «Micro32 Suite v8.1») en los tres; `toolchain` y `runtime` conservan `v1.0`–`v8.0` |
+| release | https://github.com/micro32-suite/BasicPlus/releases/tag/v8.1 («Micro32 Suite v8.1», Latest) |
+| artefacto **único** | `Micro32-Suite-8.1-win.zip` — 33.710.433 B, `sha256 344ee663…648a` |
+| web | https://micro32-suite.github.io/BasicPlus/ y `/en/`, build `built` sobre `a505c608`; las direcciones de `legio-e.github.io/BasicPlus/`, por `legio-e/legio-e.github.io` (un `404.html` que lleva a la misma ruta en el sitio nuevo) |
+
+**Verificado, no supuesto:** el ZIP **bajado de la release** es, byte a byte, el de `dist` (el digest de GitHub, el
+mismo); un `git clone --recursive` desde GitHub trae los tres en `v8.1`, con los árboles idénticos a los de la copia de
+trabajo; las 22 direcciones de la web nueva dan 200, y las viejas (también la de minúsculas del IDE de V8.0) llegan a la
+nueva en el navegador; la dirección de git de `legio-e/BasicPlus` redirige. Antes, el clon recursivo limpio compiló y pasó
+la red con las cuentas de siempre, y Eduardo probó el IDE del ZIP (*«el IDE bien, los programas se compilan y se
+ejecutan, la ayuda funciona»*; la VM-C, también; la opción «VM Java (TCP v1)» del panel de la placa no arranca una VM
+—como en V8.0—: `#848`, a V9).
+
 ## 🚀 V8 PUBLICADA — 20-nov-2026
 
 V8, la de la red y el Bluetooth, empezó el 14-oct en modo experimentar y cerró su alcance el 6-nov; la recta final
@@ -7712,6 +7735,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez
   (`c6648f46…`), y la pasada de Eduardo por él: `SqlDemo`, sin el aviso. **El pre-flight de V8, pasado.**
 
+#### 🔵 `#848` — en el panel de la placa, «VM Java (TCP v1)» sólo se conecta a una VM ya en marcha (`localhost:7332` por defecto): no la arranca, como sí hace el micro simulado con su botón (abierta el 21-nov, en la pasada de Eduardo por el IDE de la V8.1; igual en V8.0 · **a V9**: Eduardo, *«de momento solamente publicamos»*)
+
+- **Lo visto** (Eduardo): *«Es la de Java la que no me va»*: «[Placa ERROR] no se pudo conectar a la VM remota
+  localhost:7332 — ¿está corriendo `bpgenvm --listen 7332 --workdir ...` allí?». La VM-C y el Run de la barra (que
+  lanza su VM Java local), bien.
+- **La causa** (leído el código): `PicoExplorer.onConnect` con «VM Java (TCP v1)» llama a `BpvmBackend.connect` sobre el
+  `endpoint` del recuadro, que acaba en `BpvmClient.connectRemote`: se conecta, no lanza (es lo de `A2.6`, una VM en
+  otro sitio). El micro simulado tiene su «Arrancar» (`SimRunner`). Las clases que conectan y lanzan
+  (`BpvmClient`, `PicoExplorer`, `SimRunner`) son idénticas en el IDE de V8.0 y en el de V8.1. Y desde el ZIP 8.1, la VM
+  Java (`java -cp BpIde-8.1.jar edu.bpgenvm.Main --listen 7332 --workdir …`) arranca y escucha.
+- **Para V9**: que la opción de Java tenga, como el micro simulado, su botón para arrancar una VM local (el `spawnVmProcess`
+  del Run ya existe); o que el mensaje diga cómo.
+
 #### 🔵 `#847` — el AOT del IDE no ve los módulos que sólo viajan en un pack: `SqlDemo`, sin una `native`, sale con «[aot] omitido SqlDemo.bp: … falta el modulo 'SQLite' … ¿BpVM.cfg o --stdlibDir?, ¿compilado antes? (se ejecutará interpretado)» (abierta el 20-nov, en las pruebas finales: Eduardo, con el IDE del ZIP en una carpeta limpia; desde V7 · **(a), hecha el 20-nov, en V8; (b), a V9**)
 
 - **Lo visto** (el log de Eduardo, *Run on Device* de `samples/SqlDemo.bp` en la P4 del kit): «compilación OK», el aviso
@@ -9074,7 +9110,7 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **Comprobado en la P4**, con los plazos de verdad: quieta 25 s y un programa callado 30 s, sin falsa alarma; parado en el depurador, contesta; y cuando la radio desaparece, el IDE lo dice a los 11 s y se vuelve a conectar. En la ventana, Eduardo: *«OK, todo funciona»*.
 - **Las placas:** la P4, la S3 y la C5, con la imagen nueva el 7-nov. Una placa con WiFi y una imagen anterior daría, con este IDE, «conexión perdida» con un programa callado más de 15 s.
 
-#### 🔵 `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir · **14-nov: decidido el orden** —la suite, entre V8 y V9— · **20-nov: LO SIGUIENTE, como una V8.1**)
+#### ✅ `#802` — idea de Eduardo: «Micro32 Suite», una organización en GitHub y el proyecto dividido en dos, Java y C (abierta el 6-nov; sin decidir · **14-nov: decidido el orden** —la suite, entre V8 y V9— · **20-nov: LO SIGUIENTE, como una V8.1** · **CERRADA el 21-nov: V8.1 PUBLICADA**, tag `v8.1` en los tres; el registro, arriba del todo)
 
 - **La idea:** *«con JC llamar al proyecto BasicPlus se queda un poco corto»*: el nombre de un grupo de proyectos, y dos: el IDE, el compilador y la VM-Java, y la VM-C con las de los micros.
 - **Medido** (`V8_IDEAS` §E14): el código se separa limpio, por contratos; en medio quedan la stdlib, la red, el AOT, lo que usa el IDE y los documentos; y en V8, uno de cada tres commits de código toca Java y C a la vez.

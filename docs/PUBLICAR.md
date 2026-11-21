@@ -54,6 +54,25 @@ decisión.
 
 ---
 
+## ✅ PRE-FLIGHT DE V8.1 — la suite (pasado el 21-nov; V8.1 publicada el 21-nov)
+
+Una versión que sólo reorganiza (`#802`): lo que se mide es que nada cambie. Como en V8.0, `PUBLICAR.md` viaja en el
+ZIP: esta tabla, completa, entra en el commit de después del tag (el del tag, `a505c608`, lleva la de dentro del ZIP).
+
+| comprobación | resultado |
+|---|---|
+| Suites (`pack`, `miVM`, `lexer-java`) | 17, 66 y 404, en la copia de trabajo y en el clon recursivo limpio (allí, 2 de `miVM` saltadas: necesitan `samples/LocalsDbg.dbg`, que es salida de compilación; igual en V8.0) |
+| `compat/compat.sh check` | en la copia de trabajo, tras mover Java a `toolchain/` (paso 1c): **VERDE**, con las cuentas de V8.0. En el clon recursivo limpio del estado final (los remotos desnudos haciendo de GitHub; el ZIP de V6, el oráculo, aparte): las mismas, salvo `test-frcond`, que pide el kernel de FreeRTOS en `../FreeRTOS-LTS`, un SDK fuera de git; con él, pasa (y su control, rojo) |
+| El lote de Mono (`cs2jc`, recompilado con las rutas nuevas) | 848, 6, 1468 y 420: ningún veredicto distinto del de V8.0 |
+| `doc_frags`, `samples_sweep`, `h13-errores`, `enlaces_docs` (desde `scripts/`) | 377 de BP y 78 de JC, 0 FALLO · 415 OK · 151 OK · 1396 enlaces, los 3 de `V4_IDEAS` de siempre |
+| El compilador nuevo, los mismos `.mod` | el corpus (765 fuentes) con el jar de antes y el de `toolchain/`: los 763 `.mod`, iguales |
+| Guarda de las 4 portadas | **4 OK** — 20 069 / 20 594 / 25 333 / 25 090 B; 20 / 20 / 7 / 7 (los README cuentan los `#` del bloque de clonar) |
+| ZIP montado y verificado por dentro | `Micro32-Suite-8.1-win.zip`, 33 MB, sha256 **`344ee663…`**, 799 entradas. Frente al de V8.0, las mismas; cambian el IDE (`IdePrefs`, `FrmMain`, `AotRiscvPicSmoke`; y sin las 14 clases rancias del de V8.0), la hora del micro simulado y 25 textos (19 sólo de rutas, direcciones o el jar; `PUBLICAR`, los `QUICKSTART`, `RELEASES` y las portadas, por la V8.1). Los 774 ficheros que salen del repositorio, iguales al árbol del tag; el firmware, 10 OK; sin el nombre de la red ni su clave |
+| Desplegado en carpeta limpia y probado allí | Eduardo: *«el IDE bien, los programas se compilan y se ejecutan, la ayuda funciona»*; la VM-C, también. «VM Java (TCP v1)», en el panel de la placa, no arranca una VM (igual en V8.0): `#848`, a V9 |
+| Publicación | `toolchain` y `runtime`, creados y subidos (`main` y 10 etiquetas cada uno); `legio-e/legio-e.github.io`, con la redirección, probada antes de transferir; BasicPlus, transferido (sus estrellas, releases y Pages, con él); `v8.1` en los tres; Pages `built` sobre `a505c608` (22 direcciones, 200) y las viejas llegan a la nueva; la release, Latest, con el ZIP bajado igual byte a byte; y un `git clone --recursive` desde GitHub, con los tres árboles idénticos a los de la copia de trabajo |
+
+---
+
 ## ✅ PRE-FLIGHT DE V8 — F1 (pasado del 18 al 20-nov; V8 publicada el 20-nov)
 
 ⚠️ **Desde V8, este fichero viaja en el ZIP**: `pruebas.html` lo enlaza, y el empaquetador copia cada `.md` que enlaza
