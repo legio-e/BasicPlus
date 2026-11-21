@@ -7746,7 +7746,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (`holes/gap1`, `overlay`), sin mirar: son notas de pruebas.
 - **Para pensar, no decidido:** que la VM C del PC lea, como la Java, el `stdlibDir` de `BpVM.cfg`.
 
-#### 🔵 `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **los README, hechos en local; el push y lo de GitHub, con su palabra**)
+#### 🔵 `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **hecho el 21-nov: la portada, los README y la licencia de `toolchain` y `runtime`, y la portada de la organización; el «About», a hablarlo**: *«La 3 lo hablamos»*)
 
 - **Lo medido** (el tráfico de GitHub, los últimos 14 días): 66 visitas de 9 personas y 28 clones de 23 (en buena parte,
   robots); de fuera, 11 llegadas desde github.com y 1 desde Google. El «About», sin web; 13 *topics*; la imagen social, la
@@ -7767,10 +7767,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Verificado:** el blink en BP y en JC, compilados y corridos en las dos VMs, con la misma salida, igual entre los dos;
   `doc_frags` compila los dos (el bloque de JC, marcado ` ```java jc `: GitHub sigue coloreándolo como Java); los
   enlaces relativos y las anclas, sin uno roto; y la portada, renderizada con el Markdown de GitHub y mirada.
-- **Pendiente, con su palabra:** el push (la norma del 14-ago: nada sube entre versiones; esto no toca el producto ni
-  promete nada de V9); la web del «About» (`micro32-suite.github.io/BasicPlus/`) y más *topics*; el `LICENSE` en
-  `toolchain` y `runtime`. Y lo que es suyo: una foto o un vídeo corto de una placa con el IDE, lo mejor para arriba; la
-  imagen social; y la difusión fuera (Hacker News, Reddit, Hackaday).
+- **Después, con su palabra** (*«OK. La subimos»*; *«1 si, 2 si»*): la portada, subida (`b2987589`); y **para la suite,
+  otra página, corta**, no la misma —su papel es otro (la entrada: qué es y adónde ir), una copia acabaría desfasada y
+  una página larga empujaría hacia abajo la lista de los repositorios—: el repositorio `micro32-suite/.github`, público,
+  con `profile/README.md` (`06b01cc`; la copia de trabajo, en `C:\tmp\v81\dotgithub`), sin números de versión para no
+  tocarla en cada una. Y `toolchain` y `runtime`, con su README en los dos idiomas y su `LICENSE` (`549fb37`,
+  `d2fc997`): `toolchain` no tenía README, y el de `runtime` era el de los primeros días de la VM C («F1 (en curso)»).
+  Al escribirlo salió `#850` (`17d9089b`). Y una frase de la portada, corregida: la ventana de la GUI en el PC, la de
+  Windows (LVGL y SDL2, los de MinGW).
+- **Pendiente:** el «About» —la web y más *topics*— (Eduardo: *«La 3 lo hablamos»*). Y lo que es suyo: una foto o un
+  vídeo corto de una placa con el IDE, lo mejor para arriba; la imagen social; y la difusión fuera (Hacker News,
+  Reddit, Hackaday).
 
 #### 🔵 `#848` — en el panel de la placa, «VM Java (TCP v1)» sólo se conecta a una VM ya en marcha (`localhost:7332` por defecto): no la arranca, como sí hace el micro simulado con su botón (abierta el 21-nov, en la pasada de Eduardo por el IDE de la V8.1; igual en V8.0 · **a V9**: Eduardo, *«de momento solamente publicamos»*)
 

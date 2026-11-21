@@ -117,8 +117,8 @@ source](#build-from-source).
 
 ## Boards
 
-Nine firmware images, eleven boards, three architectures — and the PC
-(Windows, Linux or macOS), which runs both VMs and shows the graphical
+Nine firmware images, eleven boards, three architectures — and the PC, which
+runs both VMs (Windows, Linux or macOS) and, on Windows, shows the graphical
 interface in a window.
 
 | Board | Chip | Screen (LVGL) | WiFi · Bluetooth | `native` (AOT) |

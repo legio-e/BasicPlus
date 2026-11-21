@@ -116,9 +116,9 @@ código](#compilar-desde-el-código).
 
 ## Placas
 
-Nueve imágenes de firmware, once placas, tres arquitecturas — y el PC
-(Windows, Linux o macOS), que ejecuta las dos VMs y enseña la interfaz gráfica
-en una ventana.
+Nueve imágenes de firmware, once placas, tres arquitecturas — y el PC, que
+ejecuta las dos VMs (Windows, Linux o macOS) y, en Windows, enseña la interfaz
+gráfica en una ventana.
 
 | Placa | Chip | Pantalla (LVGL) | WiFi · Bluetooth | `native` (AOT) |
 |---|---|---|---|---|
