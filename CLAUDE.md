@@ -97,8 +97,9 @@ docs/         manual, specs (.mod, opcodes, heap, wire), backlog, ESTADO
 ```
 
 Los **tres proyectos Maven** son `miVM`, `lexer-java` y `BpIde` (donde se hace la
-"cirugía"). `bpgenvm-c` se compila con `make`. (Hay carpetas legacy como `lexer/`,
-`lexer2/`, `vm/`: no son las activas.)
+"cirugía"). `bpgenvm-c` se compila con `make`. (Las carpetas viejas —`lexer/`, `vm/`,
+`generador/`, `h3bench/`, `diag/`, `bp_propuesta_modelo_memoria/`— salieron del árbol en la V8.1: siguen en la
+historia, en `v8.0`.)
 
 ## Comandos (PC)
 
