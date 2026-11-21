@@ -13,7 +13,7 @@ import io, os, re, statistics, subprocess, sys, time
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
-JVM = os.path.join(ROOT, 'miVM', 'target', 'bpgenvm-1.0.jar')
+JVM = os.path.join(ROOT, 'toolchain', 'miVM', 'target', 'bpgenvm-1.0.jar')
 CVM = os.path.join(ROOT, 'bpgenvm-c', 'build', 'bpgenvm-c.exe')
 RX_SIM = re.compile(r'tabla de simbolos: (\d+) simbolos(?:, (\d+) B de nombres, (\d+) B en total)?')
 RX_ENL = re.compile(r'enlace: (\d+) modulos, (\d+) busquedas, (\d+) strcmp, (\d+) us')

@@ -28,7 +28,7 @@ function Time-Run($label, $cmd, $cmdArgs) {
 
 Write-Host ("=== Startup overhead (Hello.mod, {0} runs) ===" -f $Runs)
 & "C:/lenguajes/pm/bpgenvm-c/build/bpgenvm-c.exe" "samples/Hello.mod" | Out-Null
-& java -jar C:/lenguajes/pm/miVM/target/bpgenvm-1.0.jar "samples/Hello.mod" | Out-Null
+& java -jar C:/lenguajes/pm/toolchain/miVM/target/bpgenvm-1.0.jar "samples/Hello.mod" | Out-Null
 
 $sC = Time-Run "VM-C startup"    "C:/lenguajes/pm/bpgenvm-c/build/bpgenvm-c.exe" "samples/Hello.mod"
-$sJ = Time-Run "VM-Java startup" "java" "-jar C:/lenguajes/pm/miVM/target/bpgenvm-1.0.jar samples/Hello.mod"
+$sJ = Time-Run "VM-Java startup" "java" "-jar C:/lenguajes/pm/toolchain/miVM/target/bpgenvm-1.0.jar samples/Hello.mod"

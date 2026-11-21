@@ -2,7 +2,7 @@
   "_comentario": [
     "SqlDemo — SQLite SIN ORM: exec, execInt/Long/Double/Str y query.",
     "",
-    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "   java -jar toolchain/lexer-java/target/basicplus-frontend.jar \\",
     "        --project samples/SqlDemo.bpbuild --backend=mivm",
     "",
     "RECONSTRUIDO el 19-ago. El original vivia en notas/ (ignorada por git) y se",

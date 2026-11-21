@@ -313,8 +313,8 @@
   <a href="QUICKSTART.md">quick start</a> explains, and with Python:
 </p>
 <pre>bash compat/compat.sh check                # the net: about twenty minutes
-mvn -f lexer-java/pom.xml test             # the compiler's tests
-mvn -f miVM/pom.xml test                   # the Java VM's
+mvn -f toolchain/lexer-java/pom.xml test   # the compiler's tests
+mvn -f toolchain/miVM/pom.xml test         # the Java VM's
 python scripts/samples_sweep.py            # all the samples
 bash scripts/h13-errores.sh                # the error programs
 python scripts/doc_frags.py                # the documentation's examples</pre>

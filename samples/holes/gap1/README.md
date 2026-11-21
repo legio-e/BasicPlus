@@ -11,14 +11,14 @@ La VM-C implementa un *subconjunto* de los ~126 builtins de la VM-Java
 
 Detalle y clasificación completa: `docs/BUILTINS.md` § *Paridad VM-C (GAP-1)*.
 
-Compilar (`$F` = `lexer-java/target/basicplus-frontend.jar`):
+Compilar (`$F` = `toolchain/lexer-java/target/basicplus-frontend.jar`):
 
     java -jar $F samples/holes/gap1/GapBuiltins.bp    --compile <dir> --backend=mivm
     java -jar $F samples/holes/gap1/MissingBuiltin.bp --compile <dir> --backend=mivm
 
 Ejecutar y comparar (VM-Java vs VM-C):
 
-    java -jar miVM/target/bpgenvm-1.0.jar <dir>/GapBuiltins.mod
+    java -jar toolchain/miVM/target/bpgenvm-1.0.jar <dir>/GapBuiltins.mod
     bpgenvm-c/build/bpgenvm-c.exe        <dir>/GapBuiltins.mod
 
 | Fichero | Qué prueba |

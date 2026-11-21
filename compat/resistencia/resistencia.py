@@ -53,7 +53,7 @@ def compila():
     """ResistenciaGui.bp, compilado desde la raíz del repo (allí está el BpVM.cfg) a un temporal; con él sale también
     Resistencia.mod. Devuelve la carpeta."""
     destino = tempfile.mkdtemp(prefix='resistencia')
-    r = subprocess.run(['java', '-jar', os.path.join(REPO, 'lexer-java', 'target', 'basicplus-frontend.jar'),
+    r = subprocess.run(['java', '-jar', os.path.join(REPO, 'toolchain', 'lexer-java', 'target', 'basicplus-frontend.jar'),
                         os.path.join(AQUI, 'ResistenciaGui.bp'), '--compile', destino, '--backend=mivm'],
                        cwd=REPO, capture_output=True)   # en bytes: Java escribe en la página de códigos de Windows
     if r.returncode != 0 or not all(os.path.exists(os.path.join(destino, programa(g) + '.mod')) for g in (0, 1)):

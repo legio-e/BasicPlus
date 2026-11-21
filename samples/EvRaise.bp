@@ -5,7 +5,7 @@
 // este sample corre entero y termina normal aunque `pulsa()` dispare.
 //
 // Para ver el bytecode del `raise`:
-//   java -cp miVM/target/classes edu.bpgenvm.MainDisasm samples/EvRaise.mod
+//   java -cp toolchain/miVM/target/classes edu.bpgenvm.MainDisasm samples/EvRaise.mod
 // antes del CALL_BUILTIN [221] van, en orden, los argumentos declarados (cada
 // uno en su ancho natural), la máscara ref|ancho, el nº de argumentos, el
 // destino (4B) y el receptor (8B) — la cabecera encima para que el despachador

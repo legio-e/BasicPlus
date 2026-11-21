@@ -241,7 +241,7 @@ namespace Cs2Jc
         {
             foreach (var inicio in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
                 for (var d = new DirectoryInfo(inicio); d != null; d = d.Parent)
-                    if (Directory.Exists(Path.Combine(d.FullName, "lexer-java")) && Directory.Exists(Path.Combine(d.FullName, "miVM"))
+                    if (Directory.Exists(Path.Combine(d.FullName, "toolchain", "lexer-java")) && Directory.Exists(Path.Combine(d.FullName, "toolchain", "miVM"))
                         && Directory.Exists(Path.Combine(d.FullName, "bpgenvm-c")))
                         return d.FullName;
             return null;

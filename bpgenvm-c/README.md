@@ -2,7 +2,7 @@
 
 Implementación C99 de la VM BasicPlus. Pensada para targets pequeños
 (MCU con FreeRTOS) y para entornos hosted (Linux/macOS/Windows como
-plataforma de desarrollo). La VM Java en `../miVM/` es la
+plataforma de desarrollo). La VM Java en `../toolchain/miVM/` es la
 implementación de referencia; **si las dos divergen, gana la spec en
 `../docs/`** (`MOD_FORMAT.md`, `OPCODES.md`, `HEAP_LAYOUT.md`,
 `BUILTINS.md`).
@@ -77,11 +77,11 @@ divergencia es un bug — en cualquiera de las dos. Como referencia:
 ```
 # Compilar un .bp con el frontend Java
 cd ..
-java -jar lexer-java/target/basicplus-frontend-1.0.0-shaded.jar \
+java -jar toolchain/lexer-java/target/basicplus-frontend-1.0.0-shaded.jar \
      samples/foo.bp --compile out --backend=mivm
 
 # Ejecutar con la VM Java
-java -jar miVM/target/bpgenvm-1.0.jar out/Foo.mod
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar out/Foo.mod
 
 # Ejecutar con la VM C
 cd bpgenvm-c

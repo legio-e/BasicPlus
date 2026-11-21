@@ -131,10 +131,10 @@ V2_FE="$HERE/v2/bin/basicplus-frontend.jar"
 V2_JAVA="$HERE/v2/bin/bpgenvm-1.0.jar"
 V2_C="$HERE/v2/bin/bpgenvm-c.exe"
 # --- Binarios / fuentes V3 (actuales) ---
-V3_FE="$ROOT/lexer-java/target/basicplus-frontend.jar"
-V3_JAVA="$ROOT/miVM/target/bpgenvm-1.0.jar"
+V3_FE="$ROOT/toolchain/lexer-java/target/basicplus-frontend.jar"
+V3_JAVA="$ROOT/toolchain/miVM/target/bpgenvm-1.0.jar"
 V3_C="$ROOT/bpgenvm-c/build/bpgenvm-c.exe"
-JAVA_OPC="$ROOT/miVM/src/main/java/edu/bpgenvm/bytecode/OpCode.java"
+JAVA_OPC="$ROOT/toolchain/miVM/src/main/java/edu/bpgenvm/bytecode/OpCode.java"
 # --- Capsula V6: el ZIP publicado (dist/, versionado a proposito) ---
 V6_ZIP="$ROOT/dist/BasicPlus-6.0-win.zip"
 V6_GOLD="$HERE/v6/golden"
@@ -1128,7 +1128,7 @@ sombra_caso() {  # $1=etiqueta $2=cwd $3=libdir $4=mod $5=regex que DEBE salir $
 }
 check_sombra() {
   echo "-- la sombra (#493): /app -> /lib -> packs, igual en las dos VMs; el aviso «tapa al de /lib» --"
-  local S="$WORK/sombra" fails=0 PACKJAR="$ROOT/pack/target/pack-1.0.jar"
+  local S="$WORK/sombra" fails=0 PACKJAR="$ROOT/toolchain/pack/target/pack-1.0.jar"
   rm -rf "$S"; mkdir -p "$S/src" "$S/var" "$S/app" "$S/lib" "$S/lib2" "$S/cwd" "$S/vacio"
   cp "$STDLIB"/*.mod "$S/lib/"; cp "$STDLIB/Core.mod" "$S/lib2/"; cp "$STDLIB"/*.mod "$S/cwd/"
   # La Str VARIANTE: el mismo fuente con toHex marcado. Se compila a var/ y se

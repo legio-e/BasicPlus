@@ -32,7 +32,7 @@ SIM   = os.path.join(REPO, "bpgenvm-c", "build", "bpvm-sim.exe")
 SIM   = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
 # V7/H8 (28-sep) — el programa se COMPILA al vuelo con el compilador de hoy (como sim_smoke): el .mod versionado era
 # un MOD7 del 13-sep que ninguna VM de hoy enlazaba, y la prueba salía INVALIDA sin que nadie lo viera.
-JAR   = os.path.join(REPO, "lexer-java", "target", "basicplus-frontend.jar")
+JAR   = os.path.join(REPO, "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 def _compila():
     d = tempfile.mkdtemp(prefix="reset_smoke_mod_")
     src = os.path.join(REPO, "samples", "benchmarks", "VivoLargo.bp")

@@ -59,7 +59,7 @@ HERE="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
 ROOT="$(cd "$(dirname "$0")/../../../.." && { pwd -W 2>/dev/null || pwd; })"
 BPC="$ROOT/bpgenvm-c"
 LVGL="$BPC/third_party/lvgl"
-CP="$ROOT/lexer-java/target/classes;$ROOT/pack/target/classes;$ROOT/miVM/target/classes"
+CP="$ROOT/toolchain/lexer-java/target/classes;$ROOT/toolchain/pack/target/classes;$ROOT/toolchain/miVM/target/classes"
 ARM_BIN="C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/bin"
 RV_BIN="$HOME/.espressif/tools/riscv32-esp-elf/esp-15.2.0_20251204/riscv32-esp-elf/bin"
 

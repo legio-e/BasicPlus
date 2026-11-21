@@ -5,7 +5,7 @@
     "'Gui2 lo puedes dejar como programa de test pero ya no dentro del Pack, intentemos ahorrar",
     "memoria'). La placa necesita grabados el pack Gui (o GuiMini), el de su driver y el Stdlib.pack.",
     "",
-    "   java -jar lexer-java/target/basicplus-frontend.jar --project samples/guipack/GuiPack.bpbuild --backend=mivm",
+    "   java -jar toolchain/lexer-java/target/basicplus-frontend.jar --project samples/guipack/GuiPack.bpbuild --backend=mivm",
     "",
     "Las native de Gui2 (import v1 from pack 'LVGL') las compila el AOT del IDE para la placa al",
     "ejecutar (aot.enabled): Gui2.mod y su .mdn van a /app con el programa. Sin el .mdn, cada",

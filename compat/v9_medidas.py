@@ -9,8 +9,8 @@
 import io, os, re, shutil, subprocess, sys, tempfile, datetime, statistics
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FE = ROOT + '/lexer-java/target/basicplus-frontend.jar'
-JVM = ROOT + '/miVM/target/bpgenvm-1.0.jar'
+FE = ROOT + '/toolchain/lexer-java/target/basicplus-frontend.jar'
+JVM = ROOT + '/toolchain/miVM/target/bpgenvm-1.0.jar'
 CVM = ROOT + '/bpgenvm-c/build/bpgenvm-c.exe'
 STD8 = ROOT + '/bpstdlib'
 SAMPLES = ROOT + '/bpgenvm-c/samples'

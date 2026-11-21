@@ -3,7 +3,7 @@
  *
  * Implementación C99 del bytecode .mod descrito en docs/MOD_FORMAT.md,
  * docs/OPCODES.md, docs/HEAP_LAYOUT.md y docs/BUILTINS.md. La VM Java
- * en miVM/ es la implementación de referencia; si esta C diverge,
+ * en toolchain/miVM/ es la implementación de referencia; si esta C diverge,
  * gana la spec en docs/.
  *
  * Fase 1 (F1): single-thread, sin heap dinámico, subset de opcodes

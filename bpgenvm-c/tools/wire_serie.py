@@ -38,7 +38,7 @@ POR LA RED (V8/H3, 6-nov): donde va el puerto, la direccion de la placa. Los ver
     python tools/wire_serie.py buscar            las placas de la red, las que contesten en 1,5 s
 
 Verbos de packs y env (F1, 12-sep): `packs` (PACK_LS), `pack <f.pack> [arm|riscv]`
-(graba; con arch PODA y SELLA como el panel del IDE, via tools/packtool/PackTool),
+(graba; con arch PODA y SELLA como el panel del IDE, via toolchain/tools/packtool/PackTool),
 `packfmt` (PACK_FORMAT: pide OK a Eduardo), `env [clave valor | clave -]`, `reset`,
 `resetcable`.
 """
@@ -533,21 +533,21 @@ def cmd_pack(w, args):
     entradas de las otras familias (el tamano final se declara en el BEGIN) y
     SELLAR el motor para la direccion que la placa elige (flashAddr/ramBase del
     BEGIN_REPLY) — llamando a PackBurn.podar/sellar del frontend via un PackTool
-    de scratchpad (`java -cp lexer-java/target/classes;pack/target/classes`).
+    de scratchpad (`java -cp toolchain/lexer-java/target/classes;toolchain/pack/target/classes`).
     Sin `arch` se graba tal cual: vale para un pack SIN nativo. Un pack universal
     con .npk grabado tal cual NO sirve: la placa lo ve «SIN realojar».
     Variables: PACKTOOL_CP y PACKTOOL_DIR (donde este PackTool.class)."""
     import os, subprocess, tempfile
     arch = args[1] if len(args) > 1 else None
     raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    cp = os.environ.get("PACKTOOL_CP", os.path.join(raiz, "lexer-java", "target", "classes") + ";"
-                        + os.path.join(raiz, "pack", "target", "classes"))
-    # PackTool.java vive en tools/packtool/ y se compila a build/packtool/ si falta
+    cp = os.environ.get("PACKTOOL_CP", os.path.join(raiz, "toolchain", "lexer-java", "target", "classes") + ";"
+                        + os.path.join(raiz, "toolchain", "pack", "target", "classes"))
+    # PackTool.java vive en toolchain/tools/packtool/ y se compila a bpgenvm-c/build/packtool/ si falta
     pt = os.environ.get("PACKTOOL_DIR", os.path.join(raiz, "bpgenvm-c", "build", "packtool"))
     if not os.path.isfile(os.path.join(pt, "PackTool.class")):
         os.makedirs(pt, exist_ok=True)
         jc = subprocess.run(["javac", "-cp", cp, "-d", pt,
-                             os.path.join(raiz, "bpgenvm-c", "tools", "packtool", "PackTool.java")],
+                             os.path.join(raiz, "toolchain", "tools", "packtool", "PackTool.java")],
                             capture_output=True, text=True)
         if jc.returncode != 0: print("javac PackTool:", jc.stderr[-400:]); return
     avisar_stdlib(w, open(args[0], "rb").read())       # V7 #623: la stdlib que no lleva, si la placa no la tiene

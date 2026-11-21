@@ -25,15 +25,16 @@ ESP32-P4, la C3, la C5 y la C6 — instalación y configuración en la [guía de
 IDE](guia-ide.html#aot).
 
 ```sh
-# Toolchain (compilador + VM Java) y VM C de host
-mvn -f miVM/pom.xml install
-mvn -f lexer-java/pom.xml install
+# Toolchain (el formato de los packs, la VM Java y el compilador, en este orden) y VM C de host
+mvn -f toolchain/pack/pom.xml install
+mvn -f toolchain/miVM/pom.xml install
+mvn -f toolchain/lexer-java/pom.xml install
 cd bpgenvm-c && make && cd ..
 
 # Compilar y ejecutar el blink en AMBAS VMs (en PC los GPIO loggean)
-java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp \
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
-java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
 bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 ```
 
@@ -44,8 +45,8 @@ del proyecto.
 **El IDE** (recomendado para todo lo que sigue):
 
 ```sh
-mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-8.0.jar     # o bpide.bat, en la raíz (cambia antes su ruta)
+mvn -f toolchain/BpIde/pom.xml package
+java -jar toolchain/BpIde/target/BpIde-8.0.jar     # o bpide.bat, en la raíz (cambia antes su ruta)
 ```
 
 Abre `samples/blink.bp`, botón **Compile**, menú **Run** — la salida

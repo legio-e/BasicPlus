@@ -6,8 +6,8 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
-FE="$ROOT/lexer-java/target/basicplus-frontend.jar"
-[ -f "$FE" ] || { echo "ERROR: falta $FE (mvn -f lexer-java/pom.xml install)" >&2; exit 1; }
+FE="$ROOT/toolchain/lexer-java/target/basicplus-frontend.jar"
+[ -f "$FE" ] || { echo "ERROR: falta $FE (mvn -f toolchain/lexer-java/pom.xml install)" >&2; exit 1; }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 java -jar "$FE" "$ROOT/samples/hello.bp" --compile "$TMP" --backend=mivm >/dev/null 2>&1
 [ -f "$TMP/Hello.mod" ] || { echo "ERROR: el frontend no produjo Hello.mod" >&2; exit 1; }

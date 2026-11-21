@@ -17,7 +17,7 @@
 set -u
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-FE="$RAIZ/lexer-java/target/basicplus-frontend.jar"
+FE="$RAIZ/toolchain/lexer-java/target/basicplus-frontend.jar"
 DIR="$RAIZ/samples/errores"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 
@@ -208,7 +208,7 @@ EOF
 
 # V8 #764 (2-nov) — el ARGUMENTO DE EJECUCION que no cabe (más de 127 bytes de UTF-8) es un error en la línea de
 # órdenes de las DOS VMs: el mismo texto y el código 2, sin ejecutar nada. Antes la VM-C lo cortaba sin decirlo.
-VMJ="$RAIZ/miVM/target/bpgenvm-1.0.jar"
+VMJ="$RAIZ/toolchain/miVM/target/bpgenvm-1.0.jar"
 VMC="$RAIZ/bpgenvm-c/build/bpgenvm-c"; [ -f "$VMC.exe" ] && VMC="$VMC.exe"
 largo="$(printf '%0128d' 0 | tr 0 x)"   # 128 bytes
 esperado="el argumento no cabe: 128 bytes (el tope es 127)"

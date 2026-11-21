@@ -3,7 +3,7 @@
     "Proyecto del PACK de SQLite. Todo lo suyo vive en esta carpeta (decision de",
     "Eduardo, 14-ago): fuentes, el nativo de cada familia y el build.",
     "",
-    "   java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "   java -jar toolchain/lexer-java/target/basicplus-frontend.jar \\",
     "        --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm",
     "",
     "ANTES de construir hay que copiar los .npk a outDir: el pack recoge del",

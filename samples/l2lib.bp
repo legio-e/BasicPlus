@@ -1,6 +1,6 @@
 // Librería de ejemplo para L2 (clases exportadas en .bpi).
 // Compílala con:
-//   java -jar lexer-java/target/basicplus-frontend.jar lexer-java/samples/l2lib.bp \
+//   java -jar toolchain/lexer-java/target/basicplus-frontend.jar toolchain/lexer-java/samples/l2lib.bp \
 //        --compile bpstdlib --backend=mivm
 //
 // Luego un app que haga `import L2Lib` puede construir instancias de

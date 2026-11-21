@@ -22,7 +22,7 @@ REPO = os.path.dirname(ROOT)
 SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM): SIM = os.path.join(ROOT, "build", "bpvm-sim")
 SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
-JAR  = os.path.join(REPO, "lexer-java", "target", "basicplus-frontend.jar")
+JAR  = os.path.join(REPO, "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 # La librería de packs, grabada como la graba el IDE (SimRunner). Ver sim_smoke.py.
 STDLIB_PACK = os.path.join(REPO, "packs", "Stdlib.pack")
 PORT = 5117

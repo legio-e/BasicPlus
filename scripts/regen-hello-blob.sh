@@ -21,7 +21,7 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-FE="$RAIZ/lexer-java/target/basicplus-frontend.jar"
+FE="$RAIZ/toolchain/lexer-java/target/basicplus-frontend.jar"
 FUENTE="$RAIZ/samples/hello.bp"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 

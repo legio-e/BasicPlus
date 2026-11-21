@@ -14,9 +14,9 @@
 //
 // CÓMO SE PRUEBA (en el PC, sin placa):
 //
-//   java -jar lexer-java/target/basicplus-frontend.jar \
+//   java -jar toolchain/lexer-java/target/basicplus-frontend.jar \
 //        --project samples/packlib/Demo.bpbuild --backend=mivm
-//   java -jar miVM/target/bpgenvm-1.0.jar samples/packlib/out/DemoLib.pack
+//   java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/packlib/out/DemoLib.pack
 //   bpgenvm-c/build/bpgenvm-c            samples/packlib/out/DemoLib.pack
 //
 // Al construir tiene que decir «EJECUTABLE (main=com.example.Demo, cualificado

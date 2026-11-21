@@ -233,10 +233,12 @@ VM and inside the device.
 ## Repository layout
 
 ```
-lexer-java/   compiler (frontend): .bp → .mod + .dbg (native code inside the .mod)
-miVM/         Java VM + debugger + TCP daemon
+toolchain/    the Java side:
+  pack/         the pack format
+  miVM/         Java VM + debugger + TCP daemon
+  lexer-java/   BP and JC compiler: .bp/.jc → .mod + .dbg (native code inside the .mod)
+  BpIde/        Swing IDE (fat-jar)
 bpgenvm-c/    C99 VM: host + firmwares for RP2350, ESP32-S3/C3/C5/C6/P4, STM32
-BpIde/        Swing IDE (fat-jar)
 bpstdlib/     standard library (.bp sources + compiled .mod); the GUI packs, in gui/
 packs/        the packs; in the repo, only Stdlib.pack (the others are built or come in the release)
 samples/      example programs
@@ -248,22 +250,23 @@ docs/         manual, GUI guide, specs (.mod, opcodes, heap, wire), backlog
 Requirements: JDK 8+, Maven, GCC (MinGW on Windows), `make`.
 
 ```sh
-# 1. Java toolchain (compiler + Java VM)
-mvn -f miVM/pom.xml install
-mvn -f lexer-java/pom.xml install
+# 1. Java toolchain (the pack format, the Java VM and the compiler), in this order
+mvn -f toolchain/pack/pom.xml install
+mvn -f toolchain/miVM/pom.xml install
+mvn -f toolchain/lexer-java/pom.xml install
 
 # 2. Host C VM  (add LVGL=1 for the GUI window; see bpgenvm-c/README)
 cd bpgenvm-c && make && cd ..
 
 # 3. Compile and run an example on BOTH VMs
-java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp \
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
-java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
 bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Optional) the IDE
-mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-8.0.jar
+mvn -f toolchain/BpIde/pom.xml package
+java -jar toolchain/BpIde/target/BpIde-8.0.jar
 ```
 
 The firmwares are built with their usual toolchains (pico-sdk + ninja,

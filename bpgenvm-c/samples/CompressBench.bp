@@ -5,7 +5,7 @@
 // caliente real). El mismo .mod se corre:
 //   - VM-C interp   : ./bpgenvm-c.exe CompressBench.mod
 //   - VM-C native   : ./build/test_compressbench.exe CompressBench.mod  (registra thunk AOT)
-//   - VM-Java       : java -cp miVM/target/classes edu.bpgenvm.Main CompressBench.mod
+//   - VM-Java       : java -cp toolchain/miVM/target/classes edu.bpgenvm.Main CompressBench.mod
 // checksum debe ser idéntico en las tres rutas (paridad); solo elapsed_ms varía.
 module CompressBench
 

@@ -115,7 +115,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.abspath(os.path.join(AQUI, ".."))   # V8.1: en scripts/ (antes, en bpgenvm-c/tools/)
-JAR = os.path.join(RAIZ, "lexer-java", "target", "basicplus-frontend.jar")
+JAR = os.path.join(RAIZ, "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 STDLIB = os.path.join(RAIZ, "bpstdlib")
 PACKS = os.path.join(RAIZ, "packs")
 
@@ -733,7 +733,7 @@ def main():
     a = ap.parse_args()
 
     if not os.path.exists(JAR):
-        print("FALTA el frontend: %s (mvn -f lexer-java/pom.xml install)" % JAR)
+        print("FALTA el frontend: %s (mvn -f toolchain/lexer-java/pom.xml install)" % JAR)
         return 2
     if a.solo:
         docs = [d.replace("\\", "/") for d in a.solo]

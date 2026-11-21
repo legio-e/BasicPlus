@@ -21,10 +21,10 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-VER="$(sed -n "s@.*<version>\(.*\)</version>.*@\1@p" "$RAIZ/BpIde/pom.xml" | head -1)"
+VER="$(sed -n "s@.*<version>\(.*\)</version>.*@\1@p" "$RAIZ/toolchain/BpIde/pom.xml" | head -1)"
 NOMBRE="BasicPlus-${VER}-win"
 OUT="$RAIZ/dist/$NOMBRE"
-JAR="$RAIZ/BpIde/target/BpIde-${VER}.jar"
+JAR="$RAIZ/toolchain/BpIde/target/BpIde-${VER}.jar"
 
 echo "== BasicPlus $VER =="
 

@@ -17,8 +17,8 @@ registro en Intrinsics.java, lo dice y no la migra (errores sí, silenciosos no)
 import io, os, re, sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JAVA = os.path.join(RAIZ, "miVM", "src", "main", "java", "edu", "bpgenvm", "bytecode", "Builtin.java")
-INTR = os.path.join(RAIZ, "lexer-java", "src", "main", "java", "basicplus", "frontend", "Intrinsics.java")
+JAVA = os.path.join(RAIZ, "toolchain", "miVM", "src", "main", "java", "edu", "bpgenvm", "bytecode", "Builtin.java")
+INTR = os.path.join(RAIZ, "toolchain", "lexer-java", "src", "main", "java", "basicplus", "frontend", "Intrinsics.java")
 
 def ids_de_builtin_java():
     s = io.open(JAVA, encoding="utf-8").read()

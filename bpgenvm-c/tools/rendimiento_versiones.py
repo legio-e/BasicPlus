@@ -48,7 +48,7 @@ def compila(v, trabajo):
         if num_version(v) < desde: continue
         if v == "hoy":
             cwd = REPO
-            cmd = ["java", "-jar", os.path.join(REPO, "lexer-java", "target", "basicplus-frontend.jar")]
+            cmd = ["java", "-jar", os.path.join(REPO, "toolchain", "lexer-java", "target", "basicplus-frontend.jar")]
         else:
             cwd = dist(v)
             jar = [f for f in os.listdir(cwd) if f.startswith("BpIde-") and f.endswith(".jar")][0]

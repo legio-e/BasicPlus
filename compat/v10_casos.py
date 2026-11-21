@@ -5,8 +5,8 @@
 import io, os, re, shutil, subprocess, sys, tempfile
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 ROOT = 'C:/lenguajes/pm'
-FE = ROOT + '/lexer-java/target/basicplus-frontend.jar'
-JVM = ROOT + '/miVM/target/bpgenvm-1.0.jar'
+FE = ROOT + '/toolchain/lexer-java/target/basicplus-frontend.jar'
+JVM = ROOT + '/toolchain/miVM/target/bpgenvm-1.0.jar'
 CVM = ROOT + '/bpgenvm-c/build/bpgenvm-c.exe'
 STD9 = sys.argv[1] if len(sys.argv) > 1 else None   # dir con la stdlib compilada como MOD9 (para Gui)
 W = tempfile.mkdtemp(prefix='v10r_')

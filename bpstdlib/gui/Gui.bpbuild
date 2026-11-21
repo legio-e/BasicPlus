@@ -10,7 +10,7 @@
     "   bash bpstdlib/gui/nativo/src/build_lvgl.sh p4                  (RISCV: el P4)",
     "   bash bpstdlib/gui/nativo/src/build_lvgl.sh arm                 (ARMV8: la Metro y las STM32; V7/H6 G5.b0)",
     "   cp bpstdlib/gui/nativo/lvgl.npk.* bpstdlib/gui/out/",
-    "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/Gui.bpbuild --backend=mivm",
+    "   java -jar toolchain/lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/Gui.bpbuild --backend=mivm",
     "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/out/Gui.pack riscv-imc",
     "",
     "El copiado NO es un descuido: el pack recoge del outDir los tipos mod/mdn/npk y el",

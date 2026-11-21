@@ -235,10 +235,12 @@ dispositivo.
 ## Estructura del repositorio
 
 ```
-lexer-java/   compilador (frontend): .bp → .mod + .dbg (el código nativo va dentro del .mod)
-miVM/         VM Java + debugger + daemon TCP
+toolchain/    lo de Java:
+  pack/         el formato de los packs
+  miVM/         VM Java + debugger + daemon TCP
+  lexer-java/   compilador de BP y JC: .bp/.jc → .mod + .dbg (el código nativo va dentro del .mod)
+  BpIde/        IDE Swing (fat-jar)
 bpgenvm-c/    VM C99: host + firmwares de RP2350, ESP32-S3/C3/C5/C6/P4, STM32
-BpIde/        IDE Swing (fat-jar)
 bpstdlib/     biblioteca estándar (fuentes .bp + .mod compilados); los packs de la GUI, en gui/
 packs/        los packs; en el repo, sólo Stdlib.pack (los demás se construyen o vienen en la release)
 samples/      programas de ejemplo
@@ -250,22 +252,23 @@ docs/         manual, guía gráfica, specs (.mod, opcodes, heap, wire), backlog
 Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`.
 
 ```sh
-# 1. Toolchain Java (compilador + VM Java)
-mvn -f miVM/pom.xml install
-mvn -f lexer-java/pom.xml install
+# 1. Toolchain Java (el formato de los packs, la VM Java y el compilador), en este orden
+mvn -f toolchain/pack/pom.xml install
+mvn -f toolchain/miVM/pom.xml install
+mvn -f toolchain/lexer-java/pom.xml install
 
 # 2. VM C de host  (añade LVGL=1 para la ventana de la GUI; ver bpgenvm-c/README)
 cd bpgenvm-c && make && cd ..
 
 # 3. Compilar y ejecutar un ejemplo en AMBAS VMs
-java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp \
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
-java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
 bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Opcional) el IDE
-mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-8.0.jar
+mvn -f toolchain/BpIde/pom.xml package
+java -jar toolchain/BpIde/target/BpIde-8.0.jar
 ```
 
 Los firmwares se compilan con sus toolchains habituales (pico-sdk + ninja,

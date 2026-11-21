@@ -25,7 +25,7 @@ SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]
 SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
-JAR  = os.path.join(ROOT, "..", "lexer-java", "target", "basicplus-frontend.jar")
+JAR  = os.path.join(ROOT, "..", "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 STDLIB_PACK = os.path.normpath(os.path.join(ROOT, "..", "packs", "Stdlib.pack"))
 STDLIB_DIR  = os.path.normpath(os.path.join(ROOT, "..", "bpstdlib"))
 N_STAT = 300

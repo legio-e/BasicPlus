@@ -36,7 +36,7 @@ if [ ! -d "$D/nativo/src" ]; then echo "no existe $D/nativo/src"; exit 1; fi
 BPB=$(ls "$D"/*.bpbuild 2>/dev/null | head -1)
 if [ -z "$BPB" ]; then echo "falta el .bpbuild en $D"; exit 1; fi
 INC="$ROOT/bpgenvm-c/include"
-CP="$ROOT/lexer-java/target/classes;$ROOT/pack/target/classes;$ROOT/miVM/target/classes"
+CP="$ROOT/toolchain/lexer-java/target/classes;$ROOT/toolchain/pack/target/classes;$ROOT/toolchain/miVM/target/classes"
 
 ARM_BIN="C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/bin"
 RV_BIN="$HOME/.espressif/tools/riscv32-esp-elf/esp-15.2.0_20251204/riscv32-esp-elf/bin"
@@ -85,5 +85,5 @@ echo "== el pack =="
 mkdir -p "$D/out"
 rm -f "$D"/out/*.npk.*
 cp "$D"/nativo/driver_"$DRV".npk.* "$D/out/"
-java -jar "$ROOT/lexer-java/target/basicplus-frontend.jar" --project "$BPB" --backend=mivm 2>&1 | grep -E "error|pack generado" || true
+java -jar "$ROOT/toolchain/lexer-java/target/basicplus-frontend.jar" --project "$BPB" --backend=mivm 2>&1 | grep -E "error|pack generado" || true
 ls -la "$D"/out/*.pack "$D"/nativo/driver_"$DRV".npk.* | awk '{print $5, $9}'

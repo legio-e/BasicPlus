@@ -18,7 +18,7 @@ set -e
 HERE="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
 ROOT="$(cd "$(dirname "$0")/../../.." && { pwd -W 2>/dev/null || pwd; })"
 INC="$ROOT/bpgenvm-c/include"
-CP="$ROOT/lexer-java/target/classes;$ROOT/pack/target/classes;$ROOT/miVM/target/classes"
+CP="$ROOT/toolchain/lexer-java/target/classes;$ROOT/toolchain/pack/target/classes;$ROOT/toolchain/miVM/target/classes"
 QUE="${1:-todos}"
 
 ARM_BIN="C:/Program Files (x86)/Arm/GNU Toolchain mingw-w64-i686-arm-none-eabi/bin"

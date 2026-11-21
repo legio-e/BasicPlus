@@ -4,7 +4,7 @@
 `bpstdlib/Core.bp` declara cada primitiva de la VM como una función con cuerpo `inline
 CALL_BUILTIN <id>` (la sección «LAS PRIMITIVAS DE LA VM»). De ahí salen:
 
-  miVM/src/main/java/edu/bpgenvm/bytecode/Builtin.java   el enum (constante, nombre BP, id = orden)
+  toolchain/miVM/src/main/java/edu/bpgenvm/bytecode/Builtin.java   el enum (constante, nombre BP, id = orden)
   bpgenvm-c/src/builtin_ids.h                              el enum de C (BUILTIN_X = n) con la firma BP
   bpgenvm-c/src/builtin_cadenas.h                          #774: dónde están sus parámetros string en la pila
 
@@ -36,7 +36,7 @@ import io, os, re, sys, glob
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORE = os.path.join(RAIZ, "bpstdlib", "Core.bp")
-JAVA = os.path.join(RAIZ, "miVM", "src", "main", "java", "edu", "bpgenvm", "bytecode", "Builtin.java")
+JAVA = os.path.join(RAIZ, "toolchain", "miVM", "src", "main", "java", "edu", "bpgenvm", "bytecode", "Builtin.java")
 CH   = os.path.join(RAIZ, "bpgenvm-c", "src", "builtin_ids.h")
 CC   = os.path.join(RAIZ, "bpgenvm-c", "src", "builtin_cadenas.h")
 

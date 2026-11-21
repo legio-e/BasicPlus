@@ -3,7 +3,7 @@
 Programas mínimos que reproducen bugs/limitaciones concretos. Sirven de
 verificación al taparlos y de guardia anti-regresión. Compilar con:
 
-    java -jar lexer-java/target/basicplus-frontend.jar samples/holes/<f>.bp
+    java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/holes/<f>.bp
 
 (Diagnósticos en formato `[línea:col] error ...`.)
 

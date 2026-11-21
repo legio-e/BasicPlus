@@ -13,7 +13,7 @@ al ejecutar, en la ABI del día.) Pasó el 20-ago (#504: ABI 4 contra 6) y otra 
 
 QUE COMPRUEBA
   1. Las dos puntas dicen la misma ABI: `MDN_ABI_VERSION` en bpgenvm-c/src/mdn_format.h
-     (la VM) y en lexer-java/.../MdnPack.java (quien escribe el `.mdn`).
+     (la VM) y en toolchain/lexer-java/.../MdnPack.java (quien escribe el `.mdn`).
   2. Cada `.mdn` VERSIONADO (los ingredientes de `bpstdlib/**/nativo/`: de ahí se
      rehace cada pack) está en esa ABI.
   3. Cada `.pack` que se puede grabar —`packs/`, los `out/` de los proyectos de pack
@@ -37,7 +37,7 @@ import sys
 
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 MDN_FORMAT = os.path.join(RAIZ, 'bpgenvm-c', 'src', 'mdn_format.h')
-MDN_PACK = os.path.join(RAIZ, 'lexer-java', 'src', 'main', 'java', 'basicplus', 'frontend', 'MdnPack.java')
+MDN_PACK = os.path.join(RAIZ, 'toolchain', 'lexer-java', 'src', 'main', 'java', 'basicplus', 'frontend', 'MdnPack.java')
 
 PACK_MAGIC = 0x4250414B        # 'BPAK'
 PACK_VERFMT = 1

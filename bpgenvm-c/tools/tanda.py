@@ -219,7 +219,7 @@ except ImportError:          # solo hace falta para las placas; el --sim no lo u
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.abspath(os.path.join(AQUI, "..", ".."))            # C:/lenguajes/pm
 BPGENVM = os.path.join(RAIZ, "bpgenvm-c")
-JAR = os.path.join(RAIZ, "lexer-java", "target", "basicplus-frontend.jar")
+JAR = os.path.join(RAIZ, "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 EXE = os.path.join(BPGENVM, "build", "bpgenvm-c.exe")
 if not os.path.exists(EXE):
     EXE = EXE[:-4]
@@ -1035,9 +1035,9 @@ RE_THUNKS = re.compile(r"(\d+) thunk\(s\)")
 
 
 def jar_del_ide():
-    """El fat-jar del IDE (trae AotBuild y el frontend): el mas reciente de BpIde/target."""
+    """El fat-jar del IDE (trae AotBuild y el frontend): el mas reciente de toolchain/BpIde/target."""
     import glob
-    c = [j for j in glob.glob(os.path.join(RAIZ, "BpIde", "target", "BpIde-*.jar"))
+    c = [j for j in glob.glob(os.path.join(RAIZ, "toolchain", "BpIde", "target", "BpIde-*.jar"))
          if "original" not in os.path.basename(j)]
     return max(c, key=os.path.getmtime) if c else None
 
@@ -1054,14 +1054,14 @@ def fundir_aot(p, o, receta):
     cache[receta] = fa
     jar = jar_del_ide()
     if not jar:
-        fa["error"] = "no encuentro el jar del IDE (BpIde/target/BpIde-*.jar): hace falta para compilar el nativo"
+        fa["error"] = "no encuentro el jar del IDE (toolchain/BpIde/target/BpIde-*.jar): hace falta para compilar el nativo"
         return fa
     if not os.path.isfile(os.path.join(PACKTOOL_DIR, "AotSingle.class")) or \
             os.path.getmtime(os.path.join(PACKTOOL_DIR, "AotSingle.class")) < \
-            os.path.getmtime(os.path.join(BPGENVM, "tools", "packtool", "AotSingle.java")):
+            os.path.getmtime(os.path.join(RAIZ, "toolchain", "tools", "packtool", "AotSingle.java")):
         os.makedirs(PACKTOOL_DIR, exist_ok=True)
         jc = subprocess.run(["javac", "-cp", jar, "-d", PACKTOOL_DIR,
-                             os.path.join(BPGENVM, "tools", "packtool", "AotSingle.java")],
+                             os.path.join(RAIZ, "toolchain", "tools", "packtool", "AotSingle.java")],
                             capture_output=True)
         if jc.returncode != 0:
             fa["error"] = "javac AotSingle: " + jc.stderr.decode("utf-8", "replace")[-300:]

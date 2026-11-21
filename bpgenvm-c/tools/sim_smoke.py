@@ -27,7 +27,7 @@ SIM  = os.path.join(ROOT, "build", "bpvm-sim.exe")
 if not os.path.exists(SIM):
     SIM = SIM[:-4]  # sin .exe (Linux/mac)
 SIM  = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
-JAR  = os.path.join(ROOT, "..", "lexer-java", "target", "basicplus-frontend.jar")
+JAR  = os.path.join(ROOT, "..", "toolchain", "lexer-java", "target", "basicplus-frontend.jar")
 # La librería de packs del IDE (la que autodetecta IdePrefs.packsDirEffective en el
 # repo) y la stdlib canónica con la que se compara lo que el sim sirve.
 STDLIB_PACK = os.path.normpath(os.path.join(ROOT, "..", "packs", "Stdlib.pack"))

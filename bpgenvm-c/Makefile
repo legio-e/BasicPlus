@@ -155,7 +155,7 @@ for m in $(1); do \
   why=""; \
   if [ ! -f samples/$$m.mod ]; then why="no existe"; \
   elif [ samples/$$m.bp -nt samples/$$m.mod ]; then why="el .bp es mas nuevo"; \
-  elif [ ../lexer-java/target/basicplus-frontend.jar -nt samples/$$m.mod ]; then why="el compilador es mas nuevo"; \
+  elif [ ../toolchain/lexer-java/target/basicplus-frontend.jar -nt samples/$$m.mod ]; then why="el compilador es mas nuevo"; \
   else \
     got=$$(od -An -tx1 -N4 samples/$$m.mod | tr -d ' \n' | tr a-z A-Z); \
     if [ "$$got" != "$$want" ]; then why="formato $$got != $$want (rancio)"; fi; \
@@ -163,12 +163,12 @@ for m in $(1); do \
   if [ -n "$$why" ]; then \
     echo "  (regenerando samples/$$m.mod — $$why)"; \
     rm -f samples/$$m.mod; \
-    java -jar ../lexer-java/target/basicplus-frontend.jar \
+    java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \
          samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt >/dev/null 2>&1 || true; \
     got=$$(od -An -tx1 -N4 samples/$$m.mod 2>/dev/null | tr -d ' \n' | tr a-z A-Z); \
     if [ "$$got" != "$$want" ]; then \
       echo "  ✗ samples/$$m.mod NO se ha regenerado como MOD$$fmt (el compilador ha fallado; míralo a mano):"; \
-      java -jar ../lexer-java/target/basicplus-frontend.jar samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt 2>&1 | grep -i "error\|no compilado" | head -3 | sed 's/^/     /'; \
+      java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar samples/$$m.bp --compile samples --backend=mivm --formato=$$fmt 2>&1 | grep -i "error\|no compilado" | head -3 | sed 's/^/     /'; \
       exit 1; \
     fi; \
   fi; \
@@ -200,7 +200,7 @@ endef
 # «sin interfaz» es rojo.
 define aotmain
 @rm -rf $(2) && mkdir -p $(2) && cp ../bpstdlib/*.mod $(2)/
-@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
+@java -cp "../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
 @# #588 (27-sep): con las clases de miVM: el AOT pregunta al compilador dónde queda cada global (ModWriter).
 @# #542 (26-sep): un import sin interfaz ya no es un aviso que haya que buscar en el log: AotMain sale
 @# con 4 y «falta el modulo 'X'», y lo para el `||` de arriba.
@@ -305,7 +305,7 @@ test-callbp: $(LIBOBJ)
 	$(call fixture,NativeBridge)
 	@if [ ! -f samples/NativeBridge.mod ]; then \
 	  echo "(skip test-callbp: falta samples/NativeBridge.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/NativeBridge.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_callbp.c test/aot_NativeBridge.c \
@@ -324,7 +324,7 @@ test-bytenat: $(LIBOBJ)
 	$(call fixture,ByteNat)
 	@if [ ! -f samples/ByteNat.mod ]; then \
 	  echo "(skip test-bytenat: falta samples/ByteNat.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/ByteNat.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_bytenat.c test/aot_ByteNat.c \
@@ -347,7 +347,7 @@ LONGNAT_BIN = build/test_longnat.exe
 test-longnat: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,LongNat)
-	@if [ ! -f samples/LongNat.mod ]; then 	  echo "(skip test-longnat: falta samples/LongNat.mod)"; 	else 	  java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" 	    basicplus.frontend.AotMain samples/LongNat.bp build/aotlong >/dev/null; 	  cp build/aotlong/aot_LongNat.c test/aot_LongNat.c; 	  $(CC) $(CFLAGS) -Isrc test/test_longnat.c test/aot_LongNat.c 	    $(LIBOBJ) -o $(LONGNAT_BIN) $(LDFLAGS); 	  echo "--- #381 long en native (la salida debe ser la de la VM-Java) ---"; 	  ./$(LONGNAT_BIN) samples/LongNat.mod; 	fi
+	@if [ ! -f samples/LongNat.mod ]; then 	  echo "(skip test-longnat: falta samples/LongNat.mod)"; 	else 	  java -cp "../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes" 	    basicplus.frontend.AotMain samples/LongNat.bp build/aotlong >/dev/null; 	  cp build/aotlong/aot_LongNat.c test/aot_LongNat.c; 	  $(CC) $(CFLAGS) -Isrc test/test_longnat.c test/aot_LongNat.c 	    $(LIBOBJ) -o $(LONGNAT_BIN) $(LDFLAGS); 	  echo "--- #381 long en native (la salida debe ser la de la VM-Java) ---"; 	  ./$(LONGNAT_BIN) samples/LongNat.mod; 	fi
 
 # #240 — Compress.decompress (LZSS) en variante NATIVE. Compila el thunk AOT
 # (byte[] + shl/shr/mod, helpers array_load_u8 / array_store_i8) y corre
@@ -359,7 +359,7 @@ test-compressnat: $(LIBOBJ)
 	$(call fixture,CompressNat)
 	@if [ ! -f samples/CompressNat.mod ]; then \
 	  echo "(skip test-compressnat: falta samples/CompressNat.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/CompressNat.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_compressnat.c test/aot_CompressNat.c \
@@ -378,7 +378,7 @@ test-compressbench: $(LIBOBJ) $(BIN)
 	$(call fixture,CompressBench)
 	@if [ ! -f samples/CompressBench.mod ]; then \
 	  echo "(skip test-compressbench: falta samples/CompressBench.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/CompressBench.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_compressbench.c test/aot_CompressBench.c \
@@ -398,7 +398,7 @@ test-xmodule: $(LIBOBJ)
 	$(call fixture,BridgeLib BridgeApp)
 	@if [ ! -f samples/BridgeApp.mod ]; then \
 	  echo "(skip test-xmodule: falta samples/BridgeApp.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/BridgeApp.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_xmodule.c test/aot_BridgeApp.c \
@@ -417,7 +417,7 @@ test-xmodnat: $(LIBOBJ)
 	$(call fixture,Helper XmodNat)
 	@if [ ! -f samples/XmodNat.mod ]; then \
 	  echo "(skip test-xmodnat: falta samples/XmodNat.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/XmodNat.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_xmodnat.c test/aot_XmodNat.c \
@@ -439,7 +439,7 @@ test-xmethodnat: $(LIBOBJ)
 	$(call fixture,XClassLib XMethodNat)
 	@if [ ! -f samples/XMethodNat.mod ]; then \
 	  echo "(skip test-xmethodnat: falta samples/XMethodNat.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/XMethodNat.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_xmethodnat.c test/aot_XMethodNat.c \
@@ -462,7 +462,7 @@ test-net: $(LIBOBJ)
 	$(call stdlibdep,Net Core Heap)
 	@if [ ! -f samples/TcpEchoTest.mod ]; then \
 	  echo "(skip test-net: falta samples/TcpEchoTest.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/TcpEchoTest.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_net.c \
@@ -477,7 +477,7 @@ test-kill: $(LIBOBJ)
 	$(call fixture,KillLoop KillSleep KillDestruye KillDestruyeLento)
 	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
 	  echo "(skip test-kill: no hay samples/KillLoop.mod / KillSleep.mod y no se han"; \
-	  echo " podido generar — ¿está construido ../lexer-java/target/basicplus-frontend.jar?)"; \
+	  echo " podido generar — ¿está construido ../toolchain/lexer-java/target/basicplus-frontend.jar?)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
@@ -514,7 +514,7 @@ test-destruyefinal: $(BIN)
 	@ef=$$(printf 'fin del main (suelto-del-main)\n~propio\n~suelto-del-main\n~global'); \
 	 ee=$$(printf 'antes del error\n~propio\n~global'); malo=0; \
 	 for vm in c java; do \
-	   if [ $$vm = c ]; then run="../$(BIN)"; else run="java -jar ../../miVM/target/bpgenvm-1.0.jar"; fi; \
+	   if [ $$vm = c ]; then run="../$(BIN)"; else run="java -jar ../../toolchain/miVM/target/bpgenvm-1.0.jar"; fi; \
 	   of=$$(cd samples && timeout 60 $$run DestruyeFinal.mod 2>/dev/null | tr -d '\r' | grep -E '^(fin del main|~)'); \
 	   oe=$$(cd samples && timeout 60 $$run DestruyeTrasError.mod 2>/dev/null | tr -d '\r' | grep -E '^(antes del error|~)'); \
 	   if [ "$$of" = "$$ef" ]; then echo "  ok  $$vm: DestruyeFinal, los tres destructores, el más nuevo primero"; \
@@ -541,7 +541,7 @@ censo-carga: $(LIBOBJ)
 	@mkdir -p build/censo
 	@cp ../bpstdlib/*.mod build/censo/
 	@for f in tools/consumo/Nada.bp tools/consumo/Importa5.bp ../samples/GuiWinJson.bp samples/GuiArbolG2.bp; do \
-	   java -jar ../lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  (no compila: $$f)"; \
+	   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  (no compila: $$f)"; \
 	 done
 	$(CC) $(CFLAGS) -Isrc test/censo_carga.c $(LIBOBJ) -o $(CENSO_BIN) $(LDFLAGS)
 	(cd build/censo && ../censo_carga.exe Nada.mod Importa5.mod GuiWinJson.mod GuiArbolG2.mod)
@@ -553,7 +553,7 @@ test-censo: $(LIBOBJ)
 	@mkdir -p build/censo
 	@cp ../bpstdlib/*.mod build/censo/
 	@for f in tools/consumo/Importa5.bp ../samples/GuiWinJson.bp samples/GuiArbolG2.bp; do \
-	   java -jar ../lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  FAIL no compila: $$f"; \
+	   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  FAIL no compila: $$f"; \
 	 done
 	@$(CC) $(CFLAGS) -Isrc test/censo_carga.c $(LIBOBJ) -o $(CENSO_BIN) $(LDFLAGS)
 	@(cd build/censo && ../censo_carga.exe --tope=100 Importa5.mod GuiWinJson.mod GuiArbolG2.mod > ../censo_tope.txt); rc=$$?; \
@@ -1161,10 +1161,10 @@ test-sqltexto: $(LIBOBJ) build/sql/sqlite3.o
 	@rm -rf $(SQLTEXTO) && mkdir -p $(SQLTEXTO)
 	@cp ../bpstdlib/*.mod ../bpstdlib/sqlite/SQLite.bp samples/SqlTexto.bp ../samples/SqlDemo.bp $(SQLTEXTO)/
 	@cd $(SQLTEXTO) && for f in SQLite SqlTexto SqlDemo; do \
-   java -jar ../../../lexer-java/target/basicplus-frontend.jar $$f.bp --compile . --backend=mivm >> compila.log 2>&1; \
+   java -jar ../../../toolchain/lexer-java/target/basicplus-frontend.jar $$f.bp --compile . --backend=mivm >> compila.log 2>&1; \
    [ -f $$f.mod ] || { cat compila.log; echo "  ROJO: $$f no compila"; exit 1; }; \
  done
-	@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain \
+	@java -cp "../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes" basicplus.frontend.AotMain \
    $(SQLTEXTO)/SQLite.bp $(SQLTEXTO) > $(SQLTEXTO)/aot.log 2>&1 || { cat $(SQLTEXTO)/aot.log; exit 1; }
 	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLSRC) test/test_sqldemo.c $(SQLTEXTO)/aot_SQLite.c \
   $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c $(SQLSRC)/packglue.c \
@@ -1506,9 +1506,9 @@ test-aottry: $(LIBOBJ)
 AOTFLOAT_OK = 31
 test-aotfloat: $(LIBOBJ)
 	@rm -rf build/aotfloat && mkdir -p build/aotfloat && cp ../bpstdlib/*.mod build/aotfloat/
-	@java -jar ../lexer-java/target/basicplus-frontend.jar ../samples/FloatNat.bp --compile build/aotfloat --backend=mivm >build/aotfloat/compile.log 2>&1 || { cat build/aotfloat/compile.log; exit 1; }
+	@java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar ../samples/FloatNat.bp --compile build/aotfloat --backend=mivm >build/aotfloat/compile.log 2>&1 || { cat build/aotfloat/compile.log; exit 1; }
 	@test -f build/aotfloat/FloatNat.mod || { cat build/aotfloat/compile.log; echo "  ROJO: FloatNat.bp no compila"; exit 1; }
-	@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain ../samples/FloatNat.bp build/aotfloat >build/aotfloat/aot.log 2>&1 || { cat build/aotfloat/aot.log; exit 1; }
+	@java -cp "../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes" basicplus.frontend.AotMain ../samples/FloatNat.bp build/aotfloat >build/aotfloat/aot.log 2>&1 || { cat build/aotfloat/aot.log; exit 1; }
 	@if grep -q "sin interfaz" build/aotfloat/aot.log; then echo "  ROJO: el AOT de FloatNat no ve la interfaz de un import (#542):"; grep "sin interfaz" build/aotfloat/aot.log; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aotfloat.c build/aotfloat/aot_FloatNat.c $(LIBOBJ) \
 	  -o build/test_aotfloat.exe $(LDFLAGS)
@@ -1801,7 +1801,7 @@ test-gchondo: $(BIN)
 	$(call stdlibdep,Core)
 	@echo "--- #648 el GC sin recursión: una lista de 4000 nodos con la pila acotada (esperado: las dos VMs hasta 'fin', con la misma salida) ---"
 	@oc=$$(cd samples && timeout 60 ../$(BIN) --pila=65536 GcHondo.mod 2>/dev/null); stc=$$?; \
-	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../miVM/target/bpgenvm-1.0.jar GcHondo.mod 2>/dev/null); stj=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../toolchain/miVM/target/bpgenvm-1.0.jar GcHondo.mod 2>/dev/null); stj=$$?; \
 	 pc=$$(printf '%s\n' "$$oc" | grep -E '^(honda|ancha|tras|fin)'); pj=$$(printf '%s\n' "$$oj" | grep -E '^(honda|ancha|tras|fin)'); \
 	 printf '%s\n' "$$pc"; \
 	 if [ $$stc -eq 0 ] && [ $$stj -eq 0 ] && printf '%s\n' "$$pc" | grep -q '^fin$$' && [ "$$pc" = "$$pj" ]; then \
@@ -1823,7 +1823,7 @@ test-ownerhondo: $(BIN)
 	$(call stdlibdep,Core)
 	@echo "--- #656 soltar un owner sin recursión: 4000 en cadena y 600 en un array, con la pila acotada (esperado: las dos VMs hasta 'fin', con la misma salida, y el repaso en la VM-C) ---"
 	@oc=$$(cd samples && timeout 60 ../$(BIN) --pila=65536 OwnerHondo.mod 2>build_ownerhondo.err); stc=$$?; \
-	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../miVM/target/bpgenvm-1.0.jar OwnerHondo.mod 2>/dev/null); stj=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../toolchain/miVM/target/bpgenvm-1.0.jar OwnerHondo.mod 2>/dev/null); stj=$$?; \
 	 pc=$$(printf '%s\n' "$$oc" | grep -E '^(honda|ancha|otra|fin)'); pj=$$(printf '%s\n' "$$oj" | grep -E '^(honda|ancha|otra|fin)'); \
 	 rep=$$(grep -ao 'soltar un owner: [0-9]* repaso' samples/build_ownerhondo.err | head -1); rm -f samples/build_ownerhondo.err; \
 	 printf '%s\n' "$$pc"; \
@@ -1843,7 +1843,7 @@ test-coresiempre: $(BIN)
 	@echo "--- #652 todo programa lleva Core: el Hello de la capsula de V6, que no lo importa (esperado: las dos VMs lo enlazan con Core) ---"
 	@d=build/coresiempre; rm -rf $$d; mkdir -p $$d; cp ../compat/v6/golden/Hello.mod ../bpstdlib/Core.mod $$d/; \
 	 ec=$$(cd $$d && timeout 30 ../../$(BIN) Hello.mod 2>&1 >/dev/null); \
-	 ej=$$(cd $$d && timeout 30 java -jar ../../../miVM/target/bpgenvm-1.0.jar Hello.mod 2>&1 >/dev/null); \
+	 ej=$$(cd $$d && timeout 30 java -jar ../../../toolchain/miVM/target/bpgenvm-1.0.jar Hello.mod 2>&1 >/dev/null); \
 	 if printf '%s\n' "$$ec" | grep -q 'enlace: 2 modulos' && ! printf '%s\n' "$$ec" | grep -q 'OOM sin prefabricar' \
 	    && printf '%s\n' "$$ej" | grep -q 'enlace: 2 modulos'; then \
 	   echo "  las dos VMs: enlace de 2 modulos (Hello y Core)"; echo "PASS test-coresiempre"; \
@@ -1863,7 +1863,7 @@ test-anidadalarga: $(BIN)
 	@echo "--- #664 una llamada anidada larga con dos workers (esperado: las dos VMs, la salida de la VM-C con un run; y en la VM-Java, aparcada para el GC) ---"
 	@o1=$$(cd samples && timeout 60 ../$(BIN) InvocaRanura.mod 2>/dev/null); st1=$$?; \
 	 oc=$$(cd samples && timeout 60 ../$(BIN) --smp=2 InvocaRanura.mod 2>/dev/null); stc=$$?; \
-	 oj=$$(cd samples && timeout 60 java -Djava.awt.headless=true -jar ../../miVM/target/bpgenvm-1.0.jar --workers=2 InvocaRanura.mod 2>build_anidada.err); stj=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Djava.awt.headless=true -jar ../../toolchain/miVM/target/bpgenvm-1.0.jar --workers=2 InvocaRanura.mod 2>build_anidada.err); stj=$$?; \
 	 ap=$$(grep -ao 'aparcadas por el GC de otro worker: [0-9]*' samples/build_anidada.err | grep -o '[0-9]*$$'); rm -f samples/build_anidada.err; \
 	 p1=$$(printf '%s\n' "$$o1" | grep -E '^(largo|heredado|fin)'); pc=$$(printf '%s\n' "$$oc" | grep -E '^(largo|heredado|fin)'); \
 	 pj=$$(printf '%s\n' "$$oj" | grep -E '^(largo|heredado|fin)'); \
@@ -2181,7 +2181,7 @@ test-importhondo: $(BIN)
 	$(call fixture,hello)
 	$(call stdlibdep,Core)
 	@rm -rf build/importhondo && mkdir -p build/importhondo && cp ../bpstdlib/Core.mod build/importhondo/
-	@java -jar ../lexer-java/target/basicplus-frontend.jar samples/importhondo/ImportHondo.bp --compile build/importhondo --backend=mivm >build/importhondo/compila.log 2>&1; \
+	@java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar samples/importhondo/ImportHondo.bp --compile build/importhondo --backend=mivm >build/importhondo/compila.log 2>&1; \
 	 if [ ! -f build/importhondo/ImportHondo.mod ] || [ ! -f build/importhondo/Eslabon13.mod ]; then \
 	   echo "  ✗ ImportHondo no compila:"; tail -5 build/importhondo/compila.log; exit 1; fi
 	@echo "--- #649 la carga sin recursión: una cadena de 13 imports no cuesta más pila que un módulo (esperado: hasta 'fin', y menos de 8 KB más que hello) ---"
@@ -2235,7 +2235,7 @@ SQLDEF   = -DSQLITE_OS_OTHER=1 -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_MEMSYS5    
 test-sqldemo: $(LIBOBJ)
 	@mkdir -p build/sql
 	@[ -f build/sql/sqlite3.c ] || unzip -o -j $(SQLZIP) "*/sqlite3.c" "*/sqlite3.h" 	    -d build/sql >/dev/null
-	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql)"; 	  exit 1; 	fi
+	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql)"; 	  exit 1; 	fi
 	@[ -f build/sql/sqlite3.o ] || $(CC) -O1 -w -c build/sql/sqlite3.c 	    -o build/sql/sqlite3.o -Ibuild/sql $(SQLDEF)
 	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLSRC) 	    test/test_sqldemo.c build/sql/aot_SQLite.c 	    $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c $(SQLSRC)/packglue.c 	    build/sql/sqlite3.o $(LIBOBJ) -o build/sqldemo.exe $(LDFLAGS) $(SQLDEF)
 	@echo "--- V5/H4: un programa BP consultando una base de datos ---"
@@ -2251,7 +2251,7 @@ test-packhelp: $(LIBOBJ)
 # REAL (Pack.jar) a partir del .mdn REAL, y comprueba que el escaneo lo
 # encuentra ahi y que el del FS lo eclipsa DICIENDOLO. Ver la cabecera del .c
 # para por que esto se prueba en host y no en placa.
-PACKJAR = ../pack/target/pack-1.0.jar
+PACKJAR = ../toolchain/pack/target/pack-1.0.jar
 
 test-mdnscan: $(LIBOBJ)
 	@mkdir -p build/sql
@@ -2357,7 +2357,7 @@ build/sql/sqlite3.o:
 
 build/sql/aot_SQLite.c:
 	@echo "falta build/sql/aot_SQLite.c — generalo con:"
-	@echo "   java -cp '../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes' basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql"
+	@echo "   java -cp '../toolchain/lexer-java/target/classes;../toolchain/pack/target/classes;../toolchain/miVM/target/classes' basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql"
 	@exit 1
 
 # Alias histórico (H9): el boardsim ES el sim, con otro nombre.
@@ -2395,7 +2395,7 @@ test-oom: $(BIN)
 	$(call fixture,OomCatch)
 	@if [ ! -f samples/OomCatch.mod ]; then \
 	  echo "(skip test-oom: falta samples/OomCatch.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/OomCatch.bp --compile samples --backend=mivm)"; \
 	else \
 	  echo "--- OOM atrapable (esperado: 'cazado OOM: No space in heap' + 'vivo tras OOM' + exit 0) ---"; \
@@ -2419,7 +2419,7 @@ test-excmsggc: $(BIN)
 	$(call fixture,ExcMsgGc)
 	@if [ ! -f samples/ExcMsgGc.mod ]; then \
 	  echo "(skip test-excmsggc: falta samples/ExcMsgGc.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/ExcMsgGc.bp --compile samples --backend=mivm --libdir ../bpstdlib)"; \
 	else \
 	  echo "--- msg de RuntimeError sobrevive al GC (esperado: 'caught msg=[ALOAD...' + 'fin') ---"; \
@@ -2540,7 +2540,7 @@ test-iomt: $(BIN)
 	$(call stdlibdep,Core IO Log)
 	@if [ ! -f samples/IoMt.mod ]; then \
 	  echo "(skip test-iomt: falta samples/IoMt.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/IoMt.bp --compile samples --backend=mivm)"; \
 	else \
 	  echo "--- B1.4b Threads BP + littlefs + --smp=4 (esperado: 200/200/200/3000, 0 rotas) ---"; \
@@ -2586,7 +2586,7 @@ test-throwmsg: $(LIBOBJ)
 	$(call fixture,ThrowMsg)
 	@if [ ! -f samples/ThrowMsg.mod ]; then \
 	  echo "(skip test-throwmsg: falta samples/ThrowMsg.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/ThrowMsg.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_throwmsg.c test/aot_ThrowMsg.c \
@@ -2608,7 +2608,7 @@ test-throwuser: $(LIBOBJ)
 	$(call fixture,ThrowUser)
 	@if [ ! -f samples/ThrowUser.mod ]; then \
 	  echo "(skip test-throwuser: falta samples/ThrowUser.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/ThrowUser.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_throwuser.c test/aot_ThrowUser.c \
@@ -2627,7 +2627,7 @@ test-method: $(LIBOBJ)
 	$(call fixture,MethodCall)
 	@if [ ! -f samples/MethodCall.mod ]; then \
 	  echo "(skip test-method: falta samples/MethodCall.mod — regenéralo con:"; \
-	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
+	  echo "   java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/MethodCall.bp --compile samples --backend=mivm)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_method.c test/aot_MethodCall.c \
@@ -2655,7 +2655,7 @@ $(error DBGMOD ya no existe (#541): las pruebas del depurador compilan su .mod e
 endif
 define dbgmod
 @rm -rf $(DBGDIR) && mkdir -p $(DBGDIR) && cp ../bpstdlib/*.mod $(DBGDIR)/
-@java -jar ../lexer-java/target/basicplus-frontend.jar $(DBGBP) --compile $(DBGDIR) --backend=mivm --stdlibDir=$(DBGDIR) >$(DBGDIR)/compila.log 2>&1 || { echo "  ✗ $(DBGBP) no compila:"; grep -iE "error|abortada" $(DBGDIR)/compila.log | head -5; exit 1; }
+@java -jar ../toolchain/lexer-java/target/basicplus-frontend.jar $(DBGBP) --compile $(DBGDIR) --backend=mivm --stdlibDir=$(DBGDIR) >$(DBGDIR)/compila.log 2>&1 || { echo "  ✗ $(DBGBP) no compila:"; grep -iE "error|abortada" $(DBGDIR)/compila.log | head -5; exit 1; }
 @m=$$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' $(DBGBP) | head -1); \
  if [ -z "$$m" ] || [ ! -f $(DBGDIR)/$$m.mod ]; then echo "  ✗ $(DBGBP) no ha dejado su .mod en $(DBGDIR) (módulo '$$m')"; exit 1; fi; \
  echo $$m.mod > $(DBGDIR)/.mod

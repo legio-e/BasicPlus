@@ -271,7 +271,7 @@ nada, se puede poner como observación, una limitación conocida.»*). El `try`/
 
 ## Dónde se hace cumplir
 
-Todo el gating vive en `lexer-java/src/main/java/basicplus/frontend/AotCEmitter.java`:
+Todo el gating vive en `toolchain/lexer-java/src/main/java/basicplus/frontend/AotCEmitter.java`:
 
 - `cType(...)` — la puerta de los tipos.
 - `isBridgeI32Type(...)` — la puerta del puente `native→BP`.
@@ -297,7 +297,7 @@ demuestra nada.
 ## 🔬 EL CENSO: qué construcciones pasan por el AOT
 
 > **Ya no se escribe a mano.** Lo mide
-> `lexer-java/src/test/java/basicplus/frontend/AotCoberturaTest.java`, que recorre
+> `toolchain/lexer-java/src/test/java/basicplus/frontend/AotCoberturaTest.java`, que recorre
 > los nodos del AST con un fragmento BP mínimo por cada uno, pregunta al emisor, y
 > compara contra una foto esperada. Si alguien añade soporte —o lo rompe— **el
 > test lo dice**, y la foto se mueve a propósito en vez de pudrirse sola.

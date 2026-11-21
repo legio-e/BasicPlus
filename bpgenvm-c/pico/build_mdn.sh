@@ -26,14 +26,14 @@ LEXER="$PM_ROOT/lexer-java"
 # El frontend usa `basicplus.pack.*` (PackException) desde V5, y este script se
 # quedo con el classpath de antes: fallaba con ClassNotFoundException nada mas
 # arrancar. Nadie se entero porque el camino que se usa a diario es el del IDE
-# (BpIde/AotBuild.java) — dos caminos al mismo artefacto y uno se pudrio.
+# (toolchain/BpIde/AotBuild.java) — dos caminos al mismo artefacto y uno se pudrio.
 # Ojo al armarlo: Git Bash traduce una ruta Unix suelta a formato Windows al
 # pasarla a java, pero NO una lista separada por ';' — hay que traducirlas a
 # mano con cygpath o java no encuentra ni la clase principal.
 if command -v cygpath >/dev/null 2>&1; then
-    CP="$(cygpath -w "$LEXER/target/classes");$(cygpath -w "$PM_ROOT/pack/target/classes");$(cygpath -w "$PM_ROOT/miVM/target/classes")"
+    CP="$(cygpath -w "$LEXER/target/classes");$(cygpath -w "$PM_ROOT/toolchain/pack/target/classes");$(cygpath -w "$PM_ROOT/toolchain/miVM/target/classes")"
 else
-    CP="$LEXER/target/classes:$PM_ROOT/pack/target/classes:$PM_ROOT/miVM/target/classes"
+    CP="$LEXER/target/classes:$PM_ROOT/toolchain/pack/target/classes:$PM_ROOT/toolchain/miVM/target/classes"
 fi
 SAMPLES="$PM_ROOT/samples"
 WORK_DIR="$SCRIPT_DIR/mdn_build"     # intermedios (.c, .o)
@@ -114,7 +114,7 @@ echo "[2/4] arm-none-eabi-gcc → ${MOD}.o (receta $RECETA: $CFLAGS_RECETA)"
 # cargable en cualquier direccion (comprobado enlazando a dos bases distintas:
 # el .text sale byte-identico).
 #
-# El pipeline del IDE (BpIde/AotBuild.java) hace lo MISMO y con el MISMO guion.
+# El pipeline del IDE (toolchain/BpIde/AotBuild.java) hace lo MISMO y con el MISMO guion.
 # Si uno de los dos cambia, el otro tambien: son dos caminos al mismo artefacto.
 ELF_FILE="$WORK_DIR/aot_${MOD}.elf"
 echo "[3/4] enlace → ${MOD}.elf (literales dentro del .text)"

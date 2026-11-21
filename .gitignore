@@ -28,21 +28,22 @@ Thumbs.db
 # ============================================================
 # Compilation artifacts en samples/
 # ============================================================
-# Los .mod/.bpi/.dbg de lexer-java/samples/ son recompilables
+# Los .mod/.bpi/.dbg de toolchain/lexer-java/samples/ son recompilables
 # en cualquier momento; los excluímos para que el repo no se
 # llene de binarios que cambian con cada compilación.
 # NOTA: lo de bpstdlib/ sí va al repo — es la distribución
 # del stdlib.
-lexer-java/samples/*.mod
-lexer-java/samples/*.bpi
-lexer-java/samples/*.dbg
-lexer-java/samples/**/out/*.mod
-lexer-java/samples/**/out/*.bpi
-lexer-java/samples/**/out/*.dbg
-lexer-java/samples/**/*.class
+# V8.1 (#802): los proyectos de Java, bajo toolchain/ (el futuro repositorio toolchain).
+toolchain/lexer-java/samples/*.mod
+toolchain/lexer-java/samples/*.bpi
+toolchain/lexer-java/samples/*.dbg
+toolchain/lexer-java/samples/**/out/*.mod
+toolchain/lexer-java/samples/**/out/*.bpi
+toolchain/lexer-java/samples/**/out/*.dbg
+toolchain/lexer-java/samples/**/*.class
 
 # Dir de outputs de compilaciones ad-hoc del frontend
-lexer-java/out/
+toolchain/lexer-java/out/
 
 # Stray outputs de tests
 out_test.txt
@@ -68,7 +69,7 @@ pico-sdk/
 # Outputs ad-hoc y prefs del IDE
 # ============================================================
 out/
-BpIde/.bpide-prefs
+toolchain/BpIde/.bpide-prefs
 
 # ============================================================
 # Build artefacts del firmware Pico y de bpgenvm-c
@@ -121,11 +122,11 @@ dist/firmware/*
 samples/*.slots
 
 # ============================================================
-# Outputs ad-hoc del AOT/MdnPack en lexer-java
+# Outputs ad-hoc del AOT/MdnPack en toolchain/lexer-java
 # ============================================================
-lexer-java/*.mdn
-lexer-java/*.o
-lexer-java/aotout/
+toolchain/lexer-java/*.mdn
+toolchain/lexer-java/*.o
+toolchain/lexer-java/aotout/
 
 # ============================================================
 # samples/ — outputs de compilación (la fuente son los .bp;
@@ -139,12 +140,12 @@ samples/*.mdn
 # .mod sueltos de demos ad-hoc en la raíz del repo
 /*.mod
 
-# miVM/ — los .mod de los demos los ESCRIBEN los Main*.java (emisores a mano,
+# toolchain/miVM/ — los .mod de los demos los ESCRIBEN los Main*.java (emisores a mano,
 # anteriores al compilador): MainArrays→ArrDemo.mod, MainOOP→OOPDemo.mod, etc.
 # Son salida, no fuente. Se regeneran ejecutando su Main.
-miVM/*.mod
-miVM/*.bpi
-miVM/*.dbg
+toolchain/miVM/*.mod
+toolchain/miVM/*.bpi
+toolchain/miVM/*.dbg
 
 # Scratch temporal
 /Temp/

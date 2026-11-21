@@ -22,4 +22,4 @@ $PY compat/resistencia/resistencia.py COM22 acabar C:/tmp/r/pico2       # al fin
 ```
 
 En el PC, `corta` (tres vueltas de medio segundo) o `fallos`, con la flash en una carpeta:
-`java -jar miVM/target/bpgenvm-1.0.jar --flash-dir=<carpeta> Resistencia.mod corta`.
+`java -jar toolchain/miVM/target/bpgenvm-1.0.jar --flash-dir=<carpeta> Resistencia.mod corta`.

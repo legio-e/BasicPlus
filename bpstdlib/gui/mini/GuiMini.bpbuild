@@ -8,7 +8,7 @@
     "",
     "   VARIANTE=mini bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool, 64]",
     "   cp bpstdlib/gui/nativo/mini/lvgl.npk.* bpstdlib/gui/mini/out/",
-    "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/mini/GuiMini.bpbuild --backend=mivm",
+    "   java -jar toolchain/lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/mini/GuiMini.bpbuild --backend=mivm",
     "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/mini/out/GuiMini.pack riscv-imc",
     "",
     "El nativo se COPIA, como en ../Gui.bpbuild (alli esta el porque: el pack recoge del outDir los",

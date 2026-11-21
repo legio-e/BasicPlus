@@ -47,13 +47,13 @@ Write-Host ("=== Benchmark CPU-bound: {0} ({1} runs c/u) ===" -f $Mod, $Runs)
 # Warm-up: 1 run extra para calentar caches y JIT.
 Write-Host "-- warmup --"
 & "C:/lenguajes/pm/bpgenvm-c/build/bpgenvm-c.exe" $Mod 2>&1 | Out-Null
-& java -jar C:/lenguajes/pm/miVM/target/bpgenvm-1.0.jar $Mod 2>&1 | Out-Null
+& java -jar C:/lenguajes/pm/toolchain/miVM/target/bpgenvm-1.0.jar $Mod 2>&1 | Out-Null
 
 Write-Host "-- VM-C --"
 $rC = Time-Run "VM-C" "C:/lenguajes/pm/bpgenvm-c/build/bpgenvm-c.exe" $Mod
 
 Write-Host "-- VM-Java --"
-$rJ = Time-Run "VM-Java" "java" ("-jar C:/lenguajes/pm/miVM/target/bpgenvm-1.0.jar " + $Mod)
+$rJ = Time-Run "VM-Java" "java" ("-jar C:/lenguajes/pm/toolchain/miVM/target/bpgenvm-1.0.jar " + $Mod)
 
 Write-Host ""
 Write-Host "=== Resultados ==="

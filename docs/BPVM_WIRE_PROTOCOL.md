@@ -600,8 +600,8 @@ Arranca un programa. Devuelve `sessionId`.
 Request: `{"type":"RUN","id":N,"path":"/app/Hello.mod","arg":"opcional"}`
 
 ⚠️ **`args:[]` NUNCA EXISTIÓ, y no podía existir.** Este documento lo prometió desde el principio,
-pero **ninguna línea de código lo parseó jamás** (grep de `"args"` en `bpgenvm-c/src`, `miVM/src` y
-`BpIde/src`: cero), y no era un olvido — el mini-parser JSON de las placas **no sabe leer arrays
+pero **ninguna línea de código lo parseó jamás** (grep de `"args"` en `bpgenvm-c/src`, `toolchain/miVM/src` y
+`toolchain/BpIde/src`: cero), y no era un olvido — el mini-parser JSON de las placas **no sabe leer arrays
 anidados** (`include/json_min.h:14`), así que implementarlo obligaría a tocar el parser de las cinco
 familias. Corregido el 6-sep con `#412`.
 

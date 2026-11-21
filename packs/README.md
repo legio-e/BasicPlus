@@ -35,7 +35,7 @@ La librería **no** se empaqueta con un script aparte: es un proyecto BP normal,
 con las mismas herramientas que cualquier programa de usuario.
 
 ```bash
-java -jar lexer-java/target/basicplus-frontend.jar \
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar \
      --project bpstdlib/Stdlib.bpbuild --backend=mivm --prune-bpi
 cp bpstdlib/out/Stdlib.pack packs/
 ```

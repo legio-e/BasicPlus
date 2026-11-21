@@ -27,8 +27,8 @@ namespace Cs2Jc
 
         public Ejecutor(string raiz, string trabajo, int plazo)
         {
-            fe = Path.Combine(raiz, "lexer-java", "target", "basicplus-frontend.jar");
-            vmJava = Path.Combine(raiz, "miVM", "target", "bpgenvm-1.0.jar");
+            fe = Path.Combine(raiz, "toolchain", "lexer-java", "target", "basicplus-frontend.jar");
+            vmJava = Path.Combine(raiz, "toolchain", "miVM", "target", "bpgenvm-1.0.jar");
             vmC = Path.Combine(raiz, "bpgenvm-c", "build", "bpgenvm-c.exe");
             Trabajo = Path.GetFullPath(trabajo);
             Plazo = plazo;

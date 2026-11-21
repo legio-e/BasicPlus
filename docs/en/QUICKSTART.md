@@ -25,15 +25,16 @@ ESP32-P4, the C3, the C5 and the C6 — installation and setup in the [IDE
 guide](guia-ide.html#aot).
 
 ```sh
-# Toolchain (compiler + Java VM) and host C VM
-mvn -f miVM/pom.xml install
-mvn -f lexer-java/pom.xml install
+# Toolchain (the pack format, the Java VM and the compiler, in this order) and host C VM
+mvn -f toolchain/pack/pom.xml install
+mvn -f toolchain/miVM/pom.xml install
+mvn -f toolchain/lexer-java/pom.xml install
 cd bpgenvm-c && make && cd ..
 
 # Compile and run the blink on BOTH VMs (on a PC the GPIOs log)
-java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp \
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
-java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
 bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 ```
 
@@ -44,8 +45,8 @@ invariant.
 **The IDE** (recommended for everything that follows):
 
 ```sh
-mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-7.0.jar     # or bpide.bat, at the root (fix its path first)
+mvn -f toolchain/BpIde/pom.xml package
+java -jar toolchain/BpIde/target/BpIde-8.0.jar     # or bpide.bat, at the root (fix its path first)
 ```
 
 Open `samples/blink.bp`, **Compile** button, **Run** menu — the output

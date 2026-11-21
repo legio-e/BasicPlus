@@ -1,7 +1,7 @@
 {
   "_comentario": [
     "Proyecto de la LIBRERIA ESTANDAR. Compilarlo produce la libreria:",
-    "  java -jar lexer-java/target/basicplus-frontend.jar \\",
+    "  java -jar toolchain/lexer-java/target/basicplus-frontend.jar \\",
     "       --project bpstdlib/Stdlib.bpbuild --backend=mivm --prune-bpi",
     "(o Project -> Build Project desde el IDE).",
     "",

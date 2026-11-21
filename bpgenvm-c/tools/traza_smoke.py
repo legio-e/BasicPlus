@@ -28,7 +28,7 @@ from traza_dbg import traduce                             # noqa: E402
 
 run_smoke.PORT = 5131
 VM_C = os.path.join("build", "bpgenvm-c.exe" if os.name == "nt" else "bpgenvm-c")
-VM_JAVA = os.path.join("..", "miVM", "target", "bpgenvm-1.0.jar")
+VM_JAVA = os.path.join("..", "toolchain", "miVM", "target", "bpgenvm-1.0.jar")
 fails = 0
 
 

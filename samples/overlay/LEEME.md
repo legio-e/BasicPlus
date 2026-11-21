@@ -14,8 +14,8 @@ acaba bien y otra falla.
 Para probarlo, hay que compilar los dos programas en la misma carpeta:
 
 ```sh
-java -jar lexer-java/target/basicplus-frontend.jar samples/overlay/ProgramaB.bp --compile samples/overlay/out --backend=mivm
-java -jar lexer-java/target/basicplus-frontend.jar samples/overlay/ProgramaA.bp --compile samples/overlay/out --backend=mivm
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/overlay/ProgramaB.bp --compile samples/overlay/out --backend=mivm
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/overlay/ProgramaA.bp --compile samples/overlay/out --backend=mivm
 bpgenvm-c/build/bpgenvm-c samples/overlay/out/ProgramaA.mod
 ```
 

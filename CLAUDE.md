@@ -87,17 +87,23 @@ el piso, no el techo); lo grande es headroom opcional, nunca requisito. **Fuera:
 ## Estructura del repositorio
 
 ```
-lexer-java/   compilador (frontend): .bp → .mod + .bpi + .dbg (+ AOT .mdn)   [Maven]
-miVM/         VM Java + debugger + daemon TCP                                 [Maven]
-bpgenvm-c/    VM C99: host + firmwares (pico/esp32/esp32p4/stm32)             [make]
-BpIde/        IDE Swing (fat-jar)                                             [Maven]
-bpstdlib/     biblioteca estándar (.bp + .mod compilados)
-samples/      programas de ejemplo (.bp / .mod)
-docs/         manual, specs (.mod, opcodes, heap, wire), backlog, ESTADO
+toolchain/        lo de Java (con la V8.1, el repositorio `toolchain` de micro32-suite, #802):
+  pack/           el formato de los packs (lo usan la VM-Java y el compilador)        [Maven]
+  miVM/           VM Java + debugger + daemon TCP                                     [Maven]
+  lexer-java/     compilador de BP y JC: .bp/.jc → .mod + .bpi + .dbg (+ AOT .mdn)   [Maven]
+  BpIde/          IDE Swing (fat-jar)                                                 [Maven]
+  tools/packtool/ podar y sellar un pack para una placa (lo llama wire_serie.py)
+bpgenvm-c/        VM C99: host + firmwares (pico/esp32*/stm32) (con la V8.1, `runtime`) [make]
+bpstdlib/         biblioteca estándar (.bp + .mod compilados)
+samples/          programas de ejemplo (.bp / .mod)
+compat/           la red: paridad dual-VM, MOD8, la cápsula de V6, la resistencia…
+scripts/          el empaquetador, los generadores y las herramientas de docs y corpus
+docs/             manual, specs (.mod, opcodes, heap, wire), backlog, ESTADO
 ```
 
-Los **tres proyectos Maven** son `miVM`, `lexer-java` y `BpIde` (donde se hace la
-"cirugía"). `bpgenvm-c` se compila con `make`. (Las carpetas viejas —`lexer/`, `vm/`,
+Los **cuatro proyectos Maven**, en `toolchain/`, se construyen en este orden: `pack`, `miVM`
+(depende de `pack`), `lexer-java` (de los dos) y `BpIde` (del compilador): en `BpIde` se hace la
+"cirugía". `bpgenvm-c` se compila con `make`. (Las carpetas viejas —`lexer/`, `vm/`,
 `generador/`, `h3bench/`, `diag/`, `bp_propuesta_modelo_memoria/`— salieron del árbol en la V8.1: siguen en la
 historia, en `v8.0`.)
 
@@ -106,27 +112,28 @@ historia, en `v8.0`.)
 Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), make.
 
 ```sh
-# Toolchain Java (compilador + VM Java)
-mvn -f miVM/pom.xml install
-mvn -f lexer-java/pom.xml install
+# Toolchain Java (el formato de los packs + VM Java + compilador), en este orden
+mvn -f toolchain/pack/pom.xml install
+mvn -f toolchain/miVM/pom.xml install
+mvn -f toolchain/lexer-java/pom.xml install
 
 # VM-C de host (LVGL=1 para la ventana de la GUI)
 cd bpgenvm-c && make && cd ..
 
 # Compilar un ejemplo y correrlo en AMBAS VMs
-java -jar lexer-java/target/basicplus-frontend.jar samples/blink.bp --compile samples --backend=mivm
-java -jar miVM/target/bpgenvm-1.0.jar samples/Blink.mod      # VM-Java
-bpgenvm-c/build/bpgenvm-c samples/Blink.mod                  # VM-C
+java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp --compile samples --backend=mivm
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod      # VM-Java
+bpgenvm-c/build/bpgenvm-c samples/Blink.mod                            # VM-C
 
 # El IDE
-mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-7.0.jar
+mvn -f toolchain/BpIde/pom.xml package
+java -jar toolchain/BpIde/target/BpIde-8.0.jar
 ```
 
 ### Cómo verificar la paridad dual-VM (el gesto más repetido)
 ```sh
-java -jar miVM/target/bpgenvm-1.0.jar samples/X.mod > /tmp/java.out 2>&1
-bpgenvm-c/build/bpgenvm-c            samples/X.mod > /tmp/c.out    2>&1
+java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/X.mod > /tmp/java.out 2>&1
+bpgenvm-c/build/bpgenvm-c                      samples/X.mod > /tmp/c.out    2>&1
 diff /tmp/java.out /tmp/c.out && echo "PARIDAD OK"
 ```
 Cualquier diferencia de `stdout` es un fallo del invariante, aunque el programa

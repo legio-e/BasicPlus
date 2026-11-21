@@ -26,7 +26,7 @@ set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-FE="$ROOT/lexer-java/target/basicplus-frontend.jar"
+FE="$ROOT/toolchain/lexer-java/target/basicplus-frontend.jar"
 STD="$ROOT/bpstdlib"
 REGEN=0
 PACK="$ROOT/packs/Stdlib.pack"
@@ -38,7 +38,7 @@ for a in "$@"; do
 done
 
 command -v java >/dev/null 2>&1 || { echo "  ✗ stdlib del pack: no hay java — no se puede comprobar"; exit 2; }
-[ -f "$FE" ] || { echo "  ✗ stdlib del pack: falta $FE (mvn -f lexer-java/pom.xml package) — no se puede comprobar"; exit 2; }
+[ -f "$FE" ] || { echo "  ✗ stdlib del pack: falta $FE (mvn -f toolchain/lexer-java/pom.xml package) — no se puede comprobar"; exit 2; }
 
 if [ "$REGEN" -eq 1 ]; then
   # La receta de packs/README.md, tal cual: el pack sale del PROYECTO de la stdlib (el mismo

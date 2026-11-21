@@ -69,7 +69,7 @@ ellos (`out/`, y el `.elf` intermedio).
 ## Cómo se construye
 
     copy nativo\*.* out\
-    java -jar lexer-java/target/basicplus-frontend.jar \
+    java -jar toolchain/lexer-java/target/basicplus-frontend.jar \
          --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm
 
 El copiado NO es un descuido: el pack recoge del `outDir` los tipos
@@ -84,9 +84,9 @@ hablaba 6 — SQLite rota en todas las placas sin que nadie lo viera), hay que
 **regenerarlos con toolchain** y actualizarlos aquí. Por línea de comandos, el
 mismo paso que da el IDE:
 
-    java -cp "BpIde/target/classes;lexer-java/target/classes;pack/target/classes;miVM/target/classes;bpgenvm-c/build/packtool"          PackAot bpstdlib/sqlite <outDir> bpstdlib/sqlite arm,riscv bpstdlib/sqlite/SQLite.bp
+    java -cp "toolchain/BpIde/target/classes;toolchain/lexer-java/target/classes;toolchain/pack/target/classes;toolchain/miVM/target/classes;bpgenvm-c/build/packtool"          PackAot bpstdlib/sqlite <outDir> bpstdlib/sqlite arm,riscv bpstdlib/sqlite/SQLite.bp
 
-(`bpgenvm-c/tools/packtool/PackAot.java`, compilado a `bpgenvm-c/build/packtool/`).
+(`toolchain/tools/packtool/PackAot.java`, compilado a `bpgenvm-c/build/packtool/`).
 Comprueba la cabecera: bytes 4-8 del `.mdn` son versión y **ABI** (`struct '<HH'`).
 
 **Desde `#575` (26-sep) hay red**: pasó otra vez —la VM subió a la ABI 9 y estos `.mdn` se

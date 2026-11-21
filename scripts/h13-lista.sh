@@ -17,7 +17,7 @@
 set -u
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-FE="$RAIZ/lexer-java/target/basicplus-frontend.jar"
+FE="$RAIZ/toolchain/lexer-java/target/basicplus-frontend.jar"
 VMC="$RAIZ/bpgenvm-c/build/bpgenvm-c.exe"
 STD="$RAIZ/bpstdlib"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT

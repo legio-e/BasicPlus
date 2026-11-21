@@ -172,7 +172,7 @@ Estos pasos se hicieron el 6-ago-2026 (H13 de V4), el 22-ago (V5), el 12-sep (V6
 escritos porque la próxima vez hay que repetirlos, y porque **cada uno tapa una trampa que ya nos mordió al menos una
 vez**.
 
-- [ ] **Suites verdes**: `mvn -f lexer-java/pom.xml test` y `mvn -f miVM/pom.xml test`.
+- [ ] **Suites verdes**: `mvn -f toolchain/lexer-java/pom.xml test` y `mvn -f toolchain/miVM/pom.xml test`.
       ⚠️ El 22-ago estaban ROJAS sin que nadie lo supiera (ver arriba): mirar el
       número de fallos, no el color del último build que se recuerda. Con `-q`, Maven
       no lo dice: se cuenta en `target/surefire-reports/TEST-*.xml`.

@@ -12,9 +12,9 @@ fuente y Builtin.java / builtins.c se generan de él (scripts/gen_builtins.py).
 import io, os, re, sys, glob
 sys.stdout.reconfigure(encoding='utf-8')
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SEM = os.path.join(R, 'lexer-java/src/main/java/basicplus/frontend/SemanticAnalyzer.java')
-EMI = os.path.join(R, 'lexer-java/src/main/java/basicplus/frontend/MivmEmitter.java')
-BJ = os.path.join(R, 'miVM/src/main/java/edu/bpgenvm/bytecode/Builtin.java')
+SEM = os.path.join(R, 'toolchain/lexer-java/src/main/java/basicplus/frontend/SemanticAnalyzer.java')
+EMI = os.path.join(R, 'toolchain/lexer-java/src/main/java/basicplus/frontend/MivmEmitter.java')
+BJ = os.path.join(R, 'toolchain/miVM/src/main/java/edu/bpgenvm/bytecode/Builtin.java')
 
 TIPO = {'PrimitiveType.INTEGER': 'integer', 'PrimitiveType.STRING': 'string', 'PrimitiveType.FLOAT': 'float',
         'PrimitiveType.BOOLEAN': 'boolean', 'PrimitiveType.INT8': 'int8', 'PrimitiveType.UINT8': 'byte',
