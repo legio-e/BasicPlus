@@ -1,7 +1,0 @@
-module CharAt
-  function Main()
-    var s: string := "Hi"
-    print charCodeAt(s, 0)
-    print charCodeAt(s, 1)
-  end Main
-end CharAt

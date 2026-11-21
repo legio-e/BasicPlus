@@ -1,7 +1,0 @@
-{
-  "name": "pico2",
-  "variant": "A",
-  "ledPin": 25,
-  "neopixelPin": -1,
-  "psramCsPin": -1
-}

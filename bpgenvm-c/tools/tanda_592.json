@@ -1,7 +1,0 @@
-{
-  "_comentario": "V7 #592 (9-oct): el 2º temporizador en placa. NatPesadaPlaca: una native cuyas vueltas son lentas (un indexOf de 32 KB cada una: cerca de un ms en una Pico) y que no acaba nunca; un KILL a los 500 ms y el EXITED tiene que llegar en 300 —con el contador de antes de #592 la native lo veía cada 1024 vueltas: cerca de un segundo—. En la S3 (Xtensa, sin AOT) corre interpretada: el control.",
-  "pruebas": [
-    { "nombre": "NatPesadaPlaca", "fuente": "bpgenvm-c/samples/NatPesadaPlaca.bp", "aot": true,
-      "kill_tras_ms": 500, "kill_max_ms": 300 }
-  ]
-}

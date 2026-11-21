@@ -1,8 +1,0 @@
-# toolchain (micro32-suite) — V8.1 (#802): el .gitattributes de BasicPlus no llega dentro de un submódulo.
-# Los artefactos binarios de BasicPlus, digan lo que digan las heurísticas: sin conversión de finales de línea nunca.
-*.mod binary
-*.mdn binary
-*.pack binary
-*.npk binary
-*.uf2 binary
-*.bin binary

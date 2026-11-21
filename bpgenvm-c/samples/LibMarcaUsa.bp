@@ -1,7 +1,0 @@
-module LibMarcaUsa
-  import com.acme.lib.LibMarcaBase
-  public function main()
-    var a: LibMarcaBase.Base := LibMarcaBase.Base(5)
-    print a.quien()
-  end main
-end LibMarcaUsa

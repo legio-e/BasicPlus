@@ -1,0 +1,6 @@
+[submodule "toolchain"]
+	path = toolchain
+	url = https://github.com/micro32-suite/toolchain.git
+[submodule "runtime"]
+	path = bpgenvm-c
+	url = https://github.com/micro32-suite/runtime.git

@@ -1,7 +1,0 @@
-{
-  "class": "Ventana",
-  "type": "Panel",
-  "children": [
-    { "type": "Button", "text": "B", "name": "boton" }
-  ]
-}
