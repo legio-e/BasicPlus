@@ -9111,7 +9111,16 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   desde la estructura nueva y comparado con el de V8.0 (igual salvo la versión y las horas); **7. el ZIP, con el nombre
   de la suite** (Eduardo: *«Ahora el zip cambia de nombre no? Algo como 'Micro32-Suite V8.1'»*): `Micro32-Suite-8.1-win.zip`,
   con la carpeta `Micro32-Suite-8.1-win/` dentro, y la release, «Micro32 Suite v8.1»; los lenguajes siguen siendo BasicPlus y
-  JC, y el IDE, BpIde.
+  JC, y el IDE, BpIde; **8. los repositorios nuevos conservan las etiquetas** `v1.0`–`v8.0` que trae el `filter-repo`
+  (cada una, el estado de esa parte en esa versión); desde la V8.1, la misma etiqueta en los tres.
+- **Hecho el 21-nov** (todo en local; en GitHub, sólo la organización): el paso 0; el 1 (`ec6ce3e1`, `83a85e8f`,
+  `849124a7`: lo viejo fuera, las herramientas de docs y corpus a `scripts/`, Java a `toolchain/` con sus rutas —la red,
+  verde; Mono, igual; un ZIP de prueba, igual al de V8.0 salvo rutas—); el 2 (`git filter-repo`, instalado con el OK de
+  Eduardo: `toolchain`, 788 commits, y `runtime`, 1212, cada uno con el árbol idéntico al de su carpeta); y el 3
+  (`06ead075` y `b3cab88d`, su `.gitignore` y su `.gitattributes`, que el de BasicPlus no les llega; `87fecfcd`, los dos,
+  submódulos en `toolchain/` y `bpgenvm-c/`, sin tocar un fichero de trabajo). Un clon recursivo desde cero sale entero
+  (2 623 ficheros) y compila (Java con sus pruebas, el IDE, la VM-C con su `Makefile` en CRLF). Se saltan en él dos
+  pruebas de `miVM` que necesitan `samples/LocalsDbg.dbg`, que es salida de compilación: también en V8.0.
 - **El plan de la V8.1** (21-nov; Eduardo: *«OK»*; por pasos, cada uno con la red de testigo, y nada en GitHub hasta el
   final):
   0. **Eduardo crea la organización** `micro32-suite`, en la web de GitHub. Nada más. ✅ **Hecho el 21-nov** (creada a
