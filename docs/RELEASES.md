@@ -33,6 +33,12 @@ historia, sus etiquetas y sus releases.
 - **Las carpetas viejas** que ya no se usaban (`lexer/`, `vm/`, `generador/`…) salen del árbol; siguen en la
   historia.
 
+**Lo verificado antes de publicar:** un clon recursivo desde cero —los tres repositorios— compila entero y pasa
+la red con las mismas cuentas que V8.0 (la paridad 217/217, MOD8 209, dos workers 217/217, la cápsula de V6 59/59,
+las 117 pruebas de C) y las suites (404 del compilador, 66 de la VM Java y 17 del formato de los packs); el lote de
+Mono da las mismas 848; y el ZIP, frente al de V8.0, tiene las mismas 799 entradas: cambian el IDE, la hora del
+micro simulado y textos de la documentación (las rutas nuevas, las direcciones de la organización y lo de la V8.1).
+
 ---
 
 ## v8.0 — noviembre 2026

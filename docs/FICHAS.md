@@ -9121,6 +9121,19 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   submódulos en `toolchain/` y `bpgenvm-c/`, sin tocar un fichero de trabajo). Un clon recursivo desde cero sale entero
   (2 623 ficheros) y compila (Java con sus pruebas, el IDE, la VM-C con su `Makefile` en CRLF). Se saltan en él dos
   pruebas de `miVM` que necesitan `samples/LocalsDbg.dbg`, que es salida de compilación: también en V8.0.
+- **Y los pasos 5 y 4** (21-nov): `toolchain` → `42f4b80`, BpIde 8.1 y su enlace a la web (era
+  `legio-e.github.io/basicplus/`); en BasicPlus (`c5d14d73`), el ZIP `Micro32-Suite-X-win`, los dos README (dónde vive
+  BasicPlus, la estructura con los submódulos, `git clone --recursive`), las portadas, `pruebas.html`, `PUBLICAR` (la
+  suite: los commits y el push de dentro afuera, las etiquetas en los tres), las notas de la v8.1, CLAUDE.md y el
+  `.sha256` del ZIP de V8.0, que faltaba. **El paso 4, desde un clon recursivo limpio del estado final** (los remotos
+  desnudos haciendo de GitHub, y el ZIP de V6, el oráculo, bajado aparte): Java (17, 66 con las 2 saltadas de siempre,
+  404) y la red con las cuentas de siempre —paridad 217/217, MOD8 209 y los 8 SKIP, dos workers 217/217, cápsula 59/59,
+  sim, sombra, norma, la stdlib embebida—, salvo `test-frcond`, que necesita el kernel de FreeRTOS en
+  `../FreeRTOS-LTS` (un SDK fuera de git; con él, pasa, y su control sale rojo): 117/117. Y el ZIP, montado en la copia
+  de trabajo (los packs y el firmware no están en git): `Micro32-Suite-8.1-win.zip`, 33 MB, sha256 `344ee663…`, 799
+  entradas como el de V8.0; cambian el IDE, la hora del micro simulado y 25 textos (19 sólo de rutas, direcciones o el
+  jar; y `PUBLICAR`, los `QUICKSTART`, `RELEASES` y las portadas, por lo de la V8.1); el firmware, 10 OK; sin el nombre
+  de la red ni su clave.
 - **El plan de la V8.1** (21-nov; Eduardo: *«OK»*; por pasos, cada uno con la red de testigo, y nada en GitHub hasta el
   final):
   0. **Eduardo crea la organización** `micro32-suite`, en la web de GitHub. Nada más. ✅ **Hecho el 21-nov** (creada a
