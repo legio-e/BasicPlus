@@ -9108,7 +9108,10 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
   **3. los dos nuevos, con su historia** (los commits que tocaron sus carpetas, con otros hashes; los originales siguen
   en `BasicPlus`); **4. lo viejo, fuera del árbol** (queda en la historia: con `v8.0` se recupera); **5. Pages, con una
   redirección** desde `legio-e/legio-e.github.io`, probada antes de transferir; **6. la V8.1 trae su ZIP**, montado
-  desde la estructura nueva y comparado con el de V8.0 (igual salvo la versión y las horas).
+  desde la estructura nueva y comparado con el de V8.0 (igual salvo la versión y las horas); **7. el ZIP, con el nombre
+  de la suite** (Eduardo: *«Ahora el zip cambia de nombre no? Algo como 'Micro32-Suite V8.1'»*): `Micro32-Suite-8.1-win.zip`,
+  con la carpeta `Micro32-Suite-8.1-win/` dentro, y la release, «Micro32 Suite v8.1»; los lenguajes siguen siendo BasicPlus y
+  JC, y el IDE, BpIde.
 - **El plan de la V8.1** (21-nov; Eduardo: *«OK»*; por pasos, cada uno con la red de testigo, y nada en GitHub hasta el
   final):
   0. **Eduardo crea la organización** `micro32-suite`, en la web de GitHub. Nada más. ✅ **Hecho el 21-nov** (creada a
