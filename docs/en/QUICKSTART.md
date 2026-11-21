@@ -46,7 +46,7 @@ invariant.
 
 ```sh
 mvn -f toolchain/BpIde/pom.xml package
-java -jar toolchain/BpIde/target/BpIde-8.0.jar     # or bpide.bat, at the root (fix its path first)
+java -jar toolchain/BpIde/target/BpIde-8.1.jar     # or bpide.bat, at the root (fix its path first)
 ```
 
 Open `samples/blink.bp`, **Compile** button, **Run** menu — the output

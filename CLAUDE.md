@@ -87,13 +87,13 @@ el piso, no el techo); lo grande es headroom opcional, nunca requisito. **Fuera:
 ## Estructura del repositorio
 
 ```
-toolchain/        lo de Java (con la V8.1, el repositorio `toolchain` de micro32-suite, #802):
+toolchain/        SUBMÓDULO micro32-suite/toolchain — lo de Java:
   pack/           el formato de los packs (lo usan la VM-Java y el compilador)        [Maven]
   miVM/           VM Java + debugger + daemon TCP                                     [Maven]
   lexer-java/     compilador de BP y JC: .bp/.jc → .mod + .bpi + .dbg (+ AOT .mdn)   [Maven]
   BpIde/          IDE Swing (fat-jar)                                                 [Maven]
   tools/packtool/ podar y sellar un pack para una placa (lo llama wire_serie.py)
-bpgenvm-c/        VM C99: host + firmwares (pico/esp32*/stm32) (con la V8.1, `runtime`) [make]
+bpgenvm-c/        SUBMÓDULO micro32-suite/runtime — VM C99: host + firmwares (pico/esp32*/stm32) [make]
 bpstdlib/         biblioteca estándar (.bp + .mod compilados)
 samples/          programas de ejemplo (.bp / .mod)
 compat/           la red: paridad dual-VM, MOD8, la cápsula de V6, la resistencia…
@@ -106,6 +106,14 @@ Los **cuatro proyectos Maven**, en `toolchain/`, se construyen en este orden: `p
 "cirugía". `bpgenvm-c` se compila con `make`. (Las carpetas viejas —`lexer/`, `vm/`,
 `generador/`, `h3bench/`, `diag/`, `bp_propuesta_modelo_memoria/`— salieron del árbol en la V8.1: siguen en la
 historia, en `v8.0`.)
+
+**Desde la V8.1 (#802), tres repositorios en la organización `micro32-suite`:** BasicPlus (éste: la
+stdlib, los samples, la red, los docs con FICHAS y ESTADO, el empaquetador) y, como submódulos en las
+mismas rutas de siempre, `toolchain` (en `toolchain/`) y `runtime` (en `bpgenvm-c/`). Un cambio de
+código se commitea **DENTRO de su submódulo** y después, en BasicPlus, el commit que mueve el puntero
+(`git add toolchain` o `git add bpgenvm-c`); uno que toca Java y C son tres commits. El push, de dentro
+afuera: primero los submódulos, luego BasicPlus. Un clon nuevo, con `git clone --recursive`. Y ojo:
+`git ls-files`/`git grep` desde la raíz no entran en los submódulos (`--recurse-submodules`).
 
 ## Comandos (PC)
 
@@ -127,7 +135,7 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod                            # VM-C
 
 # El IDE
 mvn -f toolchain/BpIde/pom.xml package
-java -jar toolchain/BpIde/target/BpIde-8.0.jar
+java -jar toolchain/BpIde/target/BpIde-8.1.jar
 ```
 
 ### Cómo verificar la paridad dual-VM (el gesto más repetido)

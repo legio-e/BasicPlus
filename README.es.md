@@ -2,6 +2,11 @@
 
 > 🇬🇧 [English version](README.md)
 
+> **Desde la V8.1, BasicPlus vive en la organización [micro32-suite](https://github.com/micro32-suite)**,
+> junto a [toolchain](https://github.com/micro32-suite/toolchain) (el compilador, el IDE y la VM Java) y
+> [runtime](https://github.com/micro32-suite/runtime) (la VM C y el firmware), que este repositorio trae como
+> submódulos. Se clona con `git clone --recursive`.
+
 **Un lenguaje de propósito general para microcontroladores de 32 bits, con
 sintaxis BASIC moderna, orientación a objetos, interfaz gráfica y un debugger
 de primera clase.**
@@ -235,15 +240,18 @@ dispositivo.
 ## Estructura del repositorio
 
 ```
-toolchain/    lo de Java:
+toolchain/    lo de Java — submódulo: micro32-suite/toolchain
   pack/         el formato de los packs
   miVM/         VM Java + debugger + daemon TCP
   lexer-java/   compilador de BP y JC: .bp/.jc → .mod + .dbg (el código nativo va dentro del .mod)
   BpIde/        IDE Swing (fat-jar)
 bpgenvm-c/    VM C99: host + firmwares de RP2350, ESP32-S3/C3/C5/C6/P4, STM32
+              — submódulo: micro32-suite/runtime
 bpstdlib/     biblioteca estándar (fuentes .bp + .mod compilados); los packs de la GUI, en gui/
 packs/        los packs; en el repo, sólo Stdlib.pack (los demás se construyen o vienen en la release)
 samples/      programas de ejemplo
+compat/       la red de pruebas: la paridad dual-VM, los formatos viejos, la de resistencia
+scripts/      el empaquetador, los generadores y las herramientas de los documentos y el corpus
 docs/         manual, guía gráfica, specs (.mod, opcodes, heap, wire), backlog
 ```
 
@@ -252,6 +260,11 @@ docs/         manual, guía gráfica, specs (.mod, opcodes, heap, wire), backlog
 Requisitos: JDK 8+, Maven, GCC (MinGW en Windows), `make`.
 
 ```sh
+# 0. Clonarlo CON sus submódulos (toolchain/ y bpgenvm-c/); si ya lo clonaste
+#    sin ellos: git submodule update --init
+git clone --recursive https://github.com/micro32-suite/BasicPlus.git
+cd BasicPlus
+
 # 1. Toolchain Java (el formato de los packs, la VM Java y el compilador), en este orden
 mvn -f toolchain/pack/pom.xml install
 mvn -f toolchain/miVM/pom.xml install
@@ -268,14 +281,14 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Opcional) el IDE
 mvn -f toolchain/BpIde/pom.xml package
-java -jar toolchain/BpIde/target/BpIde-8.0.jar
+java -jar toolchain/BpIde/target/BpIde-8.1.jar
 ```
 
 Los firmwares se compilan con sus toolchains habituales (pico-sdk + ninja,
 ESP-IDF, STM32CubeIDE); ver `bpgenvm-c/{pico,esp32,esp32c3,esp32c5,esp32c6,esp32p4,stm32}/`.
 Los packs de la GUI (`Gui`, `GuiMini`, `DriverSpi`) se construyen desde
 `bpstdlib/gui/` (cada `.bpbuild` dice cómo). O coge los **binarios
-precompilados** —imágenes y packs— de la [última release](https://github.com/legio-e/BasicPlus/releases/latest).
+precompilados** —imágenes y packs— de la [última release](https://github.com/micro32-suite/BasicPlus/releases/latest).
 
 ## Documentación
 
@@ -317,11 +330,17 @@ prueba de fiabilidad de 48 horas en cuatro placas. Entra una placa nueva, la
 **ESP32-P4X**, la nueva revisión del P4. Nueve imágenes para once placas y tres
 arquitecturas; verificado en hardware real en **las once**.
 
+**La V8.1** (noviembre 2026) no cambia nada del producto: reorganiza el proyecto
+como una suite. BasicPlus pasa a la organización **micro32-suite**; el compilador,
+el IDE y la VM Java, a **toolchain**, y la VM C y el firmware, a **runtime**, cada
+uno con su historia, y aquí entran como submódulos. La descarga se llama ahora
+`Micro32-Suite-8.1-win.zip`.
+
 Descargas y detalle completo: la
-**[release v8.0](https://github.com/legio-e/BasicPlus/releases/tag/v8.0)** y las
-**[notas de versión](docs/RELEASES.md)**; lo que trajo V7 —una imagen por micro, la
-pantalla y SQLite en packs, el segundo núcleo, la ESP32-C5—, en la
-**[release v7.0](https://github.com/legio-e/BasicPlus/releases/tag/v7.0)**.
+**[release v8.1](https://github.com/micro32-suite/BasicPlus/releases/tag/v8.1)** y las
+**[notas de versión](docs/RELEASES.md)**; lo que trajo V8 —la WiFi y el Bluetooth,
+JC, la prueba de fiabilidad, la ESP32-P4X—, en la
+**[release v8.0](https://github.com/micro32-suite/BasicPlus/releases/tag/v8.0)**.
 
 ## Licencia
 

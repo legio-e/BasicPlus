@@ -1,7 +1,28 @@
-# Checklist de publicación — BasicPlus v8.0
+# Checklist de publicación — Micro32 Suite v8.1 (BasicPlus)
 
-Doc de mantenedor (no enlazado desde la portada). El repo público
-`legio-e/BasicPlus` **ya existe**; publicar es un `push` + una release.
+Doc de mantenedor (no enlazado desde la portada). Los repositorios públicos **ya existen**:
+`micro32-suite/BasicPlus` (hasta la V8.1, `legio-e/BasicPlus`), con `micro32-suite/toolchain` y
+`micro32-suite/runtime` como submódulos; publicar es un `push` de los tres + una release.
+
+## 🧩 Desde la V8.1: la suite, tres repositorios (#802)
+
+BasicPlus es el de fuera y trae como submódulos a `toolchain` (en `toolchain/`: el compilador, el IDE, la
+VM Java y el formato de los packs) y a `runtime` (en `bpgenvm-c/`: la VM C, el OS embebido y el firmware).
+Lo que cambia al publicar:
+
+- **Los commits, de dentro afuera.** Un cambio de código se commitea DENTRO de su submódulo; después, en
+  BasicPlus, el commit que mueve el puntero (`git add toolchain` o `git add bpgenvm-c`). Un cambio que toca
+  Java y C son tres commits: los dos de dentro y el de fuera.
+- **Las etiquetas, en los tres:** `vX.Y` en `toolchain` y en `runtime` sobre los commits a los que apunta
+  BasicPlus (`git submodule status` dice cuáles), y en BasicPlus sobre su commit publicado.
+- **El push, de dentro afuera:** primero `toolchain` y `runtime` (la rama y la etiqueta), después BasicPlus.
+  Al revés, un `git clone --recursive` de BasicPlus pediría commits que todavía no están en GitHub.
+- **La release, en BasicPlus**, con `Micro32-Suite-X.Y-win.zip`; `toolchain` y `runtime` llevan sólo la
+  etiqueta.
+- **Pages**, en `micro32-suite.github.io/BasicPlus/`; las direcciones de `legio-e.github.io/BasicPlus/`,
+  con una redirección desde `legio-e/legio-e.github.io` (GitHub no redirige Pages al transferir).
+- **La prueba del clon limpio:** `git clone --recursive` en una carpeta nueva, y allí compilar todo, la red
+  y el ZIP.
 
 > **Esto se hace una vez cada varias semanas y no se recuerda.** Por eso cada paso
 > dice *qué* se hace, *quién* lo hace y **cómo saber que salió bien**. Si un paso
@@ -285,7 +306,7 @@ vez**.
       formato viejo (`MOD_VIEJOS`).
 - [ ] **BpIde**: ⚠️ **con el IDE CERRADO**. `mvn install` en `miVM` y en
       `lexer-java`, luego `mvn package` en `BpIde`. La versión sale del pom
-      (`BpIde-8.0.jar`; el `<version>` del pom es la versión del producto en curso).
+      (`BpIde-8.1.jar`; el `<version>` del pom es la versión del producto en curso).
 - [ ] **Micro simulado con LVGL y SQLite**: `cd bpgenvm-c && make sim LVGL=1 SQLITE=1`
       (con SQLite desde V6: los demos de BD corren sin placa).
       ⚠️ *Trampa (hallazgo 37)*: **sin `LVGL=1` el simulador ejecuta pero no
@@ -344,8 +365,8 @@ El proyecto tiene **dos portadas distintas**, y hay que tocar las dos:
 
 | dónde | fichero | cuándo se ve |
 |---|---|---|
-| página del **repo** (github.com/legio-e/BasicPlus) | `README.md` + `README.es.md` | al instante con el `push` |
-| sitio de **Pages** (legio-e.github.io/BasicPlus) | `docs/index.html` + `docs/en/index.html` | tras construir Pages |
+| página del **repo** (github.com/micro32-suite/BasicPlus) | `README.md` + `README.es.md` | al instante con el `push` |
+| sitio de **Pages** (micro32-suite.github.io/BasicPlus) | `docs/index.html` + `docs/en/index.html` | tras construir Pages |
 
 Y la de Pages viaja **además** dentro del ZIP: es la documentación que abre
 el IDE. Si cambias `docs/`, **hay que rehacer el ZIP**; el `README.md` no
@@ -391,10 +412,10 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
 - [ ] Settings → Pages → Source: rama `main`, carpeta **`/docs`** (ya configurado).
 - [ ] `docs/.nojekyll` presente.
 - [ ] **Comprobar que el build de Pages terminó BIEN** — no basta con el push:
-      `gh api repos/legio-e/BasicPlus/pages/builds/latest --jq .status`
+      `gh api repos/micro32-suite/BasicPlus/pages/builds/latest --jq .status`
       ⚠️ Dos despliegues seguidos se pisan («*due to in progress deployment*»)
       y el segundo **falla en silencio**: la web sigue sirviendo la anterior.
-      Se relanza con `gh api -X POST repos/legio-e/BasicPlus/pages/builds`.
+      Se relanza con `gh api -X POST repos/micro32-suite/BasicPlus/pages/builds`.
 - [ ] Abrir la URL y comprobar: portada, que **carga la captura**
       (`img/guicolordemo.png`), y que los volúmenes (`manual`, `referencia`,
       `guia-ide`, `gui`, `basedatos`, `creditos` y, desde V8, `jc` y `pruebas`) abren
@@ -405,9 +426,10 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       `docs/` a propósito (para que no viaje en el ZIP). Si lo quieres en la web,
       hay que copiarlo o enlazarlo a mano.
 
-## 4 · Release v8.0
+## 4 · Release v8.1
 
-- [ ] Tag `v8.0` sobre el commit publicado, y `git push origin v8.0`.
+- [ ] Las etiquetas `v8.1`, en los tres (arriba, «la suite»): `toolchain` y `runtime` sobre los commits a los
+      que apunta BasicPlus, y BasicPlus sobre el suyo; y el push de dentro afuera.
 - [ ] Cuerpo de la release: **bilingüe, español y luego inglés**, con el molde de la
       anterior (`dist/release-v7.0.md`; el de V8, `dist/release-v8.0.md`): intro ·
       Lo nuevo · **Al actualizar** · Descarga (tabla de las **ocho** imágenes +
@@ -418,9 +440,10 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       22-ago comparando con lo que V4 publicó de verdad.
       ℹ️ El enlace «English below ↓» de la primera línea no salta: GitHub no pone
       anclas a los encabezados de una release (visto en v7.0; en v6.0, igual).
-- [ ] `gh release create v8.0 dist/BasicPlus-8.0-win.zip --repo legio-e/BasicPlus
-      --title "BasicPlus v8.0" --notes-file dist/release-v8.0.md` — **el ZIP y nada
-      más** (ver arriba: las imágenes van dentro).
+- [ ] `gh release create v8.1 dist/Micro32-Suite-8.1-win.zip --repo micro32-suite/BasicPlus
+      --title "Micro32 Suite v8.1" --notes-file dist/release-v8.1.md` — **el ZIP y nada
+      más** (ver arriba: las imágenes van dentro). Hasta V8.0, `BasicPlus-X-win.zip` y
+      «BasicPlus vX».
 - [ ] Comprobar desde la propia release: descargar el ZIP y verificar el
       `sha256` contra el que anotaste al montarlo.
 

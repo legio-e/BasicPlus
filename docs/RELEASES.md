@@ -1,8 +1,37 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v8.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
-> `v5.0`, v6 en `v6.0`, v7 en `v7.0`). Ajusta versión/fecha al publicar.
+> `v8.1` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
+> `v5.0`, v6 en `v6.0`, v7 en `v7.0`, v8 en `v8.0`). Ajusta versión/fecha al publicar.
+
+---
+
+## v8.1 — noviembre 2026 · la suite
+
+**No cambia nada del producto: reorganiza el proyecto.** BasicPlus pasa a la organización
+[micro32-suite](https://github.com/micro32-suite) de GitHub, y el código se reparte en tres repositorios:
+
+| repositorio | qué lleva | en BasicPlus |
+|---|---|---|
+| **BasicPlus** | la biblioteca estándar, los ejemplos, la red de pruebas, la documentación y el empaquetador | — |
+| **toolchain** | lo de Java: el compilador de BP y JC, el IDE, la VM Java y el formato de los packs | `toolchain/` |
+| **runtime** | lo de C: la VM C, el OS embebido y el firmware de las placas | `bpgenvm-c/` |
+
+`toolchain` y `runtime` nacen con su historia —los mismos commits, desde mayo, y las etiquetas `v1.0`–`v8.0`
+sobre su estado en cada versión— y BasicPlus los trae como **submódulos**: se clona con
+`git clone --recursive` (si ya estaba clonado, `git submodule update --init`). BasicPlus conserva toda su
+historia, sus etiquetas y sus releases.
+
+- **La descarga se llama ahora `Micro32-Suite-8.1-win.zip`** y lleva lo mismo que la de V8.0, con el IDE en
+  `BpIde-8.1.jar`. Los lenguajes siguen siendo BasicPlus y JC.
+- **El IDE de V8.0 llevaba 14 clases sobrantes** de compilaciones viejas (`ModWriter$2`…, restos que ningún
+  fuente genera); el de V8.1, compilado desde cero, ya no.
+- **La web**, en `micro32-suite.github.io/BasicPlus/`.
+- **Para compilar**, los cuatro proyectos de Java, en `toolchain/`, van en este orden: `pack`, `miVM`,
+  `lexer-java` y `BpIde`. Las instrucciones de antes empezaban por `miVM` sin nombrar `pack`, del que depende,
+  y en una máquina limpia fallaban.
+- **Las carpetas viejas** que ya no se usaban (`lexer/`, `vm/`, `generador/`…) salen del árbol; siguen en la
+  historia.
 
 ---
 

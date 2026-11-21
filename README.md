@@ -2,6 +2,11 @@
 
 > 🇪🇸 [Versión en español](README.es.md)
 
+> **Since V8.1, BasicPlus lives in the [micro32-suite](https://github.com/micro32-suite) organization**,
+> together with [toolchain](https://github.com/micro32-suite/toolchain) (the compiler, the IDE and the Java VM)
+> and [runtime](https://github.com/micro32-suite/runtime) (the C VM and the firmware), which this repository
+> brings in as submodules. Clone it with `git clone --recursive`.
+
 **A general-purpose language for 32-bit microcontrollers, with modern BASIC
 syntax, object orientation, a graphical UI and a first-class debugger.**
 
@@ -233,15 +238,18 @@ VM and inside the device.
 ## Repository layout
 
 ```
-toolchain/    the Java side:
+toolchain/    the Java side — submodule: micro32-suite/toolchain
   pack/         the pack format
   miVM/         Java VM + debugger + TCP daemon
   lexer-java/   BP and JC compiler: .bp/.jc → .mod + .dbg (native code inside the .mod)
   BpIde/        Swing IDE (fat-jar)
 bpgenvm-c/    C99 VM: host + firmwares for RP2350, ESP32-S3/C3/C5/C6/P4, STM32
+              — submodule: micro32-suite/runtime
 bpstdlib/     standard library (.bp sources + compiled .mod); the GUI packs, in gui/
 packs/        the packs; in the repo, only Stdlib.pack (the others are built or come in the release)
 samples/      example programs
+compat/       the test net: dual-VM parity, the old formats, the endurance test
+scripts/      the packager, the generators and the tools for the docs and the corpus
 docs/         manual, GUI guide, specs (.mod, opcodes, heap, wire), backlog
 ```
 
@@ -250,6 +258,11 @@ docs/         manual, GUI guide, specs (.mod, opcodes, heap, wire), backlog
 Requirements: JDK 8+, Maven, GCC (MinGW on Windows), `make`.
 
 ```sh
+# 0. Clone it WITH its submodules (toolchain/ and bpgenvm-c/); if you already
+#    cloned it without them: git submodule update --init
+git clone --recursive https://github.com/micro32-suite/BasicPlus.git
+cd BasicPlus
+
 # 1. Java toolchain (the pack format, the Java VM and the compiler), in this order
 mvn -f toolchain/pack/pom.xml install
 mvn -f toolchain/miVM/pom.xml install
@@ -266,14 +279,14 @@ bpgenvm-c/build/bpgenvm-c samples/Blink.mod
 
 # 4. (Optional) the IDE
 mvn -f toolchain/BpIde/pom.xml package
-java -jar toolchain/BpIde/target/BpIde-8.0.jar
+java -jar toolchain/BpIde/target/BpIde-8.1.jar
 ```
 
 The firmwares are built with their usual toolchains (pico-sdk + ninja,
 ESP-IDF, STM32CubeIDE); see `bpgenvm-c/{pico,esp32,esp32c3,esp32c5,esp32c6,esp32p4,stm32}/`.
 The GUI packs (`Gui`, `GuiMini`, `DriverSpi`) are built from `bpstdlib/gui/`
 (each `.bpbuild` says how). Or grab the **prebuilt binaries** — images and
-packs — from the [latest release](https://github.com/legio-e/BasicPlus/releases/latest).
+packs — from the [latest release](https://github.com/micro32-suite/BasicPlus/releases/latest).
 
 ## Documentation
 
@@ -318,11 +331,17 @@ with Mono's C# tests; and a 48-hour reliability test on four boards. A new board
 comes in, the **ESP32-P4X**, the new revision of the P4. Nine images for eleven
 boards and three architectures; verified on real hardware on **all eleven**.
 
+**V8.1** (November 2026) changes nothing in the product: it reorganizes the
+project as a suite. BasicPlus moves to the **micro32-suite** organization; the
+compiler, the IDE and the Java VM go to **toolchain**, and the C VM and the
+firmware to **runtime**, each with its own history, brought in here as
+submodules. The download is now called `Micro32-Suite-8.1-win.zip`.
+
 Downloads and full detail: the
-**[v8.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v8.0)** and the
-**[release notes](docs/RELEASES.md)** *(Spanish)*; what V7 brought — one image per
-micro, the screen and SQLite in packs, the second core, the ESP32-C5 — is in the
-**[v7.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v7.0)**.
+**[v8.1 release](https://github.com/micro32-suite/BasicPlus/releases/tag/v8.1)** and the
+**[release notes](docs/RELEASES.md)** *(Spanish)*; what V8 brought — WiFi and
+Bluetooth, JC, the reliability test, the ESP32-P4X — is in the
+**[v8.0 release](https://github.com/micro32-suite/BasicPlus/releases/tag/v8.0)**.
 
 ## License
 

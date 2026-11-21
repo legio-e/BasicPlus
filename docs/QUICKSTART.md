@@ -46,7 +46,7 @@ del proyecto.
 
 ```sh
 mvn -f toolchain/BpIde/pom.xml package
-java -jar toolchain/BpIde/target/BpIde-8.0.jar     # o bpide.bat, en la raíz (cambia antes su ruta)
+java -jar toolchain/BpIde/target/BpIde-8.1.jar     # o bpide.bat, en la raíz (cambia antes su ruta)
 ```
 
 Abre `samples/blink.bp`, botón **Compile**, menú **Run** — la salida

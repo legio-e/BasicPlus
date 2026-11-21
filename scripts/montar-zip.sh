@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
-# montar-zip.sh — arma el ZIP de distribución de BasicPlus para Windows.
+# montar-zip.sh — arma el ZIP de distribución de la suite (Micro32 Suite: BasicPlus y JC,
+# el IDE, las dos VMs y el firmware) para Windows. Hasta V8.0 se llamaba BasicPlus-X-win.
 #
 # POR QUÉ UN SCRIPT Y NO A MANO: el ZIP es lo que se prueba en H13 y lo que se
 # publica, y tiene que ser el MISMO. Montarlo a mano una vez para probar y otra
@@ -22,11 +23,11 @@ set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 VER="$(sed -n "s@.*<version>\(.*\)</version>.*@\1@p" "$RAIZ/toolchain/BpIde/pom.xml" | head -1)"
-NOMBRE="BasicPlus-${VER}-win"
+NOMBRE="Micro32-Suite-${VER}-win"     # V8.1 (#802): el nombre de la suite (hasta V8.0, BasicPlus-X-win)
 OUT="$RAIZ/dist/$NOMBRE"
 JAR="$RAIZ/toolchain/BpIde/target/BpIde-${VER}.jar"
 
-echo "== BasicPlus $VER =="
+echo "== Micro32 Suite $VER =="
 
 # El jar manda: si no está, no hay nada que empaquetar (y la versión sale del pom,
 # así que un jar viejo con otro nombre se detecta aquí y no en la release).
