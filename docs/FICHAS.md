@@ -9087,6 +9087,52 @@ Salió al probar lo que le quedaba a H3 sin apagar el router: con el IDE conecta
 - **20-nov, con V8 publicada** (Eduardo: *«Antes de V9 tenemos que crear la Suite y publicarla. Será como una versión
   V8.1. Pero por hoy es suficiente, a descansar y mañana empezaremos estudiando como hacerlo.»*): lo siguiente es la
   suite, como una V8.1. La próxima sesión empieza estudiando cómo hacerla, sin tocar nada.
+- **21-nov, la forma** (Eduardo: *«Crear un grupo. Dentro el repositorio actual. Dentro un repositorio del compilador,
+  el IDE y herramientas (básicamente todo lo que está hecho en Java). El contenido de este repositorio se lo quitamos al
+  repositorio actual. Dentro del grupo también otro repositorio del OS embebido y de las VMs (básicamente todo lo que
+  está hecho en C). Su contenido se lo robamos al repositorio actual. Entonces el repositorio actual se queda con la
+  librerías, los ejemplos, la documentación, etc.»*). Mejor que lo de §E14 (un tercer repositorio para lo de en
+  medio): `BasicPlus` conserva su historia, sus etiquetas, los 1625 hashes que citan los documentos, sus estrellas, sus
+  releases y Pages, y lo de en medio (la stdlib, los ejemplos, la red, FICHAS) se queda donde está. Medido el reparto:
+  Java, `miVM`, `lexer-java`, `BpIde` y **`pack/`** (un cuarto proyecto Maven: el compilador depende de él) y el Java de
+  `bpgenvm-c/tools/packtool`; C, `bpgenvm-c`; lo viejo (`lexer/`, `vm/`, `generador/`, `h3bench/`, `diag/`,
+  `bp_propuesta_modelo_memoria/`), sin mover; y las herramientas de `bpgenvm-c/tools`, repartidas (las de placa, con C;
+  las de documentos y corpus, con `BasicPlus`). Los tres se necesitan para compilar y probar (C llama al compilador en
+  el `Makefile` y en 20 scripts; el AOT escribe C contra las cabeceras de `bpgenvm-c`; las pruebas y las imágenes usan
+  `bpstdlib`): propuestos, los dos nuevos como **submódulos** de `BasicPlus`. Y GitHub (su documentación): al transferir
+  un repositorio se van con él las estrellas, los seguidores, las issues y las releases, y los enlaces y el `git`
+  redirigen; **Pages no**: `legio-e.github.io/BasicPlus/` daría 404.
+- **Decidido** (Eduardo, 21-nov): **1. la organización, `micro32-suite`** (libre ese día en GitHub: 404; la crea él), y
+  los dos repositorios nuevos, **`toolchain`** (el de Java: el compilador de BP y JC, el IDE, la VM-Java y las
+  herramientas) y **`runtime`** (el de C: la VM-C, el OS embebido y los firmwares); **2. submódulos** de `BasicPlus`;
+  **3. los dos nuevos, con su historia** (los commits que tocaron sus carpetas, con otros hashes; los originales siguen
+  en `BasicPlus`); **4. lo viejo, fuera del árbol** (queda en la historia: con `v8.0` se recupera); **5. Pages, con una
+  redirección** desde `legio-e/legio-e.github.io`, probada antes de transferir; **6. la V8.1 trae su ZIP**, montado
+  desde la estructura nueva y comparado con el de V8.0 (igual salvo la versión y las horas).
+- **El plan de la V8.1** (21-nov; Eduardo: *«OK»*; por pasos, cada uno con la red de testigo, y nada en GitHub hasta el
+  final):
+  0. **Eduardo crea la organización** `micro32-suite`, en la web de GitHub. Nada más. ✅ **Hecho el 21-nov** (creada a
+     las 09:42 UTC; plan gratuito; Eduardo, propietario; sin repositorios).
+  1. **En `BasicPlus`, todavía un solo repositorio:** (a) lo viejo, fuera del árbol; (b) lo que está en una carpeta que
+     no es la suya: el Java de `bpgenvm-c/tools/packtool`, con el de Java, y las herramientas de documentos y corpus de
+     `bpgenvm-c/tools` (`doc_frags`, `enlaces_docs`, `samples_sweep`, `rendimiento_versiones`), a `BasicPlus`; (c) los
+     cuatro proyectos de Java, a `toolchain/` (`git mv`), con sus rutas al día: 77 ficheros de fuera los nombran (214
+     veces: la red, el `Makefile` de la VM-C, los scripts, los README, CLAUDE.md…), 32 de dentro miran a `../bpstdlib`
+     y compañía, y 13 notas de la memoria de Claude. CLAUDE.md, además, decía «tres proyectos Maven»: son cuatro, con
+     `pack`. Al acabar: la red, verde con las mismas cuentas; las suites; y un ZIP de prueba, igual que el de V8.0.
+  2. **Los repositorios nuevos, con su historia** (`git filter-repo` sobre una copia): `toolchain`, con la raíz en lo
+     que es `toolchain/` tras el paso 1 (y sus rutas de antes: `miVM/`, `lexer-java/`, `BpIde/`, `pack/` y el
+     `packtool`); `runtime`, con la raíz en lo que hoy es `bpgenvm-c/`.
+  3. **En `BasicPlus`, los submódulos en las mismas rutas:** `toolchain/` y `bpgenvm-c/` —el de C, montado con su nombre
+     de hoy: no cambia ni una ruta de C, ni las de los builds de las placas—. Así el paso 3 no mueve nada que el 1 no
+     haya probado ya.
+  4. **Verificarlo desde un clon limpio** (`git clone --recursive` en otra carpeta): compilar todo, la red, las suites,
+     el micro simulado, el ZIP (comparado con el de V8.0) y, al menos, el build de una imagen.
+  5. **La versión 8.1:** el IDE, las portadas y las notas (la reorganización y cómo se clona); CLAUDE.md, con el mapa
+     nuevo; y la memoria.
+  6. **La redirección de Pages**, en `legio-e/legio-e.github.io`, probada antes de transferir.
+  7. **Publicar, con el OK de Eduardo:** transferir `BasicPlus` a `micro32-suite`; crear y subir `toolchain` y
+     `runtime`; las etiquetas `v8.1` en los tres; la release `v8.1` con el ZIP; Pages y la redirección, comprobados.
 
 #### ✅ `#801` — el turno de un hilo se cuenta en opcodes: el que pasa el rato en builtins largos hace esperar a los demás hasta 150 ms (abierta el 6-nov; se vio en la C5 mirando la WiFi, y no es de la WiFi · **CERRADA el 13-nov** sin cambiar el código, el commit de `#801`; Eduardo: *«Yo haría a)»*, documentarlo)
 
