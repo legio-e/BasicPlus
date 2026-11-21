@@ -7735,6 +7735,32 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez
   (`c6648f46…`), y la pasada de Eduardo por él: `SqlDemo`, sin el aviso. **El pre-flight de V8, pasado.**
 
+#### 🔵 `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **los README, hechos en local; el push y lo de GitHub, con su palabra**)
+
+- **Lo medido** (el tráfico de GitHub, los últimos 14 días): 66 visitas de 9 personas y 28 clones de 23 (en buena parte,
+  robots); de fuera, 11 llegadas desde github.com y 1 desde Google. El «About», sin web; 13 *topics*; la imagen social, la
+  que genera GitHub. Y `toolchain` y `runtime`, **sin licencia**: el `LICENSE` (MIT) es de la raíz de BasicPlus, y
+  `filter-repo` no se lo llevó; para GitHub, «sin licencia» es «todos los derechos reservados».
+- **De los consejos, lo acertado para la portada:** arriba, qué es en dos líneas, la imagen y la descarga (el ZIP sólo
+  pide Java; pedir Maven, C99 y submódulos para probarlo echa a casi todos), y lo largo, condensado y enlazado. **Lo que
+  no:** «no aparece ninguna release» (hay nueve, y la v8.1 es la Latest); presentarlo como «más rápido» que MicroPython
+  (no está medido).
+- **Hecho, en los dos README** (con la misma estructura): las insignias (versión, licencia, «probado en 11 placas»,
+  documentación); los enlaces de arriba (la descarga para Windows, la web, el inicio rápido, la otra lengua); la
+  captura del IDE con el micro simulado (la de la guía del IDE); el blink, el de `samples/blink.bp` (10 vueltas, no 100),
+  y el mismo en JC, plegado; «Pruébalo», con el ZIP; «Por qué BasicPlus», en ocho puntos; las placas, en una tabla corta
+  (placa, chip, pantalla, WiFi y Bluetooth, AOT; lo demás de la tabla de antes está en `INSTALAR_FIRMWARE` y
+  `QUICKSTART`), con la WiFi de los kits de la P4 «sin probar», como en las notas de v8.0; lo de V8 y la historia, en
+  «Estado»; la nota de la suite, en «Estructura del repositorio»; y «Comentarios», con las issues y las discusiones. Los
+  enlaces a un `.html` van a la web: GitHub enseña el fuente de un `.html`, no la página.
+- **Verificado:** el blink en BP y en JC, compilados y corridos en las dos VMs, con la misma salida, igual entre los dos;
+  `doc_frags` compila los dos (el bloque de JC, marcado ` ```java jc `: GitHub sigue coloreándolo como Java); los
+  enlaces relativos y las anclas, sin uno roto; y la portada, renderizada con el Markdown de GitHub y mirada.
+- **Pendiente, con su palabra:** el push (la norma del 14-ago: nada sube entre versiones; esto no toca el producto ni
+  promete nada de V9); la web del «About» (`micro32-suite.github.io/BasicPlus/`) y más *topics*; el `LICENSE` en
+  `toolchain` y `runtime`. Y lo que es suyo: una foto o un vídeo corto de una placa con el IDE, lo mejor para arriba; la
+  imagen social; y la difusión fuera (Hacker News, Reddit, Hackaday).
+
 #### 🔵 `#848` — en el panel de la placa, «VM Java (TCP v1)» sólo se conecta a una VM ya en marcha (`localhost:7332` por defecto): no la arranca, como sí hace el micro simulado con su botón (abierta el 21-nov, en la pasada de Eduardo por el IDE de la V8.1; igual en V8.0 · **a V9**: Eduardo, *«de momento solamente publicamos»*)
 
 - **Lo visto** (Eduardo): *«Es la de Java la que no me va»*: «[Placa ERROR] no se pudo conectar a la VM remota
