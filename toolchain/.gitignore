@@ -1,0 +1,51 @@
+# toolchain (micro32-suite): lo de Java —pack, miVM, lexer-java, BpIde y el packtool—.
+# Hasta la V8.1 vivía en BasicPlus y estas reglas estaban en su .gitignore; con la suite es un
+# repositorio aparte (un submódulo de BasicPlus) y el .gitignore de fuera ya no le llega (#802).
+
+# ============================================================
+# Las genéricas (las mismas que en BasicPlus)
+# ============================================================
+target/
+*.class
+**/dependency-reduced-pom.xml
+.idea/
+.vscode/
+*.iml
+nbproject/private/
+nb-configuration.xml
+.classpath
+.project
+.settings/
+**/.claude/settings.local.json
+Thumbs.db
+.DS_Store
+out/
+out_test.txt
+tmp_iotest/
+dist/
+__pycache__/
+
+# ============================================================
+# lexer-java: los .mod/.bpi/.dbg de samples/ son recompilables; y las
+# salidas ad-hoc del frontend y del AOT/MdnPack
+# ============================================================
+lexer-java/samples/*.mod
+lexer-java/samples/*.bpi
+lexer-java/samples/*.dbg
+lexer-java/samples/**/out/*.mod
+lexer-java/samples/**/out/*.bpi
+lexer-java/samples/**/out/*.dbg
+lexer-java/samples/**/*.class
+lexer-java/out/
+lexer-java/*.mdn
+lexer-java/*.o
+lexer-java/aotout/
+
+# BpIde: las preferencias locales del IDE
+BpIde/.bpide-prefs
+
+# miVM: los .mod de los demos los ESCRIBEN los Main*.java (emisores a mano,
+# anteriores al compilador): son salida, no fuente
+miVM/*.mod
+miVM/*.bpi
+miVM/*.dbg

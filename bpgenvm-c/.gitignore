@@ -6,3 +6,63 @@ out.txt
 *.flash
 boardsim.flash
 build2/
+
+# ============================================================
+# V8.1 (#802): lo que el .gitignore de BasicPlus ignoraba aquí. Con la suite, esta
+# carpeta es el repositorio runtime (un submódulo de BasicPlus) y aquél ya no le llega.
+# ============================================================
+# Las genéricas (las mismas que en BasicPlus)
+target/
+*.class
+**/dependency-reduced-pom.xml
+.idea/
+.vscode/
+*.iml
+nbproject/private/
+nb-configuration.xml
+.classpath
+.project
+.settings/
+**/.claude/settings.local.json
+Thumbs.db
+.DS_Store
+out/
+out_test.txt
+tmp_iotest/
+dist/
+__pycache__/
+FreeRTOS-Kernel/
+FreeRTOS-LTS/
+FreeRTOSv202604.00-LTS.zip
+pico-sdk/
+
+# Pico: el build, y lo que CMake deja FUERA de build/ al resolver picotool/pioasm y
+# generar cabeceras (se colaron en un commit el 8-ago: 301 ficheros)
+pico/build/
+pico/mdn_build/
+pico/_deps/
+pico/FREERTOS_KERNEL/
+pico/generated/
+pico/build-bringup/
+pico/pico_flash_region.ld
+pico/CMakeCache.txt
+pico/CMakeFiles/
+
+# samples/: salidas de compilación
+samples/*.mod
+samples/*.bpi
+samples/*.dbg
+samples/*.slots
+
+# STM32: los .mod/.bpi/.dbg son intermedios; el blob embebido (stm32_mods.c) sí se versiona
+stm32/**/*.bpi
+stm32/**/*.dbg
+stm32/**/*.mod
+
+# P4: el scratch de bring-up gráfico (ejemplos IDF/BSP), y los componentes que descarga
+# idf.py y su lock (el manifiesto idf_component.yml sí se versiona)
+esp32p4_mipi_dsi/
+esp32p4_bsp_button/
+esp32p4_lvgl_test/
+esp32p4/managed_components/
+esp32p4/dependencies.lock

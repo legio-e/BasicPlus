@@ -28,22 +28,11 @@ Thumbs.db
 # ============================================================
 # Compilation artifacts en samples/
 # ============================================================
-# Los .mod/.bpi/.dbg de toolchain/lexer-java/samples/ son recompilables
-# en cualquier momento; los excluímos para que el repo no se
-# llene de binarios que cambian con cada compilación.
+# V8.1 (#802): toolchain/ y bpgenvm-c/ llevan su propio .gitignore —con la suite son
+# los repositorios toolchain y runtime, submódulos de éste, y este .gitignore no les
+# llega—. Aquí queda sólo lo de BasicPlus.
 # NOTA: lo de bpstdlib/ sí va al repo — es la distribución
 # del stdlib.
-# V8.1 (#802): los proyectos de Java, bajo toolchain/ (el futuro repositorio toolchain).
-toolchain/lexer-java/samples/*.mod
-toolchain/lexer-java/samples/*.bpi
-toolchain/lexer-java/samples/*.dbg
-toolchain/lexer-java/samples/**/out/*.mod
-toolchain/lexer-java/samples/**/out/*.bpi
-toolchain/lexer-java/samples/**/out/*.dbg
-toolchain/lexer-java/samples/**/*.class
-
-# Dir de outputs de compilaciones ad-hoc del frontend
-toolchain/lexer-java/out/
 
 # Stray outputs de tests
 out_test.txt
@@ -69,27 +58,6 @@ pico-sdk/
 # Outputs ad-hoc y prefs del IDE
 # ============================================================
 out/
-toolchain/BpIde/.bpide-prefs
-
-# ============================================================
-# Build artefacts del firmware Pico y de bpgenvm-c
-# ============================================================
-bpgenvm-c/pico/build/
-bpgenvm-c/pico/mdn_build/
-# Artefactos del build de la Pico que NO estan bajo build/: los deja CMake al
-# resolver picotool/pioasm y al generar cabeceras. Se colaron en un commit el
-# 8-ago (301 ficheros, 130.000 lineas) por un `git add -A` sobre pico/ — y el
-# unico arreglo que no depende de acordarse es que git los ignore.
-bpgenvm-c/pico/_deps/
-bpgenvm-c/pico/FREERTOS_KERNEL/
-bpgenvm-c/pico/generated/
-bpgenvm-c/pico/build-bringup/
-bpgenvm-c/pico/pico_flash_region.ld
-bpgenvm-c/build/
-bpgenvm-c/samples/*.mod
-bpgenvm-c/samples/*.bpi
-bpgenvm-c/samples/*.dbg
-bpgenvm-c/samples/*.slots
 
 # Outputs locales del IDE/runs en samples/
 samples/out/
@@ -122,13 +90,6 @@ dist/firmware/*
 samples/*.slots
 
 # ============================================================
-# Outputs ad-hoc del AOT/MdnPack en toolchain/lexer-java
-# ============================================================
-toolchain/lexer-java/*.mdn
-toolchain/lexer-java/*.o
-toolchain/lexer-java/aotout/
-
-# ============================================================
 # samples/ — outputs de compilación (la fuente son los .bp;
 # .mod/.bpi/.dbg/.mdn se recompilan). NOTA: bpstdlib/ SÍ se versiona.
 # ============================================================
@@ -140,42 +101,13 @@ samples/*.mdn
 # .mod sueltos de demos ad-hoc en la raíz del repo
 /*.mod
 
-# toolchain/miVM/ — los .mod de los demos los ESCRIBEN los Main*.java (emisores a mano,
-# anteriores al compilador): MainArrays→ArrDemo.mod, MainOOP→OOPDemo.mod, etc.
-# Son salida, no fuente. Se regeneran ejecutando su Main.
-toolchain/miVM/*.mod
-toolchain/miVM/*.bpi
-toolchain/miVM/*.dbg
 
 # Scratch temporal
 /Temp/
 
-# CMake in-source del firmware Pico + outputs de build STM32
-bpgenvm-c/pico/CMakeCache.txt
-bpgenvm-c/pico/CMakeFiles/
-bpgenvm-c/stm32/**/*.bpi
-bpgenvm-c/stm32/**/*.dbg
-# Los .mod del port STM32 son intermedios: se compilan del .bp de al lado y de
-# ahí sale el blob embebido (stm32_mods.c), que ESE sí se versiona.
-bpgenvm-c/stm32/**/*.mod
-
 # Logs de samples (LogTest, etc.)
 samples/*.log
 samples/*.log.old
-
-# ============================================================
-# Scratch de bring-up gráfico del ESP32-P4 (ejemplos IDF/BSP +
-# sus managed_components/ y build/ = miles de ficheros descargados).
-# 100% regenerable, NO va al repo. El firmware REAL es bpgenvm-c/esp32p4/.
-# ============================================================
-bpgenvm-c/esp32p4_mipi_dsi/
-bpgenvm-c/esp32p4_bsp_button/
-bpgenvm-c/esp32p4_lvgl_test/
-
-# Firmware REAL del P4: componentes descargados + lock (idf.py los regenera;
-# el manifiesto idf_component.yml SÍ se versiona). Igual que el firmware del S3.
-bpgenvm-c/esp32p4/managed_components/
-bpgenvm-c/esp32p4/dependencies.lock
 
 # ============================================================
 # Capturas de pantalla / imágenes de trabajo (locales, fuera del repo)
