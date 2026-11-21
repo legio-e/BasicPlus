@@ -7746,7 +7746,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (`holes/gap1`, `overlay`), sin mirar: son notas de pruebas.
 - **Para pensar, no decidido:** que la VM C del PC lea, como la Java, el `stdlibDir` de `BpVM.cfg`.
 
-#### 🔵 `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **hecho el 21-nov: la portada, los README y la licencia de `toolchain` y `runtime`, y la portada de la organización; el «About», a hablarlo**: *«La 3 lo hablamos»*)
+#### ✅ `#851` — la web, para el buscador: la cabecera de las 21 páginas (título, descripción, `hreflang`, dirección canónica, tarjeta para compartir) y el mapa del sitio (abierta y cerrada el 21-nov: Eduardo, con los consejos de Google para salir en el buscador; *«1 y 2 si»*)
+
+- **Lo que había:** la web ya existía —las páginas de `docs/` en GitHub Pages: lo que Google llama «crear una web a
+  partir de la documentación»—. Le faltaba: ninguna de las 21 páginas con descripción, ni `hreflang`, ni dirección
+  canónica, ni tarjeta (Open Graph); los títulos de las portadas no decían qué es («BasicPlus — Documentación»); y
+  sin `sitemap.xml`. MkDocs o Docusaurus, no: rehacer las 21 páginas (y `doc_frags`) para conseguir lo mismo.
+- **El enfoque** (Eduardo): *«A mí lo que me gustaría es que el usuario que realmente lo necesite lo pueda
+  encontrar»*; y lo que hace único al proyecto: *«juntamos programación, gráficos y BD. Por comparar si en Arduino o
+  en Micropython quieres tener todo eso, no es imposible pero te tienes que buscar la vida»*. Las descripciones dicen
+  eso y lo que buscaría quien lo necesita (BASIC, su placa, microcontrolador), sin nombrar a otros.
+- **Hecho:** `scripts/seo_paginas.py`, con la tabla de títulos y descripciones: escribe la cabecera detrás del
+  `<title>`, entre dos marcas (se puede repetir: la segunda vez, 0 cambios), y `docs/sitemap.xml` (21 direcciones);
+  con `--comprobar`, nombra la página nueva que no está en la tabla. Los títulos, sólo los de las dos portadas
+  («BasicPlus — BASIC orientado a objetos para microcontroladores de 32 bits»). Las descripciones de las portadas, de
+  158 caracteres o menos: con más, Google las corta justo en el nombre de las placas. Su línea, en `PUBLICAR`.
+- **Verificado:** fuera del bloque (y del título de las portadas), cada página es la de antes, byte a byte salvo los
+  finales de línea —con `core.autocrlf`, el blob va en LF y la copia de trabajo en CRLF; el `grep` de Git Bash quita
+  el CR y los cuenta mal—; un bloque por página, dentro del `<head>`; el `sitemap.xml`, XML válido; los enlaces
+  internos, los 3 de `V4_IDEAS` de siempre.
+- **No hecho, por ahora** (*«No hace falta, era solamente para ver qué podemos mejorar»*): Google Search Console
+  —decirle a Google que la web existe y ver con qué búsquedas sale; con la cuenta de Eduardo— y la raíz del dominio
+  (`micro32-suite.github.io` da 404).
+
+#### ✅ `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **CERRADA el 21-nov: la portada, los README y la licencia de `toolchain` y `runtime`, la portada de la organización y el «About»**)
 
 - **Lo medido** (el tráfico de GitHub, los últimos 14 días): 66 visitas de 9 personas y 28 clones de 23 (en buena parte,
   robots); de fuera, 11 llegadas desde github.com y 1 desde Google. El «About», sin web; 13 *topics*; la imagen social, la
@@ -7775,9 +7798,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `d2fc997`): `toolchain` no tenía README, y el de `runtime` era el de los primeros días de la VM C («F1 (en curso)»).
   Al escribirlo salió `#850` (`17d9089b`). Y una frase de la portada, corregida: la ventana de la GUI en el PC, la de
   Windows (LVGL y SDL2, los de MinGW).
-- **Pendiente:** el «About» —la web y más *topics*— (Eduardo: *«La 3 lo hablamos»*). Y lo que es suyo: una foto o un
-  vídeo corto de una placa con el IDE, lo mejor para arriba; la imagen social; y la difusión fuera (Hacker News,
-  Reddit, Hackaday).
+- **El «About», hecho** (Eduardo, después de *«La 3 lo hablamos»*: *«1 y 2 si»*): la web,
+  `micro32-suite.github.io/BasicPlus/en/` (la portada inglesa: quien llega de GitHub lee inglés), también en el perfil
+  de la organización; y siete *topics* más (`embedded`, `iot`, `virtual-machine`, `compiler`, `interpreter`, `risc-v`,
+  `ide`): 20, el máximo. La cabecera de la web para el buscador, en `#851`.
+- **Lo que queda es suyo, si quiere:** una foto o un vídeo corto de una placa con el IDE, lo mejor para arriba; la
+  imagen social; y la difusión fuera (Hacker News, Reddit, Hackaday).
 
 #### 🔵 `#848` — en el panel de la placa, «VM Java (TCP v1)» sólo se conecta a una VM ya en marcha (`localhost:7332` por defecto): no la arranca, como sí hace el micro simulado con su botón (abierta el 21-nov, en la pasada de Eduardo por el IDE de la V8.1; igual en V8.0 · **a V9**: Eduardo, *«de momento solamente publicamos»*)
 

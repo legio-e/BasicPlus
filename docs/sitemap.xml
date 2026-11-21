@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- lo escribe scripts/seo_paginas.py; no editar a mano -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://micro32-suite.github.io/BasicPlus/basedatos.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/bp-desde-dentro.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/cheatsheet.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/creditos.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/basedatos.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/creditos.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/gui.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/guia-ide.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/jc.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/manual.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/pruebas.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/en/referencia.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/gui.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/guia-ide.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/jc.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/manual.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/opcodes.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/pruebas.html</loc></url>
+  <url><loc>https://micro32-suite.github.io/BasicPlus/referencia.html</loc></url>
+</urlset>

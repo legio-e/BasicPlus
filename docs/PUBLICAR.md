@@ -255,6 +255,10 @@ vez**.
       línea `JC:` del final, **0 FALLO**. Y los enlaces internos, desde V8 con su script:
       `python -I -X utf8 scripts/enlaces_docs.py`, 0 rotos en lo que se publica
       (los cuadernos viejos, como `V4_IDEAS.md`, pueden apuntar a fuentes que ya no existen).
+- [ ] **La cabecera de cada página de la web, para el buscador** (desde el 21-nov, `#851`):
+      `python -I -X utf8 scripts/seo_paginas.py --comprobar` → «por cambiar: 0». Una página
+      nueva en `docs/` sale como «SIN FILA EN LA TABLA»: su título y su descripción, en la tabla
+      del script, y después sin `--comprobar` (escribe su cabecera y `docs/sitemap.xml`).
 - [ ] **`pruebas.html` con los números de ESTE pre-flight** (desde V8; idea de Eduardo,
       15-nov: *«que los usuarios vean que se está probando a fondo todo el sistema»*): las
       suites de Maven, la red (sus casos y sus pruebas de C), el barrido de samples, los
