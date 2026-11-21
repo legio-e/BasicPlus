@@ -35,7 +35,7 @@ cd bpgenvm-c && make && cd ..
 java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
 java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
-bpgenvm-c/build/bpgenvm-c samples/Blink.mod
+bpgenvm-c/build/bpgenvm-c --libdir=bpstdlib samples/Blink.mod     # --libdir: where the stdlib is
 ```
 
 If the program's output is not identical on both (each VM's banner lines do

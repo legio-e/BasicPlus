@@ -7735,6 +7735,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `#847`, de V7; su parte (a), arreglada en V8 (*«Arreglo pequeño en V8»*), y la (b), a V9. Con ella, el ZIP, otra vez
   (`c6648f46…`), y la pasada de Eduardo por él: `SqlDemo`, sin el aviso. **El pre-flight de V8, pasado.**
 
+#### ✅ `#850` — la orden de la VM C de los README y el QUICKSTART falla: `bpgenvm-c/build/bpgenvm-c samples/Blink.mod` no encuentra la biblioteca estándar —«dep 'Gpio.__init' (Gpio) NO ENCONTRADO: samples/Gpio.mod»— (abierta y cerrada el 21-nov, al escribir el README de `runtime` para `#849`; desde V7)
+
+- **La causa:** desde `#493` (V7, 15-sep) la VM C del PC busca la biblioteca en su `/lib`, que es la carpeta de
+  `--libdir=`; sin la opción, sólo junto al `.mod`. La VM Java la encuentra sola, por el `stdlibDir` de `BpVM.cfg`.
+  Así que la orden de «Compilar desde el código» daba error a quien la siguiera, desde hace dos meses.
+- **Arreglado** (la documentación; el código hace lo que se diseñó): `--libdir=bpstdlib` en los dos README, en los
+  dos QUICKSTART y en las dos órdenes de CLAUDE.md (la de correr y la de la paridad). Probado: sin la opción, el
+  error; con ella, «Blink terminado», como la VM Java. Los dos `.md` de `samples/` que la usan sin la opción
+  (`holes/gap1`, `overlay`), sin mirar: son notas de pruebas.
+- **Para pensar, no decidido:** que la VM C del PC lea, como la Java, el `stdlibDir` de `BpVM.cfg`.
+
 #### 🔵 `#849` — la portada del repositorio, para quien llega de fuera: los dos README; y en GitHub, la web del «About», los *topics* y la licencia de `toolchain` y `runtime` (abierta el 21-nov: Eduardo, con los consejos de Google para dar visibilidad al repositorio, *«¿Podrías hacer una revisión de la página principal siguiendo los consejos que creas más acertados?»* · **los README, hechos en local; el push y lo de GitHub, con su palabra**)
 
 - **Lo medido** (el tráfico de GitHub, los últimos 14 días): 66 visitas de 9 personas y 28 clones de 23 (en buena parte,

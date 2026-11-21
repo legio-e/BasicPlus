@@ -131,7 +131,7 @@ cd bpgenvm-c && make && cd ..
 # Compilar un ejemplo y correrlo en AMBAS VMs
 java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp --compile samples --backend=mivm
 java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod      # VM-Java
-bpgenvm-c/build/bpgenvm-c samples/Blink.mod                            # VM-C
+bpgenvm-c/build/bpgenvm-c --libdir=bpstdlib samples/Blink.mod         # VM-C (--libdir: la stdlib; sin él, falla)
 
 # El IDE
 mvn -f toolchain/BpIde/pom.xml package
@@ -141,7 +141,7 @@ java -jar toolchain/BpIde/target/BpIde-8.1.jar
 ### Cómo verificar la paridad dual-VM (el gesto más repetido)
 ```sh
 java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/X.mod > /tmp/java.out 2>&1
-bpgenvm-c/build/bpgenvm-c                      samples/X.mod > /tmp/c.out    2>&1
+bpgenvm-c/build/bpgenvm-c --libdir=bpstdlib   samples/X.mod > /tmp/c.out    2>&1
 diff /tmp/java.out /tmp/c.out && echo "PARIDAD OK"
 ```
 Cualquier diferencia de `stdout` es un fallo del invariante, aunque el programa

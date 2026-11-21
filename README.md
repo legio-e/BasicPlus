@@ -240,7 +240,7 @@ cd bpgenvm-c && make && cd ..
 java -jar toolchain/lexer-java/target/basicplus-frontend.jar samples/blink.bp \
      --compile samples --backend=mivm
 java -jar toolchain/miVM/target/bpgenvm-1.0.jar samples/Blink.mod
-bpgenvm-c/build/bpgenvm-c samples/Blink.mod
+bpgenvm-c/build/bpgenvm-c --libdir=bpstdlib samples/Blink.mod
 
 # 4. (Optional) the IDE
 mvn -f toolchain/BpIde/pom.xml package
